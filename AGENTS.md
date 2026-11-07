@@ -1,6 +1,8 @@
 # Agent instructions
 
-Read README.md, docs/implementation.md, and docs/plans/executor.md before work.
+Read README.md, docs/implementation.md, docs/plans/executor.md, and
+[docs/GRAVITY.md](docs/GRAVITY.md) before work. Follow its accepted rules;
+proposals remain proposals.
 Use ASD-STE100 Simplified Technical English for prose and new names. Preserve
 required interfaces and established technical terms.
 

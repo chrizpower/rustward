@@ -15,6 +15,8 @@ cargo run --locked -- validate examples/tasks.yaml
 Start with [the implementation handoff](docs/implementation.md), then read
 [the reviewed plan](docs/plans/executor.md). Confirm phase 0 decisions before
 building the execution core. Proposed choices are not measured results.
+See [the architecture overview](docs/ARCHITECTURE.md) for the system diagram and
+implementation boundaries.
 
 ## Development
 
