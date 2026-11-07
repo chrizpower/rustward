@@ -4,8 +4,13 @@ Rustward is a small Rust task executor for one trusted administrator. It will
 run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
-Status: repository bootstrap only. No executor is implemented. The binary
-reports this status and exits with failure; it cannot run tasks.
+Status: task configuration validation is implemented. The binary can validate
+version 1 YAML files; it cannot run tasks. See the
+[configuration schema](docs/configuration.md) and synthetic example.
+
+```sh
+cargo run --locked -- validate examples/tasks.yaml
+```
 
 Start with [the implementation handoff](docs/implementation.md), then read
 [the reviewed plan](docs/plans/executor.md). Confirm phase 0 decisions before
