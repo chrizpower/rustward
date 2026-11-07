@@ -1,12 +1,17 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use serde::{Deserialize, Deserializer};
 use serde_yaml_ng::Value;
 
+#[derive(Debug)]
+pub struct Config {
+    tasks: Vec<Task>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Config {
+struct Document {
     version: u32,
     tasks: Vec<Task>,
 }
@@ -108,7 +113,7 @@ fn valid_path(path: &str) -> bool {
 }
 
 pub fn validate(source: &str) -> Result<Config, String> {
-    let config: Config = serde_yaml_ng::from_str(source).map_err(|error| error.to_string())?;
+    let config: Document = serde_yaml_ng::from_str(source).map_err(|error| error.to_string())?;
     if config.version != 1 {
         return Err("version: only version 1 is supported".into());
     }
@@ -175,10 +180,65 @@ pub fn validate(source: &str) -> Result<Config, String> {
             }
         }
     }
-    Ok(config)
+    Ok(Config {
+        tasks: config.tasks,
+    })
 }
 
 impl Config {
+    /// Validate submitted values and generate one argument per configured entry.
+    /// Missing values use defaults. Errors do not include submitted values.
+    pub fn arguments(
+        &self,
+        task_id: &str,
+        values: &BTreeMap<String, Value>,
+    ) -> Result<Vec<String>, String> {
+        let task = self
+            .tasks
+            .iter()
+            .find(|task| task.id == task_id)
+            .ok_or_else(|| format!("task {task_id}: unknown task ID"))?;
+        for id in values.keys() {
+            if !task.inputs.iter().any(|input| input.id == *id) {
+                return Err(format!("task {task_id}: input {id}: undeclared input"));
+            }
+        }
+        let mut resolved = BTreeMap::new();
+        for input in &task.inputs {
+            let fail = |message| format!("task {task_id}: input {}: {message}", input.id);
+            let Some(value) = values.get(&input.id).or(input.default.as_ref()) else {
+                if input.required {
+                    return Err(fail("missing required input"));
+                }
+                continue;
+            };
+            if !input.accepts(value) {
+                return Err(fail("value must match the input type and contain no NUL"));
+            }
+            if input
+                .choices
+                .as_ref()
+                .is_some_and(|choices| !choices.contains(value))
+            {
+                return Err(fail("value is not a declared choice"));
+            }
+            let text = match input.kind {
+                InputType::String => value.as_str().unwrap().to_owned(),
+                InputType::Integer => value.as_i64().unwrap().to_string(),
+                InputType::Boolean => value.as_bool().unwrap().to_string(),
+            };
+            resolved.insert(&input.id, text);
+        }
+        Ok(task
+            .arguments
+            .iter()
+            .map(|argument| match argument {
+                Argument::Literal(value) => value.literal.clone(),
+                Argument::Input(reference) => resolved[&reference.input].clone(),
+            })
+            .collect())
+    }
+
     pub fn task_count(&self) -> usize {
         self.tasks.len()
     }

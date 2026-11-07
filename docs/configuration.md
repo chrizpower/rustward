@@ -7,8 +7,8 @@ return exit code 1. Validation reads one UTF-8 YAML document. It does not run
 commands, inspect program availability, contact hosts, or load credentials.
 
 This slice defines the task contract for F01, F03, F04, and F15. It implements
-configuration validation only. It does not implement request input validation,
-argument generation, activation, reload, schedules, or execution.
+configuration validation, request input validation, and argument generation. It
+does not implement activation, reload, schedules, or execution.
 
 ## Schema
 
@@ -50,14 +50,37 @@ The argument contract reserves one argument for each list entry. A literal is
 unchanged. An input supplies its complete value as one argument; strings remain
 unchanged, integers use decimal form, and booleans use `true` or `false`.
 There is no interpolation, splitting, implicit flag, conditional omission,
-shell expansion, or environment substitution. The validator checks references;
-argument generation and submitted value validation are future work. A program
+shell expansion, or environment substitution. The configuration validator checks references. Request validation checks all
+submitted values before argument generation. A program
 can still interpret an argument as an option. Task owners must use program
 options such as `--` where needed. Validation does not inspect program behavior.
 
 [The synthetic example](../examples/tasks.yaml) uses paths that need not exist.
 The generic schema contains no Ansible-specific fields, secrets, schedules,
 runtime selection, environment configuration, or execution limits.
+
+## Request inputs and arguments
+
+Use `rustward::config::validate(source)` to obtain a validated `Config`. Call
+`Config::arguments(task_id, &values)` with a
+`BTreeMap<String, serde_yaml_ng::Value>`. It returns `Result<Vec<String>, String>`.
+The configuration fields are private, and only configuration validation can
+construct a `Config`. The method does not change the configuration or values.
+
+Task selection uses an exact ID match. Unknown task IDs and undeclared input
+names are errors. Each declared input uses its submitted value, or its default
+when absent. Explicit null is invalid and does not select the default. A required
+input without either value is an error. An absent optional input without a
+default is permitted only when no argument references it, as required by the
+configuration schema. Unused inputs still receive type and choice checks.
+
+Values must have the declared type, without conversion. Integers must fit `i64`;
+floats and numeric strings are invalid. Choice values must match exactly.
+Strings preserve empty values, spaces, Unicode, and shell syntax. NUL is invalid.
+Each configured literal or input produces exactly one argument, in list order.
+Repeated input references produce repeated arguments. Errors identify the task
+or input and do not include submitted values. The map interface does not define
+a request wire format or duplicate-key handling for a future transport.
 
 ## Dependencies and open decisions
 
@@ -71,7 +94,7 @@ This version is the first implementation contract, authorized by the task
 configuration slice. It does not accept unrelated plan proposals. Review schema
 compatibility and migration before changing version 1 or publishing a release.
 Before execution, define prepared runtime identity and path ownership (P03),
-submitted input validation, environment and secret references, task resource
+request transport, environment and secret references, task resource
 controls, and metadata and configuration size bounds (P07). Systemd manager,
 permissions, state transitions, and recovery remain separate implementation
 gates. Workload compatibility still needs a sanitized task inventory. License

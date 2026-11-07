@@ -1,4 +1,4 @@
-mod config;
+use rustward::config;
 
 use std::{env, fs, process::ExitCode};
 

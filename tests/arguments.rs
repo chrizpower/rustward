@@ -1,0 +1,189 @@
+use std::collections::BTreeMap;
+
+use rustward::config::validate;
+use serde_yaml_ng::Value;
+
+const EXAMPLE: &str = include_str!("../examples/tasks.yaml");
+
+fn values(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
+    entries
+        .iter()
+        .map(|(id, value)| (id.to_string(), value.clone()))
+        .collect()
+}
+
+#[test]
+fn preserves_argument_boundaries_and_repeated_references() {
+    let source = EXAMPLE.replace(
+        "      - literal: --name",
+        "      - literal: ''\n      - literal: 'literal with spaces; $HOME'\n      - input: name",
+    );
+    let config = validate(&source).unwrap();
+    for text in [
+        "",
+        "two words",
+        "  padded  ",
+        "日本語 🦀",
+        "$(touch /synthetic/marker); * $HOME ' \" \\ \n",
+    ] {
+        let result = config
+            .arguments("synthetic-report", &values(&[("name", text.into())]))
+            .unwrap();
+        assert_eq!(
+            result,
+            ["", "literal with spaces; $HOME", text, text, "2", "false"]
+        );
+    }
+}
+
+#[test]
+fn applies_defaults_and_explicit_overrides() {
+    let config =
+        validate(&EXAMPLE.replace("required: true", "required: true\n        default: sample"))
+            .unwrap();
+    assert_eq!(
+        config
+            .arguments("synthetic-report", &BTreeMap::new())
+            .unwrap(),
+        ["--name", "sample", "2", "false"]
+    );
+    assert_eq!(
+        config
+            .arguments(
+                "synthetic-report",
+                &values(&[
+                    ("name", "".into()),
+                    ("count", 3.into()),
+                    ("enabled", true.into())
+                ])
+            )
+            .unwrap(),
+        ["--name", "", "3", "true"]
+    );
+}
+
+#[test]
+fn formats_signed_integer_limits() {
+    let config = validate(&EXAMPLE.replace("        choices: [1, 2, 3]\n", "")).unwrap();
+    for number in [i64::MIN, -1, 0, i64::MAX] {
+        let args = config
+            .arguments(
+                "synthetic-report",
+                &values(&[("name", "sample".into()), ("count", number.into())]),
+            )
+            .unwrap();
+        assert_eq!(args[2], number.to_string());
+    }
+}
+
+#[test]
+fn rejects_invalid_values_without_default_fallback() {
+    let config = validate(EXAMPLE).unwrap();
+    for (id, invalid) in [
+        ("name", Value::Null),
+        ("name", 2.into()),
+        ("name", true.into()),
+        ("name", "bad\0value".into()),
+        ("count", "2".into()),
+        ("count", true.into()),
+        ("count", 2.5.into()),
+        ("count", Value::from(u64::MAX)),
+        ("count", 4.into()),
+        ("enabled", "false".into()),
+        ("enabled", 0.into()),
+        ("enabled", Value::Null),
+        ("name", Value::Sequence(vec![])),
+        ("name", Value::Mapping(Default::default())),
+    ] {
+        let mut submitted = values(&[("name", "sample".into())]);
+        submitted.insert(id.into(), invalid);
+        assert!(
+            config
+                .arguments("synthetic-report", &submitted)
+                .unwrap_err()
+                .contains(&format!("input {id}:"))
+        );
+    }
+}
+
+#[test]
+fn rejects_missing_and_unknown_inputs_and_unknown_tasks() {
+    let config = validate(EXAMPLE).unwrap();
+    assert!(
+        config
+            .arguments("synthetic-report", &BTreeMap::new())
+            .unwrap_err()
+            .contains("missing required input")
+    );
+    assert!(
+        config
+            .arguments("synthetic-report", &values(&[("other", true.into())]))
+            .unwrap_err()
+            .contains("undeclared input")
+    );
+    for id in ["", "missing", "Synthetic-report"] {
+        assert!(
+            config
+                .arguments(id, &BTreeMap::new())
+                .unwrap_err()
+                .contains("unknown task ID")
+        );
+    }
+}
+
+#[test]
+fn selects_task_and_validates_unused_inputs() {
+    let source = format!(
+        "{EXAMPLE}\n  - id: other\n    label: Other\n    executable: /synthetic/other\n    working_directory: /synthetic\n    arguments: []\n    inputs:\n      - id: unused\n        type: boolean\n        required: true\n        choices: [true]\n      - id: optional\n        type: string\n"
+    );
+    let config = validate(&source).unwrap();
+    assert!(config.arguments("other", &BTreeMap::new()).is_err());
+    assert!(
+        config
+            .arguments("other", &values(&[("unused", false.into())]))
+            .is_err()
+    );
+    assert!(
+        config
+            .arguments(
+                "other",
+                &values(&[("unused", true.into()), ("optional", 1.into())])
+            )
+            .is_err()
+    );
+    assert!(
+        config
+            .arguments("other", &values(&[("unused", true.into())]))
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        config
+            .arguments("other", &values(&[("name", "sample".into())]))
+            .is_err()
+    );
+}
+
+#[test]
+fn checks_string_choices_without_conversion() {
+    let config = validate(&EXAMPLE.replace(
+        "required: true",
+        "required: true\n        choices: ['', '日本語', 'true']",
+    ))
+    .unwrap();
+    for text in ["", "日本語", "true"] {
+        assert_eq!(
+            config
+                .arguments("synthetic-report", &values(&[("name", text.into())]))
+                .unwrap()[1],
+            text
+        );
+    }
+    for value in ["other".into(), true.into()] {
+        assert!(
+            config
+                .arguments("synthetic-report", &values(&[("name", value)]))
+                .is_err()
+        );
+    }
+}

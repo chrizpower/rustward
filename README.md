@@ -4,8 +4,10 @@ Rustward is a small Rust task executor for one trusted administrator. It will
 run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
-Status: task configuration validation is implemented. The binary can validate
-version 1 YAML files; it cannot run tasks. See the
+Status: version 1 configuration validation, request input validation, and
+argument generation are implemented. The binary validates YAML files. The Rust
+library validates submitted values and returns separate arguments; it cannot run
+tasks. See the
 [configuration schema](docs/configuration.md) and synthetic example.
 
 ```sh
@@ -17,6 +19,10 @@ Start with [the implementation handoff](docs/implementation.md), then read
 building the execution core. Proposed choices are not measured results.
 See [the architecture overview](docs/ARCHITECTURE.md) for the system diagram and
 implementation boundaries.
+
+The library exposes `config::validate` and `Config::arguments(task_id, &values)`.
+Values use `BTreeMap<String, serde_yaml_ng::Value>`. See the
+[request contract](docs/configuration.md#request-inputs-and-arguments) for details.
 
 ## Development
 

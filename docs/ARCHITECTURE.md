@@ -1,7 +1,8 @@
 # Rustward architecture
 
-Rustward will run generic command tasks for one trusted administrator. Only
-version 1 task configuration validation is implemented. The diagram shows the
+Rustward will run generic command tasks for one trusted administrator. Version 1
+configuration validation, request input validation, and argument generation are
+implemented. The diagram shows the
 planned system and marks the implemented parts in green.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
@@ -23,7 +24,7 @@ flowchart TB
     subgraph Service["Planned Rustward service"]
         UI["Web UI and API"]
         Cron["UTC scheduler<br/>Skip missed runs"]
-        Inputs["Input validation and argument mapping"]
+        Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Durable admission and bounded queue"]
         Dispatch["Dispatch and recovery controls"]
         Capture["Output capture"]
@@ -37,7 +38,7 @@ flowchart TB
     Logs[("Bounded stdout and stderr logs")]
 
     Git --> CLI --> Config
-    Config -. "Future configuration activation" .-> Inputs
+    Config --> Inputs
 
     Admin --> Proxy --> UI
     UI --> Inputs
@@ -54,7 +55,7 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config implemented
+    class CLI,Config,Inputs implemented
 ```
 
 The service boundary shows the planned single Rust service. The proxy, systemd,
@@ -70,9 +71,13 @@ unknown fields and duplicate IDs. It does not execute commands or check program
 availability. See the [configuration schema](configuration.md) and
 [synthetic example](../examples/tasks.yaml).
 
-Request input validation and argument generation are the next proposed slice.
-They must preserve each configured argument as a separate value and reject
-inputs that do not match the task schema. These functions are not implemented.
+The Rust library exposes `config::validate` and `Config::arguments`. A validated
+configuration selects a task by ID, rejects undeclared or invalid values, applies
+defaults, and rejects missing required inputs. It returns an ordered `Vec<String>`
+with one value per configured argument. It validates unused inputs too. It does
+not split, expand, or interpolate values. There is no submission CLI or command
+execution. The implemented library is shown inside the planned service boundary;
+service integration is future work.
 
 ## Accepted boundaries
 

@@ -1,8 +1,8 @@
 # Implementation handoff
 
 Begin with phase 0 of [the reviewed plan](plans/executor.md). The repository
-contains task configuration validation, but no scheduler, database, API, or
-execution backend. See [the version 1 schema](configuration.md) and
+contains task configuration validation, request input validation, and argument
+generation, but no scheduler, database, API, or execution backend. See [the version 1 schema](configuration.md) and
 [the architecture overview](ARCHITECTURE.md) for the system diagram, accepted
 boundaries, and open decisions.
 
