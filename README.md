@@ -31,7 +31,7 @@ references directly in docs/:
 | [Glossary](docs/GLOSSARY.md) | Shared domain definitions |
 
 [Temporary documentation](docs/temporary/README.md) holds requirements, execution
-contracts, the configuration reference, implementation work, and migration
+contracts, configuration and capture references, implementation work, and migration
 preparation. Their useful content will be absorbed into ARCHITECTURE.md,
 GRAVITY.md, and GLOSSARY.md before those temporary files are removed. Their
 current rules and contracts remain authoritative within scope until transferred.
@@ -57,8 +57,13 @@ submission CLI, HTTP service, or dispatch implementation.
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
 manager. Tests use a fake manager and a private D-Bus peer without starting
-programs. Runtime verification, bounded output capture, and durable dispatch
-remain separate integration gates. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
+programs. Runtime verification and durable dispatch remain integration gates. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
+
+The `capture` library supplies stdout/stderr descriptors and retains separate
+raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.
+It continues draining after truncation and reports storage failures separately.
+See the [capture contract](docs/temporary/capture.md). Aggregate reservations,
+retention, and service-wide storage-failure handling remain unimplemented.
 
 ## Development
 

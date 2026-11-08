@@ -5,7 +5,8 @@ admission and queued cancellation are implemented as a library. Other lifecycle
 transitions, scheduling, restore, and execution integration are not implemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is implemented and tested with synthetic manager responses. It is not connected
-to the admission store. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
+to the admission store. [Per-run bounded capture](capture.md) is also implemented;
+aggregate reservations, retention, and service-wide failure handling remain future work. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).

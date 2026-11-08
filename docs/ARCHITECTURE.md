@@ -28,7 +28,7 @@ flowchart TB
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
         Dispatch["Dispatch and recovery controls"]
         Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
-        Capture["Output capture"]
+        Capture["Bounded per-run output capture<br/>Implemented library"]
     end
 
     DB[("Local SQLite<br/>Requests, runs, and state")]
@@ -56,13 +56,13 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Inputs,Queue,Adapter implemented
+    class CLI,Config,Inputs,Queue,Adapter,Capture implemented
 ```
 
 The service boundary shows the planned single Rust service. The proxy, systemd,
 task processes, and runtime preparation are outside that service. The local
-SQLite database and log files store retained state and output. Output capture is
-a logical component; its systemd interface remains to be defined.
+SQLite database and log files store retained state and output. Per-run output
+capture supplies descriptors to the adapter; service integration remains future work.
 
 ## Current implementation
 
@@ -106,7 +106,7 @@ the log allowance. See P07 and the retention contract for the exact rules.
 
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
-remaining specifications and required evidence. They include launch recovery, host permission verification, output capture,
+remaining specifications and required evidence. They include launch recovery, host permission verification, aggregate log reservation,
 runtime layout, scheduling checkpoints, retention, and restore mechanisms.
 Private proxy access and environment/secret references also need specifications.
 
@@ -287,7 +287,7 @@ The adapter sets `Type=exec`, `Restart=no`, `KillMode=control-group`,
 expansion. `RemainAfterExit=yes` retains a successful exited service for explicit
 cleanup. `AddRef=true` pins its unit object while the D-Bus connection remains.
 Standard input is null; stdout and stderr use caller-supplied file descriptors.
-The caller owns draining and bounded retention. There is no implicit journal or
+The `capture` library supplies draining and per-run bounded retention. There is no implicit journal or
 file-output fallback. Environment and secret policy remain integration gates;
 the low-level adapter does not provide an isolated execution environment.
 
@@ -314,7 +314,8 @@ cgroup path. Missing units, unknown cgroups, and missing PIDs alone do not prove
 cleanup. Stopping is distinct from observing program exit. A graceful stop queues
 `StopUnit`; force stopping sends SIGKILL to all unit processes. Neither response
 confirms cleanup. `release` checks cleanup before calling `UnrefUnit`; callers
-must first durably retain the final evidence and result. Connection loss can
+must first durably retain exit and cleanup evidence. Capture EOF and final
+completion can follow reference release. Connection loss can
 release references, so unit retention alone is not a recovery protocol.
 
 ### Evidence and integration gates
@@ -339,10 +340,17 @@ been run in this devbox, which has no manager. Private D-Bus tests do not prove
 systemd behavior or host permissions.
 
 The admission store remains at schema version 2 and cannot dispatch. Durable
-launch intent, slot and log-capacity reservation, runtime verification, bounded
-output capture, timeout decisions, storage-failure stopping, and crash recovery
+launch intent, slot and log-capacity reservation, runtime verification, capture integration, timeout decisions, storage-failure stopping, and crash recovery
 must be implemented together before connecting admission to this adapter. In
 particular, a missing unit or lost start reply must not cause automatic retry.
 
 The implementation follows the [systemd 257 D-Bus interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html)
 and its [transient launch property construction](https://github.com/systemd/systemd/blob/v257/src/run/run.c).
+
+
+## Bounded output capture
+
+`capture::Capture` retains separate raw streams under one limit (default 10 MiB)
+and drains after truncation. Storage faults remain separate from truncation.
+See the [capture contract](temporary/capture.md) for descriptor lifecycle,
+bounds, synchronized completion, tests, and remaining service integration.

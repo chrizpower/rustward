@@ -3,7 +3,8 @@
 Status: Temporary work list. Configuration validation, request input validation,
 argument generation, durable manual admission, and queued cancellation are implemented. The execution
 core is not implemented. A separate supervision interface and systemd user-manager
-adapter are implemented; real host verification and integration remain open.
+adapter and bounded per-run output capture are implemented. Real host verification,
+aggregate log reservations, and execution integration remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -28,8 +29,10 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    schema changes need an explicit compatibility and migration decision.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
    permissions on an isolated host.
-   Specify runtime layout, output capture, environment and secret references,
+   Specify runtime layout, environment and secret references,
    task resource controls, and remaining metadata/buffer bounds before integration.
+   Integrate the [implemented per-run capture library](capture.md), including its
+   early failure signal, with durable dispatch and service-wide P06 controls.
 3. Implement the execution core with synthetic inputs. Select the required Rust
    libraries and prove the failure cases below on an isolated systemd host.
 4. Review a sanitized Semaphore export before claiming workload compatibility.

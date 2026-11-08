@@ -145,3 +145,79 @@ fn confirms_child_cleanup_and_concurrent_unit_isolation() {
     });
     supervisor.release(&ids[1], &second).unwrap();
 }
+
+#[test]
+#[ignore = "requires an isolated Debian 13 host with a dedicated systemd user manager and cgroup v2"]
+fn captures_both_streams_through_the_user_manager() {
+    use rustward::capture::{Capture, Options};
+    let mut supervisor = Systemd::new(UserBus::connect().unwrap(), CgroupFs::default()).unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).unwrap();
+    let run_id = RunId::new(&hex::encode(bytes)).unwrap();
+    let _cleanup = TestUnits(vec![format!("rustward-run-{}.service", run_id.as_str())]);
+    let (capture, writers) =
+        Capture::create(root.path(), &run_id, Options { retained_bytes: 5 }).unwrap();
+    let launch = Launch {
+        run_id: run_id.clone(),
+        executable: "/bin/sh".into(),
+        arguments: vec![
+            "-c".into(),
+            "printf stdout-data; printf stderr-data >&2; exec sleep 120".into(),
+        ],
+        working_directory: root.path().to_str().unwrap().into(),
+        cleanup_grace: Duration::from_millis(100),
+    };
+    assert_eq!(
+        supervisor.start(&launch, writers.output()),
+        Ok(StartOutcome::Accepted)
+    );
+    drop(writers);
+    let observed = wait_for(&mut supervisor, &run_id, None, |observation| {
+        matches!(
+            observation,
+            Observation::Known {
+                state: ExecutionState::Running,
+                ..
+            }
+        )
+    });
+    let Observation::Known { identity, .. } = observed else {
+        unreachable!()
+    };
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let report = capture.report();
+        assert_eq!(capture.failure(), None);
+        if report.stdout.observed_bytes == 11 && report.stderr.observed_bytes == 11 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "capture observation deadline: {report:?}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(
+        supervisor.stop(&run_id, &identity, StopMode::Graceful),
+        Ok(StopOutcome::Accepted)
+    );
+    wait_for(&mut supervisor, &run_id, Some(&identity), |observation| {
+        matches!(
+            observation,
+            Observation::Known {
+                cleanup: Cleanup::Confirmed,
+                ..
+            }
+        )
+    });
+    supervisor.release(&run_id, &identity).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !(capture.report().stdout.eof && capture.report().stderr.eof) {
+        assert!(Instant::now() < deadline, "capture EOF deadline");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let report = capture.finish().unwrap();
+    assert_eq!(report.retained_bytes(), 5);
+    assert!(report.truncated());
+}
