@@ -1,10 +1,10 @@
 # Implementation work
 
 Status: Temporary work list. Configuration validation, request input validation,
-argument generation, durable manual admission, and queued cancellation are implemented. The execution
-core is not implemented. A separate supervision interface and systemd user-manager
+argument generation, manual admission, queued cancellation, and the durable
+dispatch protocol are implemented as libraries. Real execution is not integrated. A separate supervision interface and systemd user-manager
 adapter and bounded per-run output capture are implemented. Real host verification,
-aggregate log reservations, and execution integration remain open.
+real log-capacity integration, retention, and execution integration remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -20,13 +20,11 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Specify dispatch, launch recovery, and the remaining persisted lifecycle
-   transitions under the accepted execution contracts. Manual key verification,
-   atomic admission, and queued cancellation with separate phase and result
-   storage are implemented. Configuration and argument
-   mapping use the implemented TOML version 2 contract; see its
-   [format change](configuration.md#format-change-and-compatibility). Further
-   schema changes need an explicit compatibility and migration decision.
+1. Complete the integration gates in the [dispatch contract](dispatch.md).
+   Durable intent, exclusive ownership, FIFO claims, capacity accounting, retained
+   launch data, supervisor evidence, and conservative recovery are tested with a
+   fake supervisor. Specify acknowledgement records, active cancellation,
+   timeouts, and completion timestamps before adding those operations.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
    permissions on an isolated host.
    Specify runtime layout, environment and secret references,
@@ -67,7 +65,20 @@ scheduler execution, occurrence history, pause-state handling, first-installatio
 checkpoints, and service-setting integration. A renamed schedule must not inherit
 pause state or replay missed occurrences. Editing a schedule must not make a
 handled occurrence eligible again. Loader tests do not prove these runtime rules.
-Dispatch, production migration, and deployment remain outside this change.
+Production migration and deployment remain outside repository implementation.
+
+## Dispatch evidence and remaining work
+
+The [dispatch contract](dispatch.md) owns the implemented API and its prerequisites.
+Schema version 3 preserves version 1/2 identities and history. Tests cover lock
+ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollback,
+process exit at launch boundaries, missing/changed identity, first-result retention,
+cleanup/output gates, and durable review. No test starts a real task.
+
+Next: verify prepared runtimes, connect capture and storage-independent stopping,
+implement acknowledgement and retention reclamation, and pass isolated systemd
+host checks. The service must enforce all gates before real execution. A review
+block currently has no acknowledgement API. A dropped permit is not reissued.
 
 ## Telemetry work
 
@@ -92,10 +103,10 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   and verified prepared runtime selection. Preserve the [admission contract](../ARCHITECTURE.md#manual-admission-library).
   Define restore tooling and monitoring of permanent-record growth. Transport
   parsing and global metadata/buffer bounds remain open.
-- Define the remaining state-transition table and durable launch protocol.
+- Extend the implemented durable launch protocol with active stopping and review.
   Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
-  Reconcile recorded runs against systemd evidence after a crash. Test loss of
-  confirmation before and after launch; do not automatically retry uncertain work.
+  Integrate recorded recovery decisions with real systemd cleanup. Keep the
+  tested no-retry rule at every launch boundary.
 - Integrate `croner` with the scheduler through the accepted strict subset check.
   Persist evaluation checkpoints together with occurrence decisions. Demonstrate
   reliable coverage; report intervals with insufficient evidence as gaps. Test
@@ -107,8 +118,8 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   record with affected runs, evidence, uncertainty, decision, and reason.
 - Specify runtime manifest, paths, ownership,
   and safe removal of run work directories after completion.
-- Specify atomic log-capacity reservation, release, record/log deletion, and
-  retention age calculation. Test protected evidence and actual storage faults.
+- Integrate conservative dispatch log accounting with capture, retention cleanup,
+  record/log deletion, and retention age calculation. Test protected evidence and actual storage faults.
 - Specify a consistent application-state backup and explicit restore procedure.
   Test that missing old-generation keys cannot admit work and restored queued
   records cannot execute without review.

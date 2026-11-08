@@ -65,7 +65,8 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 - **Type and status:** Principle; uncertainty handling and planned maintenance
   accepted by the user. The admission and lifecycle contracts are in
   [execution.md](temporary/execution.md#admission-contract-decisions); launch and lifecycle
-  mechanisms still need specification. Manual admission transactions are implemented.
+  integration remains gated. Manual admission and durable dispatch are implemented
+  as libraries with fake-supervisor tests.
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof
@@ -311,3 +312,6 @@ The cron review below supersedes the initial step and combined-day rules.
 and standalone `*`. Reject steps and extensions; require one day field to be `*`.
 Use an established parser/evaluator after subset checks. Preserve stored revisions
 and admitted work. See the configuration contract.
+
+2026-11-08: Accept FIFO, `NotQueued` cancellation races, and conservative recovery.
+Preserve results; require review and cleanup evidence. See [dispatch](temporary/dispatch.md).

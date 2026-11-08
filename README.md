@@ -5,12 +5,12 @@ run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
 Status: version 2 configuration validation, request input validation,
-argument generation, durable manual admission, and queued cancellation are
-implemented. The binary
+argument generation, durable manual admission, queued cancellation, and the
+durable dispatch protocol are implemented as libraries. The binary
 validates TOML files. The Rust library validates submitted values, returns
-separate arguments, and records queued manual runs. A separate supervision
-library can request process starts through a systemd user manager; the task
-dispatch loop is not implemented. See the
+separate arguments, and records queued manual runs. Dispatch tests use a fake
+supervisor. A separate systemd adapter can request process starts; real dispatch
+integration and the service execution loop remain unimplemented. See the
 [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
 
@@ -60,7 +60,9 @@ The `admission::Store` library issues manual request keys and atomically records
 queued runs in a dedicated local SQLite database. It can read retained run state
 and cancel a queued run without deleting its history or admission record. See the [admission interface
 and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
-submission CLI, HTTP service, or dispatch implementation.
+submission CLI or HTTP service. The [dispatch library](docs/temporary/dispatch.md)
+records launch intent, reserves capacity, and preserves uncertain work after a
+crash. Real runtime, capture, and systemd integration remain gated.
 
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
@@ -70,8 +72,8 @@ programs. Runtime verification and durable dispatch remain integration gates. Se
 The `capture` library supplies stdout/stderr descriptors and retains separate
 raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.
 It continues draining after truncation and reports storage failures separately.
-See the [capture contract](docs/temporary/capture.md). Aggregate reservations,
-retention, and service-wide storage-failure handling remain unimplemented.
+See the [capture contract](docs/temporary/capture.md). Integration with dispatch
+log accounting, retention, and service-wide failure handling remain unimplemented.
 
 Structured service logs and a private Prometheus-compatible `/metrics` endpoint
 for the monitoring service are accepted future work. See the [telemetry contract](docs/temporary/telemetry.md).

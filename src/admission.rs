@@ -7,6 +7,8 @@ use toml::Value;
 
 use crate::config::Config;
 
+mod schema;
+
 type KeyMac = Hmac<Sha256>;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -22,6 +24,9 @@ pub enum Error {
     Storage,
     Randomness,
     UnsupportedSchema,
+    InvalidTransition,
+    InvalidLimits,
+    OwnerBusy,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -34,12 +39,18 @@ pub enum Admission {
 #[derive(Debug, PartialEq, Eq)]
 pub enum RunPhase {
     Queued,
+    Launching,
+    Running,
+    CleaningUp,
     Completed,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RunResult {
     Cancellation,
+    Success,
+    Failure,
+    Interruption,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,34 +64,46 @@ pub enum Cancellation {
     Cancelled,
     AlreadyCancelled,
     NotFound,
+    NotQueued,
 }
 
 fn read_run_state(connection: &Connection, run_id: &str) -> Result<Option<RunState>, Error> {
-    let state: Option<(String, Option<String>)> = connection
-        .query_row(
-            "SELECT phase, result FROM runs WHERE run_id=?1",
-            [run_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(storage)?;
-    match state {
-        None => Ok(None),
-        Some((phase, None)) if phase == "queued" => Ok(Some(RunState {
-            phase: RunPhase::Queued,
-            result: None,
-        })),
-        Some((phase, Some(result))) if phase == "completed" && result == "cancellation" => {
-            Ok(Some(RunState {
-                phase: RunPhase::Completed,
-                result: Some(RunResult::Cancellation),
-            }))
-        }
-        _ => Err(Error::Storage),
+    let state: Option<(String, Option<String>, bool, bool, bool)> = connection.query_row(
+        "SELECT phase, result, dispatched, EXISTS(SELECT 1 FROM launches WHERE launches.run_id=runs.run_id),
+         EXISTS(SELECT 1 FROM launches WHERE launches.run_id=runs.run_id AND cleanup_confirmed=1)
+         FROM runs WHERE run_id=?1", [run_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+    ).optional().map_err(storage)?;
+    let Some((phase, result, dispatched, has_launch, cleaned)) = state else {
+        return Ok(None);
+    };
+    let result = match result.as_deref() {
+        None => None,
+        Some("cancellation") => Some(RunResult::Cancellation),
+        Some("success") => Some(RunResult::Success),
+        Some("failure") => Some(RunResult::Failure),
+        Some("interruption") => Some(RunResult::Interruption),
+        _ => return Err(Error::Storage),
+    };
+    if dispatched && result == Some(RunResult::Cancellation) {
+        return Err(Error::Storage);
     }
+    let phase = match phase.as_str() {
+        "queued" if !dispatched && !has_launch && result.is_none() => RunPhase::Queued,
+        "completed" if !dispatched && !has_launch && result == Some(RunResult::Cancellation) => {
+            RunPhase::Completed
+        }
+        "launching" if dispatched && has_launch && result.is_none() => RunPhase::Launching,
+        "running" if dispatched && has_launch && result.is_none() => RunPhase::Running,
+        "cleaning_up" if dispatched && has_launch && result.is_some() => RunPhase::CleaningUp,
+        "completed" if dispatched && has_launch && cleaned && result.is_some() => {
+            RunPhase::Completed
+        }
+        _ => return Err(Error::Storage),
+    };
+    Ok(Some(RunState { phase, result }))
 }
 
-/// Durable manual admission. This store cannot dispatch or execute runs.
+/// Durable manual admission and retained lifecycle state.
 pub struct Store {
     connection: Connection,
     failed: bool,
@@ -92,7 +115,7 @@ fn random_bytes() -> Result<[u8; 32], Error> {
     Ok(bytes)
 }
 
-fn storage(error: rusqlite::Error) -> Error {
+pub(crate) fn storage(error: rusqlite::Error) -> Error {
     match error.sqlite_error_code() {
         Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked) => {
             Error::Busy
@@ -161,6 +184,10 @@ fn decode_key(key: &str) -> Result<Vec<u8>, Error> {
 }
 
 impl Store {
+    pub(crate) fn close(&mut self) {
+        self.failed = true;
+    }
+
     /// Open a dedicated database in an existing protected directory.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
@@ -206,7 +233,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if version != 1 && version != 2 {
+        } else if !(1..=3).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -240,6 +267,9 @@ impl Store {
                 )
                 .map_err(storage)?;
         }
+        if version < 3 {
+            schema::migrate(&transaction)?;
+        }
         transaction.commit().map_err(storage)?;
         Ok(Self {
             connection,
@@ -247,7 +277,7 @@ impl Store {
         })
     }
 
-    fn perform<T>(
+    pub(crate) fn perform<T>(
         &mut self,
         action: impl FnOnce(&mut Connection) -> Result<T, Error>,
     ) -> Result<T, Error> {
@@ -317,7 +347,7 @@ impl Store {
                 None => return Ok(Cancellation::NotFound),
                 Some(RunState {
                     phase: RunPhase::Completed,
-                    ..
+                    result: Some(RunResult::Cancellation),
                 }) => {
                     return Ok(Cancellation::AlreadyCancelled);
                 }
@@ -325,6 +355,7 @@ impl Store {
                     phase: RunPhase::Queued,
                     ..
                 }) => {}
+                Some(_) => return Ok(Cancellation::NotQueued),
             }
             let changed = transaction
                 .execute(

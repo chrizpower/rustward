@@ -2,9 +2,9 @@
 
 Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
-durable manual admission and queued cancellation are implemented. The diagram shows the planned system and marks the implemented
-parts in green. A separate supervision interface and systemd adapter are also
-implemented; they are not connected to admission.
+manual admission, queued cancellation, and the dispatch protocol are implemented. The diagram shows the planned system and marks the implemented
+parts in green. Dispatch tests use a fake supervisor; real systemd and capture
+integration remain gated.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
 Detailed mechanisms that remain proposals in the [requirements](temporary/requirements.md) remain proposals here. This diagram does not authorize
@@ -26,7 +26,7 @@ flowchart TB
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
-        Dispatch["Dispatch and recovery controls"]
+        Dispatch["Durable launch protocol<br/>Implemented library; fake tests"]
         Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
         Capture["Bounded per-run output capture<br/>Implemented library"]
     end
@@ -56,7 +56,7 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Inputs,Queue,Adapter,Capture implemented
+    class CLI,Config,Inputs,Queue,Dispatch,Adapter,Capture implemented
 ```
 
 The service boundary shows the planned single Rust service. The proxy, systemd,
@@ -79,7 +79,7 @@ unchanged files; two matching reads are not an atomic snapshot.
 arguments. Values use `BTreeMap<String, toml::Value>`. Accessors expose read-only
 settings, task IDs, and schedules. Runtime setting integration remains deferred.
 
-Activation, reload, scheduling, and dispatch remain unimplemented. TOML owns
+Activation, reload, scheduling, and the service execution loop remain unimplemented. TOML owns
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
@@ -107,7 +107,7 @@ the log allowance. See P07 and the retention contract for the exact rules.
 
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
-remaining specifications and required evidence. They include launch recovery, host permission verification, aggregate log reservation,
+remaining specifications and required evidence. They include real recovery, host permission checks, log-capacity integration,
 runtime layout, scheduling checkpoints, retention, and restore mechanisms.
 Private proxy access and environment/secret references also need specifications.
 
@@ -120,7 +120,8 @@ review and authorization.
 
 ## Manual admission library
 
-This library implements manual admission and queued cancellation. There is no dispatch interface.
+This library implements manual admission and queued cancellation; dispatch has
+a separate session interface below.
 The caller selects an opaque prepared runtime identity; admission retains it but
 does not verify runtime files. Runtime preparation, restore procedures, and
 execution integration remain gated by their accepted contracts.
@@ -128,7 +129,7 @@ execution integration remain gated by their accepted contracts.
 ### Storage and transactions
 
 `admission::Store::open` opens a dedicated local SQLite database. Empty paths, `:memory:`, and SQLite URI handling are excluded. Schema version
-2 uses rollback journaling and `synchronous=FULL`. An immediate transaction
+3 uses rollback journaling and `synchronous=FULL`. An immediate transaction
 serializes request lookup, queue capacity checks, and insertion of both a queued
 run and its permanent admission record. A response is returned only after commit.
 Run IDs are random 256-bit hexadecimal strings. Queue order is the insertion
@@ -177,8 +178,7 @@ An omitted value thus differs from an explicit default.
 A matching admitted key returns the original run ID before consulting the
 current task, runtime selection, admission control, or queue capacity. A changed
 payload is rejected. A missing history row returns `HistoryRemoved`; it does not
-create a run. Records are not expired. History deletion is not exposed here. The only implemented lifecycle transition
-is queued cancellation; future retention must preserve queued runs.
+create a run. Records are not expired. History deletion is not exposed here. Dispatch transitions are described below; retention must preserve queued runs.
 
 Requests are limited to 256 inputs and 64 KiB of canonical request bytes; runtime
 identities are nonempty and at most 1024 bytes. Task snapshots and generated
@@ -197,11 +197,8 @@ process exits with an unfinished equivalent first-write transaction to check
 SQLite recovery. These tests do not simulate host power loss or prove filesystem
 and hardware durability. Storage diagnostics and request-size limits are tested.
 
-Full restore, history retention, definition migration, prepared runtime
-verification, admission/dispatch service integration, and launch recovery remain
-unimplemented. The schema permits queued runs and runs completed by queued
-cancellation. Other lifecycle transitions require an explicit migration. No run can be executed through
-this library.
+Full restore, retention cleanup, runtime verification, and service integration
+remain unimplemented. Tests do not execute real tasks.
 
 ## Queued cancellation library
 
@@ -211,7 +208,7 @@ this run has never dispatched. The method works while admission is closed.
 `Cancellation::Cancelled` is returned only after the transaction commits.
 A repeated cancellation returns `AlreadyCancelled` without changing the record.
 A missing run returns `NotFound`, including when only its permanent admission
-record remains. It does not recreate removed history.
+record remains. A dispatched run returns `NotQueued`. No history is recreated.
 
 Cancellation uses an immediate transaction to read the run state and update
 phase and result together. Admission uses the same SQLite write lock. Queue
@@ -221,35 +218,38 @@ concurrent admission sees capacity before or after the committed cancellation;
 a queue-full response can be retried with its unbound key. A failed transaction
 leaves the run queued and uses the existing storage-error handling.
 
-`Store::run_state(run_id)` returns `Option<RunState>`. A present state contains
-separate `RunPhase` and optional `RunResult` fields. Only implemented states are
-exposed: `Queued` with no result and `Completed` with result `Cancellation`.
-An inconsistent stored state is a storage error and closes the handle. This is
-a read of retained history, not evidence of process execution or external effects.
+`Store::run_state(run_id)` returns separate phase and result fields. Invalid
+stored combinations close the handle with a storage error. Schema version 3 adds
+Launching, Running, CleaningUp, Success, Failure, and Interruption; active
+cancellation and timeout decisions remain future work.
 
-Database schema version 2 enforces these two state combinations with a table
-constraint. Opening version 1 migrates it in one transaction: rebuild the run
-table, preserve each row and insertion sequence, set its result to NULL, preserve
-the insertion sequence high-water mark, and update the schema version. Issuer
-state and permanent admission records do not change. New databases use version
-2. A migration failure leaves version 1 intact; later schema versions are
-rejected. Older binaries reject version 2. This database migration does not
-change request keys, fingerprints, or definition revisions. The later TOML
-format change replaces configuration syntax and the public submitted-value type;
-it leaves this database migration unchanged.
+Migration from versions 1 and 2 preserves run data, results, issuer state,
+admission records, revisions, and sequence high-water marks. Version 1 first gains
+the version 2 cancellation model. Both steps commit together. Failed migrations
+roll back; older binaries reject version 3. Tests retain both SQL fixtures and
+check failed table replacement, preserved identities, and sequence order.
 
-Running cancellation, dispatch, other phases and results, stop reasons,
-completion timestamps for retention, and full launch recovery remain future
-work. They require a new migration and their accepted execution contracts.
+## Durable dispatch library
 
-Cancellation tests cover preserved admission identity, released queue capacity,
-repeated and concurrent cancellation, concurrent admission, missing history,
-and rejected inconsistent states. Migration tests use a retained version 1 SQL
-fixture and check row data, issuer state, request fingerprints, sequence order,
-and the insertion sequence high-water mark. A failure at table rename verifies
-rollback after table replacement has begun. These checks do not prove active
-process cancellation or host recovery.
+`dispatch::Session::open(path, limits)` holds an exclusive OS lock on the database
+inode and recovers unfinished dispatched runs. Admission connections remain
+independent. Keep the protected database inode in place. Defaults are one active
+run, 10 MiB per-run log allowance, and 1 GiB aggregate accounting capacity.
 
+Dispatch starts paused. `claim_next` atomically selects the oldest queued run,
+reserves capacity, records launch intent, and returns a one-use permit containing
+retained launch data. `start` consumes it and calls a supplied supervisor once.
+No database transaction spans that call. Tests supply a fake; there is no service
+loop or systemd integration. `observe` retains identity, exit, cleanup, and review
+evidence. `finish` requires cleanup and caller-confirmed synchronized output.
+
+A new session never reconstructs permits. Unfinished launches become CleaningUp
+with Interruption unless a result was already decided. Uncertainty blocks new
+starts; missing units do not prove cleanup. Review remains required after
+completion and reopen. Acknowledgement is not implemented. Slots and log
+accounting remain reserved through uncertainty; completed logs still count.
+No retention reclamation is provided. See the [dispatch contract](temporary/dispatch.md)
+for APIs, failure cases, compatibility, and remaining integration gates.
 
 ## Supervision interface and systemd adapter
 
@@ -344,9 +344,10 @@ cleanup, and concurrent-unit isolation. The normal test run skips it. It has not
 been run in this devbox, which has no manager. Private D-Bus tests do not prove
 systemd behavior or host permissions.
 
-The admission store remains at schema version 2 and cannot dispatch. Durable
-launch intent, slot and log-capacity reservation, runtime verification, capture integration, timeout decisions, storage-failure stopping, and crash recovery
-must be implemented together before connecting admission to this adapter. In
+Schema version 3 implements durable launch intent, slot/log accounting, and
+conservative recovery with fake supervision. Runtime verification, real capture
+and log-capacity integration, timeout decisions, storage-failure stopping, and
+isolated host tests remain gates before connecting dispatch to this adapter. In
 particular, a missing unit or lost start reply must not cause automatic retry.
 
 The implementation follows the [systemd 257 D-Bus interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html)

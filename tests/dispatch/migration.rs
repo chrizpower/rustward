@@ -1,0 +1,92 @@
+use super::*;
+
+#[test]
+fn version_two_migration_preserves_rows_and_rolls_back_on_failure() {
+    for fail in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("state.db");
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch(include_str!("../fixtures/admission-v2.sql"))
+            .unwrap();
+        db.execute_batch("INSERT INTO issuer VALUES(1,zeroblob(32),zeroblob(32),100,0);
+            INSERT INTO runs VALUES(3,'old-run','old-task',x'7b7d',zeroblob(32),zeroblob(32),'{}','[]','runtime-old','completed','cancellation');
+            INSERT INTO admissions VALUES('old-key',x'1234','old-run');
+            UPDATE sqlite_sequence SET seq=20 WHERE name='runs';").unwrap();
+        if fail {
+            db.execute_batch("CREATE VIEW synthetic_view AS SELECT run_id FROM runs")
+                .unwrap();
+        }
+        if fail {
+            assert!(matches!(Store::open(&path), Err(Error::Storage)));
+            assert_eq!(
+                db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                2
+            );
+            assert_eq!(
+                db.query_row(
+                    "SELECT count(*) FROM sqlite_schema WHERE name='runs_v3'",
+                    [],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+                0
+            );
+            db.execute_batch("DROP VIEW synthetic_view").unwrap();
+        }
+        let mut store = Store::open(&path).unwrap();
+        assert_eq!(
+            db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            store.run_state("old-run").unwrap().unwrap().result,
+            Some(RunResult::Cancellation)
+        );
+        assert_eq!(
+            store.cancel_queued("old-run"),
+            Ok(Cancellation::AlreadyCancelled)
+        );
+        let row: (i64, String, Vec<u8>, String, String) = db
+            .query_row(
+                "SELECT sequence,runtime_id,task_snapshot,arguments,task_id FROM runs",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            row,
+            (
+                3,
+                "runtime-old".into(),
+                b"{}".to_vec(),
+                "[]".into(),
+                "old-task".into()
+            )
+        );
+        assert_eq!(
+            db.query_row("SELECT fingerprint FROM admissions", [], |r| r
+                .get::<_, Vec<u8>>(0))
+                .unwrap(),
+            [0x12, 0x34]
+        );
+        let key = store.issue_key().unwrap();
+        store
+            .admit(
+                &key,
+                &config::load("examples/rustward.toml").unwrap(),
+                "synthetic-report",
+                &BTreeMap::from([("name".into(), "sample".into())]),
+                "runtime-new",
+            )
+            .unwrap();
+        assert_eq!(
+            db.query_row("SELECT max(sequence) FROM runs", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            21
+        );
+        let mut session = Session::open(&path, Limits::default()).unwrap();
+        blocked(&mut session, Block::Paused);
+    }
+}

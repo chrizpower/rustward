@@ -136,8 +136,8 @@ inspect program availability, contact hosts, or load credentials.
 
 This implements the configuration and input portions of F01, F03, F04, F06,
 and F15. Activation, reload, occurrence evaluation, scheduler execution, and
-dispatch are not implemented. Service settings are exposed but not connected
-to admission, capture, retention, or other runtime components.
+the service execution loop remain unimplemented. Settings are not connected to
+admission, capture, retention, or other runtime components.
 
 ## Format change and compatibility
 
@@ -154,7 +154,8 @@ For example, old task ID `country-report` becomes `tasks/country-report.toml`;
 `BTreeMap<String, toml::Value>`. The task input types, defaults, choices, and
 argument generation rules do not change. YAML remains unsupported.
 
-SQLite schema version 2 and its existing migration are unchanged. No stored
+The configuration change did not alter SQLite schema version 2. The later
+[dispatch migration](dispatch.md) adds schema version 3 without rewriting identity. No stored
 snapshots, arguments, runtime IDs, request keys, fingerprints, or revisions are
 rewritten. A retry with an admitted key and original payload returns the original
 run even after task removal; a new task path is a changed payload. Existing
@@ -372,6 +373,7 @@ The user accepted schema version 2 and its compatibility decisions before
 implementation on 2026-11-08. This does not accept unrelated plan proposals.
 [Execution contracts](execution.md) still govern future runtime work. Activation,
 reload trigger and consistent-read integration, schedule pause/checkpoint state,
-first-installation behavior, missed-occurrence handling, dispatch, and service
-resource-limit integration remain unimplemented. No production schedule migration,
+first-installation behavior, missed-occurrence handling, service execution, and
+configuration-driven limit integration remain unimplemented. Dispatch has a
+separate tested library with caller-supplied limits; see [dispatch](dispatch.md). No production schedule migration,
 live workload, or deployment was performed.

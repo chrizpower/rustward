@@ -1,12 +1,13 @@
 # Execution contracts
 
 Status: Temporary reference for contracts accepted on 2026-11-08. Manual
-admission and queued cancellation are implemented as a library. Other lifecycle
-transitions, scheduling, restore, and execution integration are not implemented.
+admission, queued cancellation, and the durable dispatch protocol are implemented
+as libraries. Dispatch tests use a fake supervisor. Scheduling, restore, active
+stopping, and real execution integration remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
-is implemented and tested with synthetic manager responses. It is not connected
-to the admission store. [Per-run bounded capture](capture.md) is also implemented;
-aggregate reservations, retention, and service-wide failure handling remain future work. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
+is tested with synthetic manager responses. Real dispatch integration remains gated. [Per-run bounded capture](capture.md) is also implemented;
+Dispatch has conservative log accounting; capture integration, retention, and
+service-wide failure handling remain future work. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).
@@ -62,7 +63,9 @@ transition stores `Completed` and `Cancellation` atomically, preserves the
 admission record, and releases queue capacity. No process cleanup is needed
 because the run has not dispatched. Repeated cancellation does not change the
 record. See the [library and migration contract](../ARCHITECTURE.md#queued-cancellation-library).
-The other lifecycle transitions below remain accepted future behavior:
+The [dispatch contract](dispatch.md) specifies implemented launch, observation,
+completion, and recovery transactions. Active cancellation and timeout decisions
+remain future work. The accepted phases are:
 
 
 | Phase | Meaning |
@@ -74,8 +77,9 @@ The other lifecycle transitions below remain accepted future behavior:
 | Completed | Cleanup confirmed and final result recorded |
 
 Results distinguish success, failure, cancellation, timeout, and interruption.
-Record stop reasons separately while cleanup is pending. Competing-event rules
-are defined below; exact transactional recovery transitions still need tests.
+Record stop reasons separately while cleanup is pending. Dispatch retains the
+first decided result and exit evidence. Competing active cancellation/timeout
+transactions and stop-reason storage remain integration work.
 
 The execution timeout starts at dispatch and includes launch and execution, not
 queue waiting. Stopping uses a separate cleanup grace period; the slot remains
