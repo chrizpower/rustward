@@ -84,13 +84,25 @@ The hooks divide the checks as follows:
 
 | Hook | Checks | Manual command |
 | --- | --- | --- |
-| Pre-commit | Staged whitespace errors, rustfmt, and Clippy with warnings treated as errors | `git diff --cached --check` and `just check-commit` |
+| Pre-commit | Staged file size and whitespace errors, rustfmt, and Clippy with warnings treated as errors | `just check-file-size`, `git diff --cached --check`, and `just check-commit` |
 | Pre-push | rustfmt, Clippy, all test targets, and the 95% line coverage minimum | `just check` |
 
 Rust checks use the working tree. For a partial commit, run them with only the
 intended changes present. Before a push, run them on the commit to be pushed.
 Each checkout needs `just hooks-install`; it sets the local Git `core.hooksPath`
 to `.githooks`. GitHub Actions workflows are currently disabled.
+
+The file size check reads only added, copied, modified, renamed, or type-changed
+files in the Git index. Each file must be at most 5,000 tokens, where tokens equal
+bytes divided by four (20,000 bytes). Unstaged content does not affect this check.
+Deleted files and submodules are skipped. Files named `AI.md` are not inspected,
+as required by the repository rules.
+
+`Cargo.lock` is excluded through `-token-limit` in `.gitattributes`. For other
+machine-generated files, add an exact path with `-token-limit` and stage the rule.
+The check uses staged attributes. Authored source, tests, and documentation must
+stay within the limit. A failure lists the files and gives instructions to split
+them. `just check` tests these rules with a synthetic Git repository.
 
 Deployment configuration stays in
 [the deployment repository](deployment-repository). Do not copy fleet credentials

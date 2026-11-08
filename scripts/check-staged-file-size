@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+paths=$(mktemp)
+trap 'unlink "$paths"' EXIT
+git diff --cached --name-only --diff-filter=ACMRT -z > "$paths"
+
+failed=0
+while IFS= read -r -d '' path; do
+    case "$path" in
+        AI.md|*/AI.md) continue ;;
+    esac
+    attribute=$(git check-attr --cached token-limit -- "$path")
+    case "$attribute" in
+        *': token-limit: unset') continue ;;
+    esac
+    entry=$(git --literal-pathspecs ls-files --stage -- "$path")
+    case "$entry" in
+        160000\ *) continue ;;
+    esac
+    bytes=$(git cat-file -s ":$path")
+    if (( bytes > 20000 )); then
+        printf 'File size check failed: %q has %s staged bytes (%d.%02d tokens); maximum: 20,000 bytes (5,000 tokens).\n' \
+            "$path" "$bytes" "$((bytes / 4))" "$((bytes % 4 * 25))" >&2
+        failed=1
+    fi
+done < "$paths"
+
+if (( failed )); then
+    cat >&2 <<'MESSAGE'
+Split each file listed above before committing:
+1. Move each separate responsibility into a small source module. Update imports
+   and keep the public interface unchanged.
+2. Split tests by behavior. Move shared setup into a test helper module.
+3. Split documentation by topic. Keep an overview with links and update inbound
+   links. Follow the repository documentation rules when you move content.
+4. Keep each resulting file at or below 20,000 bytes. Stage all split files and
+   run `just check-file-size` again.
+For a machine-generated file, add an exact path with `-token-limit` to
+.gitattributes and stage that rule. Do not exempt authored source or documents.
+MESSAGE
+    exit 1
+fi
