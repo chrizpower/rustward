@@ -20,7 +20,9 @@ skipping missed occurrences while reporting gaps. Application code belongs in
 `chrizpower/rustward`; deployment belongs in `the deployment repository`.
 
 Configuration validation, argument generation, durable manual admission, and
-queued cancellation are implemented. Execution,
+queued cancellation are implemented. A separate supervision adapter targets
+Debian 13 and the dedicated systemd user manager; its tests use synthetic manager
+responses and a private D-Bus peer. Integrated execution,
 scheduling, and operational behavior remain unimplemented. This reference does not
 authorize live execution, production deployment, or schedule migration.
 

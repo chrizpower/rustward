@@ -2,7 +2,8 @@
 
 Status: Temporary work list. Configuration validation, request input validation,
 argument generation, durable manual admission, and queued cancellation are implemented. The execution
-backend is not implemented.
+core is not implemented. A separate supervision interface and systemd user-manager
+adapter are implemented; real host verification and integration remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -25,7 +26,8 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    mapping use the implemented TOML version 1 contract; see its
    [format change](configuration.md#format-change-and-compatibility). Further
    schema changes need an explicit compatibility and migration decision.
-2. Select the Linux/systemd baseline, manager, and narrowly scoped permissions.
+2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
+   permissions on an isolated host.
    Specify runtime layout, output capture, environment and secret references,
    task resource controls, and remaining metadata/buffer bounds before integration.
 3. Implement the execution core with synthetic inputs. Select the required Rust
@@ -57,7 +59,9 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   Persist evaluation checkpoints together with occurrence decisions. Demonstrate
   reliable coverage; report intervals with insufficient evidence as gaps. Test
   clock changes, outages, schedule edits, and first installation.
-- Select systemd baseline, manager, and permissions on an isolated test host.
+- Verify the selected systemd baseline, manager, and permissions on an isolated
+  Debian 13 test host. The [supervision adapter contract](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
+  is implemented with synthetic tests; its opt-in host test remains unrun.
   Validate process-boundary enforcement and cleanup evidence. Define the review
   record with affected runs, evidence, uncertainty, decision, and reason.
 - Specify runtime manifest, paths, ownership,
@@ -83,7 +87,8 @@ review a proposal before implementing it.
   systemd timers remain an alternative only if they preserve accepted occurrence,
   admission, and missed-work behavior. Keep one schedule owner. Consider SSE or
   bounded polling for output, and derive per-run unit identity from the run ID.
-  Transient services and `KillMode=control-group` are proposed systemd mechanisms.
+  The separate supervision adapter now implements transient services and
+  `KillMode=control-group`. Host evidence remains a gate for execution integration.
 - **P02:** SQLite transactions now record manual request identity and queued runs,
   including insertion order. Dispatch integration remains future work. Show
   queued runs before resuming. Preserve

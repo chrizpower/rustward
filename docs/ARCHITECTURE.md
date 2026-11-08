@@ -3,7 +3,8 @@
 Rustward will run generic command tasks for one trusted administrator. Version 1
 configuration validation, request input validation, argument generation, and
 durable manual admission and queued cancellation are implemented. The diagram shows the planned system and marks the implemented
-parts in green.
+parts in green. A separate supervision interface and systemd adapter are also
+implemented; they are not connected to admission.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
 Detailed mechanisms that remain proposals in the [requirements](temporary/requirements.md) remain proposals here. This diagram does not authorize
@@ -26,6 +27,7 @@ flowchart TB
         Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
         Dispatch["Dispatch and recovery controls"]
+        Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
         Capture["Output capture"]
     end
 
@@ -47,14 +49,14 @@ flowchart TB
     Dispatch <--> DB
 
     Prepare --> Runtime
-    Dispatch --> Systemd --> Task
+    Dispatch --> Adapter --> Systemd --> Task
     Runtime --> Task
     Task --> Capture --> Logs
     Logs --> UI
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Inputs,Queue implemented
+    class CLI,Config,Inputs,Queue,Adapter implemented
 ```
 
 The service boundary shows the planned single Rust service. The proxy, systemd,
@@ -79,7 +81,8 @@ too. Internally, `TaskDefinition` contains `InputDeclaration` and
 changing the submitted map. Argument generation converts only referenced values
 to strings. Defaults and submitted values use the same type and choice checks.
 It does not split, expand, or interpolate values. There is no submission
-CLI or command execution. The implemented library is shown inside the planned
+CLI or integrated task execution path. The separate supervision adapter can
+request generic process starts. The implemented library is shown inside the planned
 service boundary; service integration is future work.
 
 ## Design boundaries
@@ -103,12 +106,13 @@ the log allowance. See P07 and the retention contract for the exact rules.
 
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
-remaining specifications and required evidence. They include launch recovery, the systemd manager and permissions, output capture,
+remaining specifications and required evidence. They include launch recovery, host permission verification, output capture,
 runtime layout, scheduling checkpoints, retention, and restore mechanisms.
 Private proxy access and environment/secret references also need specifications.
 
 The current tests cover configuration, argument generation, manual admission,
-queued cancellation, and database migration. They do not prove
+queued cancellation, database migration, and the supervision adapter contract.
+Synthetic adapter and private D-Bus tests do not prove
 execution, recovery, scheduling, or deployment behavior. License selection is a
 release gate; workload compatibility and production migration require separate
 review and authorization.
@@ -240,3 +244,105 @@ fixture and check row data, issuer state, request fingerprints, sequence order,
 and the insertion sequence high-water mark. A failure at table rename verifies
 rollback after table replacement has begun. These checks do not prove active
 process cancellation or host recovery.
+
+
+## Supervision interface and systemd adapter
+
+The user selected a dedicated unprivileged systemd user manager and supplied
+Debian 13 as the fleet baseline. The adapter targets systemd 257 or newer and
+cgroup v2 on that host. It does not request system-manager or privileged unit
+creation. Host setup must keep the dedicated user manager available. The
+adapter process and manager must see the same cgroup hierarchy. Production host
+setup remains in the deployment repository; nothing here authorizes deployment.
+
+`supervision::Supervisor` defines start, observation, stop, and reference release.
+Tests and future execution-core tests can replace the complete supervisor.
+`systemd::Systemd<M, C>` implements this interface. Its `Manager` and `Cgroups`
+ports permit controlled manager replies and cgroup evidence. `UserBus` implements
+the manager port with zbus blocking D-Bus calls on the session bus, with no
+system-bus fallback. Configure that session as the dedicated user's bus. Each
+D-Bus method has a five-second timeout. `CgroupFs` reads at most 4096 bytes of
+`cgroup.events` under `/sys/fs/cgroup`; malformed or unreadable evidence stays
+unknown. No daemon, command wrapper, shell launcher, or database migration is
+added by this slice.
+
+### Start and identity
+
+A `Launch` uses an existing 64-character lowercase hexadecimal run ID, absolute
+program and working-directory paths, separate arguments, and a cleanup grace
+period. `DEFAULT_CLEANUP_GRACE` is 30 seconds; callers can supply another positive
+period in whole microseconds. The adapter rejects NUL, more than 65,536 arguments,
+and more than 1 MiB of combined program, directory, and argument text.
+
+The unit name is `rustward-run-<run-id>.service`. `StartTransientUnit` uses job
+mode `fail`. It never replaces an existing run unit or retries a failed call.
+`StartOutcome::Accepted` confirms only that a start job was queued. Explicit
+permission/argument errors report `Rejected`; an existing unit reports
+`Conflict`. Other errors, including a lost reply, report `Uncertain`. None
+permits an automatic new start for the same admitted run.
+
+The adapter sets `Type=exec`, `Restart=no`, `KillMode=control-group`,
+`SendSIGKILL=yes`, and the selected stop grace period. `ExecStartEx` includes
+`no-env-expand`, preserving complete argument values without shell or environment
+expansion. `RemainAfterExit=yes` retains a successful exited service for explicit
+cleanup. `AddRef=true` pins its unit object while the D-Bus connection remains.
+Standard input is null; stdout and stderr use caller-supplied file descriptors.
+The caller owns draining and bounded retention. There is no implicit journal or
+file-output fallback. Environment and secret policy remain integration gates;
+the low-level adapter does not provide an isolated execution environment.
+
+An observed systemd invocation ID and cgroup path form
+`supervision::ExecutionIdentity`. The future dispatcher must retain this
+correlation before using it for subsequent observation or stopping. This identity
+is separate from the run ID and prepared runtime identity. The adapter checks
+unit description, transient status, service type, and any supplied prior
+invocation and cgroup. A mismatch prevents stop or release.
+
+### Observation and cleanup
+
+Two fresh unit/service snapshots surround the cgroup read. A changed or lost
+snapshot produces uncertain evidence. A start job, main PID, or service-process
+creation timestamp alone is not proof that the program executed. Running is
+reported only for an active, running `Type=exec` unit with a main PID. Exit data
+uses the manager's exit timestamp, exit code, and signal status. An exit code is
+local evidence only; it does not prove an external outcome.
+
+Cleanup is confirmed only when the unit is inactive or failed, no job is pending,
+no main PID is reported, and its matching cgroup is empty or absent. A retained
+prior identity permits checking the cgroup after systemd clears its current
+cgroup path. Missing units, unknown cgroups, and missing PIDs alone do not prove
+cleanup. Stopping is distinct from observing program exit. A graceful stop queues
+`StopUnit`; force stopping sends SIGKILL to all unit processes. Neither response
+confirms cleanup. `release` checks cleanup before calling `UnrefUnit`; callers
+must first durably retain the final evidence and result. Connection loss can
+release references, so unit retention alone is not a recovery protocol.
+
+### Evidence and integration gates
+
+`tests/supervision.rs` uses a fake manager and cgroup reader to test uncertain
+starts, exact arguments and settings, identity mismatches, changing observations,
+exit data, stop requests, and cleanup checks. Private peer-to-peer D-Bus tests
+exercise the actual wire signatures and file-descriptor transfer. Filesystem
+tests cover malformed, oversized, and missing cgroup evidence. These tests use
+synthetic data and need no real manager.
+
+Run the opt-in test only on an isolated Debian 13 host with the dedicated user
+manager and unified cgroup hierarchy:
+
+```sh
+cargo test --locked --test systemd_host -- --ignored
+```
+
+It starts two synthetic shell workloads to check main-process exit, child
+cleanup, and concurrent-unit isolation. The normal test run skips it. It has not
+been run in this devbox, which has no manager. Private D-Bus tests do not prove
+systemd behavior or host permissions.
+
+The admission store remains at schema version 2 and cannot dispatch. Durable
+launch intent, slot and log-capacity reservation, runtime verification, bounded
+output capture, timeout decisions, storage-failure stopping, and crash recovery
+must be implemented together before connecting admission to this adapter. In
+particular, a missing unit or lost start reply must not cause automatic retry.
+
+The implementation follows the [systemd 257 D-Bus interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html)
+and its [transient launch property construction](https://github.com/systemd/systemd/blob/v257/src/run/run.c).

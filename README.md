@@ -8,7 +8,9 @@ Status: version 1 configuration validation, request input validation,
 argument generation, durable manual admission, and queued cancellation are
 implemented. The binary
 validates TOML files. The Rust library validates submitted values, returns
-separate arguments, and records queued manual runs; it cannot run tasks. See the
+separate arguments, and records queued manual runs. A separate supervision
+library can request process starts through a systemd user manager; the task
+dispatch loop is not implemented. See the
 [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/tasks.toml).
 
@@ -51,6 +53,12 @@ queued runs in a dedicated local SQLite database. It can read retained run state
 and cancel a queued run without deleting its history or admission record. See the [admission interface
 and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
 submission CLI, HTTP service, or dispatch implementation.
+
+The `supervision::Supervisor` interface supports replaceable adapters. The
+`systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
+manager. Tests use a fake manager and a private D-Bus peer without starting
+programs. Runtime verification, bounded output capture, and durable dispatch
+remain separate integration gates. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
 
 ## Development
 

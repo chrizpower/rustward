@@ -49,8 +49,9 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 - **Rule:** Use one Rust service, local SQLite, and embedded web assets. Require
   Linux with systemd for task supervision. Provide private proxy access for one
   administrator. The proxy authenticates access; Rustward protects state-changing
-  browser requests. Select manager type and unit permissions before backend
-  integration. Do not grant broad privileged unit creation as a shortcut.
+  browser requests. Target Debian 13 with systemd 257 and a dedicated unprivileged user manager,
+  as selected by the user. Verify unit permissions on an isolated host before
+  execution-core integration. Do not grant broad privileged unit creation as a shortcut.
 - **Reason and cost:** Reduce custom supervision and deployment components.
   Availability depends on one host. Real execution tests need an isolated systemd
   host; a rootless development container cannot prove host integration.
@@ -249,3 +250,10 @@ Keep version 1 task fields and domain rules. This supersedes the earlier file
 format choice and changes the Rust submitted-value type to `toml::Value`.
 Preserve persisted identities and normalized snapshots. External workload
 formats, including Ansible inventory, remain owned by those workloads.
+
+2026-11-08: The user selects a dedicated systemd user manager, confirms Debian
+13 as the fleet baseline, and requests a replaceable supervision adapter for
+manager-free tests. Target systemd 257. Real host verification, runtime and
+output integration, and durable launch recovery remain required before the
+admission store can dispatch. Transient service settings are implementation
+mechanisms, not permission to weaken P02, P06, or P07.
