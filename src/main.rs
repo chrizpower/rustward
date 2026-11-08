@@ -10,7 +10,7 @@ fn main() -> ExitCode {
         || path.is_none()
         || arguments.next().is_some()
     {
-        eprintln!("Usage: rustward validate <config.yaml>");
+        eprintln!("Usage: rustward validate <config.toml>");
         return ExitCode::FAILURE;
     }
     let source = match fs::read_to_string(path.unwrap()) {

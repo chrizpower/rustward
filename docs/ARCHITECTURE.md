@@ -13,7 +13,7 @@ execution, migration, or deployment.
 
 ```mermaid
 flowchart TB
-    Git["Git-managed YAML task definitions"]
+    Git["Git-managed TOML task definitions"]
     CLI["rustward validate<br/>Implemented"]
     Config["Versioned configuration validation<br/>Implemented"]
 
@@ -64,11 +64,11 @@ a logical component; its systemd interface remains to be defined.
 
 ## Current implementation
 
-`rustward validate <config.yaml>` reads one YAML document and checks its
+`rustward validate <config.toml>` reads one TOML document and checks its
 version, task IDs, typed inputs, defaults, choices, and argument references. It
 rejects unknown fields and duplicate IDs. It does not execute commands or check
 program availability. See the [configuration schema](temporary/configuration.md) and
-[synthetic example](../examples/tasks.yaml).
+[synthetic example](../examples/tasks.toml).
 
 The Rust library exposes `config::validate` and `Config::arguments`. A validated
 configuration selects a task by ID, rejects undeclared or invalid values,
@@ -134,7 +134,9 @@ Queued runs retain the normalized task snapshot, configuration revision,
 generated arguments, submitted inputs, and runtime identity. Schema defaults
 are applied before snapshot serialization. JSON object keys are sorted; lists
 retain order and values retain type. SHA-256 of the version-prefixed JSON bytes
-identifies definition revisions. No schema version 1 YAML fields change.
+identifies definition revisions. The task schema keeps its version 1 fields;
+TOML replaces the original YAML syntax at the user's request. See the
+[format change](temporary/configuration.md#format-change-and-compatibility).
 
 Storage errors close the affected store handle. The service must close all
 admission and dispatch paths on such an error under P06; service integration and
@@ -223,8 +225,9 @@ the insertion sequence high-water mark, and update the schema version. Issuer
 state and permanent admission records do not change. New databases use version
 2. A migration failure leaves version 1 intact; later schema versions are
 rejected. Older binaries reject version 2. This database migration does not
-change the public configuration interfaces, YAML version 1, request keys,
-fingerprints, or definition revisions.
+change request keys, fingerprints, or definition revisions. The later TOML
+format change replaces configuration syntax and the public submitted-value type;
+it leaves this database migration unchanged.
 
 Running cancellation, dispatch, other phases and results, stop reasons,
 completion timestamps for retention, and full launch recovery remain future

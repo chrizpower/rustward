@@ -71,7 +71,7 @@ requires it to be unique within a configuration.
 
 **Label**: Human-readable text for a task. It does not replace the task ID.
 
-**Configuration**: A versioned YAML document containing task definitions.
+**Configuration**: A versioned TOML document containing task definitions.
 Version 1 contains no schedule definitions.
 
 **Configuration validation**: Checking a configuration against its schema and
@@ -81,8 +81,8 @@ reference rules. It does not check program availability or execute a command.
 flags, defaults, and permitted choices.
 
 **Input value**: A typed value supplied for a declared input, or its default
-when no value is supplied. Inputs are data. Explicit null is invalid and does
-not select a default. An optional input can be absent when no argument
+when no value is supplied. Inputs are data. TOML has no null value; an omitted value selects its
+default when one exists. An optional input can be absent when no argument
 references it.
 
 **Required input**: An input that must have a value after defaults are applied.
@@ -263,7 +263,7 @@ omitted field and an explicit equivalent default have the same revision.
 **Configuration revision**: Identifies one version of the complete set of parsed
 definitions. A changed definition changes the configuration revision.
 
-Comments, whitespace, and YAML key order do not change definition revisions.
+Comments, whitespace, and TOML key order do not change definition revisions.
 Argument order does. See the [revision
 contract](temporary/execution.md#definition-revision-contract) for the distinction
 between normalized definitions and submitted request values.
@@ -300,7 +300,7 @@ provides evidence of usage; it does not decide domain meaning.
 | `TaskDefinition` | A task definition decoded from configuration. | Task names reusable work; run names one accepted execution. |
 | `InputDeclaration` | A declared input with type, required flag, default, and choices. | Distinguish the declaration from a supplied input value. |
 | `ArgumentSource` | A configured literal or input reference. | Distinguish this entry from the generated string passed to a program. |
-| `Config` | Validated task configuration. | `Document` represents the YAML document before validation. |
+| `Config` | Validated task configuration. | `Document` represents the TOML document before validation. |
 
 `Config::arguments` takes submitted values without changing them. The private
 `TaskDefinition::validate_submitted_values` method checks all input declarations
@@ -322,8 +322,9 @@ separately from defaults and generated arguments. See the [admission storage
 contract](ARCHITECTURE.md#manual-admission-library).
 
 The private names were aligned with the accepted meanings during the code
-review requested on 2026-11-08. Public Rust interfaces and YAML version 1 fields
-are unchanged. These mappings do not authorize public interface changes.
+review requested on 2026-11-08. The later user request to replace YAML with
+TOML changes the public submitted-value type to `toml::Value` and the file syntax.
+Domain meanings and field names remain unchanged. These mappings do not authorize public interface changes.
 
 ## Contract status
 

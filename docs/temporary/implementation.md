@@ -22,8 +22,9 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    transitions under the accepted execution contracts. Manual key verification,
    atomic admission, and queued cancellation with separate phase and result
    storage are implemented. Configuration and argument
-   mapping are already implemented; extend their schema only through an explicit
-   compatible contract change.
+   mapping use the implemented TOML version 1 contract; see its
+   [format change](configuration.md#format-change-and-compatibility). Further
+   schema changes need an explicit compatibility and migration decision.
 2. Select the Linux/systemd baseline, manager, and narrowly scoped permissions.
    Specify runtime layout, output capture, environment and secret references,
    task resource controls, and remaining metadata/buffer bounds before integration.

@@ -9,7 +9,7 @@ interviews on 2026-11-07 and 2026-11-08. Parent guidance:
 
 Build a small task executor for one trusted administrator. Support generic
 commands, manual requests, UTC cron schedules, and a web UI. Keep task and
-schedule definitions in Git-managed YAML. Skip missed schedules and report gaps.
+schedule definitions in Git-managed TOML. Skip missed schedules and report gaps.
 These product requirements were confirmed before this interview.
 
 The main drivers are safe recovery, bounded resource use, fixed execution
@@ -243,3 +243,9 @@ P06 remain in force. No implementation or deployment is implied.
 2026-11-08: Consolidate document roles and superseded-plan references at the
 user's request. Preserve rule IDs, accepted decisions, and unresolved
 mechanisms.
+
+2026-11-08: Replace Rustward YAML definitions with TOML at the user's request.
+Keep version 1 task fields and domain rules. This supersedes the earlier file
+format choice and changes the Rust submitted-value type to `toml::Value`.
+Preserve persisted identities and normalized snapshots. External workload
+formats, including Ansible inventory, remain owned by those workloads.

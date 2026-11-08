@@ -5,16 +5,50 @@ schema, API contract, examples, and compatibility rules into ARCHITECTURE.md,
 and relevant domain meanings into GLOSSARY.md before removing this file. Preserve
 the implemented contract and update inbound links. See [folder guidance](README.md).
 
-Use `cargo run --locked -- validate examples/tasks.yaml` to validate a file. The
-installed binary accepts `rustward validate <config.yaml>`. Success returns exit
+Use `cargo run --locked -- validate examples/tasks.toml` to validate a file. The
+installed binary accepts `rustward validate <config.toml>`. Success returns exit
 code 0. Invalid configuration, read errors, and incorrect CLI arguments return
-exit code 1. Validation reads one UTF-8 YAML document. It does not run commands,
+exit code 1. Validation reads one UTF-8 TOML document. It does not run commands,
 inspect program availability, contact hosts, or load credentials.
 
 This implemented contract covers the configuration and input portions of [plan
 requirements F01, F03, F04, and F15](requirements.md#functional-requirements).
 It implements configuration validation, request input validation, and argument
 generation. It does not implement activation, reload, schedules, or execution.
+
+## Format change and compatibility
+
+The user requested replacement of YAML with TOML. This deliberately replaces
+the earlier YAML version 1 contract. Rustward accepts TOML only; renaming an old
+file does not convert its content. The schema keeps `version = 1` and the same
+field names, supported input types, defaults, choices, and argument rules.
+The file format and Rust value type change: callers of `Config::arguments` and
+`Store::admit` must use `BTreeMap<String, toml::Value>`. TOML has no null or
+unsigned integer value. Out-of-range integers fail during parsing. Floating
+point and datetime values exist in TOML but are not accepted input values.
+
+Convert task lists to `[[tasks]]` tables. Set `arguments` and `inputs` to arrays
+of inline tables, as in the example, or use arrays of tables. Quote every string;
+write key/value pairs with `=`. Use `tasks = []` for an empty configuration.
+For example:
+
+```toml
+version = 1
+
+[[tasks]]
+id = "country-report"
+label = "Country report"
+executable = "/synthetic/bin/report"
+working_directory = "/synthetic"
+arguments = [{ input = "country" }]
+inputs = [{ id = "country", type = "string", default = "NO" }]
+```
+
+SQLite schema version 2 and its migration remain unchanged. Existing stored JSON
+snapshots, submitted values, arguments, keys, and request fingerprints remain
+valid. Equivalent validated definitions produce the same normalized JSON and
+revisions. New TOML values use the same scalar fingerprint encoding. No queued
+run is rewritten or recreated during this format change.
 
 ## Schema
 
@@ -37,14 +71,15 @@ An empty task list is valid. Use `[]` for empty argument and input lists.
 | Input | `id` | Stable ID |
 | Input | `type` | `string`, `integer`, or `boolean` |
 | Input | `required` | Optional boolean; defaults to `false` |
-| Input | `default` | Optional scalar of the declared type; explicit null is invalid |
+| Input | `default` | Optional scalar of the declared type; omit it when no default is needed |
 | Input | `choices` | Optional nonempty list of distinct values of the declared type |
 
 IDs start with an ASCII lowercase letter. Remaining characters are ASCII
 lowercase letters, digits, or hyphens. Each argument object contains exactly one
-field: `literal` or `input`. Strings must be YAML strings. Quote strings that
-could be read as another YAML scalar type. Integers must fit a signed 64-bit
-value. Booleans are `true` or `false`. String inputs cannot contain NUL.
+field: `literal` or `input`. Strings must be quoted TOML strings. For example,
+`"NO"`, `"yes"`, and `"on"` are strings; bare `NO`, `yes`, and `on` are syntax
+errors. Booleans are only `true` and `false`. Integers must fit a signed 64-bit
+value. String inputs cannot contain NUL.
 Defaults must match the declared type and belong to `choices` when it is set.
 
 A required input can have a default. The default supplies its value when no
@@ -62,7 +97,7 @@ generation. A program can still interpret an argument as an option. Task owners
 must use program options such as `--` where needed. Validation does not inspect
 program behavior.
 
-[The synthetic example](../../examples/tasks.yaml) uses paths that need not exist.
+[The synthetic example](../../examples/tasks.toml) uses paths that need not exist.
 The generic schema contains no Ansible-specific fields, secrets, schedules,
 runtime selection, environment configuration, or execution limits.
 
@@ -70,23 +105,23 @@ runtime selection, environment configuration, or execution limits.
 
 Use `rustward::config::validate(source)` to obtain a validated `Config`. Call
 `Config::arguments(task_id, &values)` with a `BTreeMap<String,
-serde_yaml_ng::Value>`. It returns `Result<Vec<String>, String>`. The
+toml::Value>`. It returns `Result<Vec<String>, String>`. The
 configuration fields are private, and only configuration validation can
 construct a `Config`. The method does not change the configuration or submitted values. Internal
 request input validation retains typed input values, including defaults, until
 argument generation converts referenced values to strings. Unused input values
 are validated but produce no arguments. See the [code mappings](../GLOSSARY.md#current-code-mappings)
-for the private types; their names do not change YAML field names.
+for the private types; their names do not change TOML field names.
 
 Task selection uses an exact ID match. Unknown task IDs and undeclared input
 names are errors. Each declared input uses its submitted value, or its default
-when absent. Explicit null is invalid and does not select the default. A
+when absent. TOML has no null value; omit an input to select its default. A
 required input without either value is an error. An absent optional input
 without a default is permitted only when no argument references it, as required
 by the configuration schema. Unused inputs still receive type and choice checks.
 
 Values must have the declared type, without conversion. Integers must fit `i64`;
-floats and numeric strings are invalid. Choice values must match exactly.
+floats, datetimes, arrays, tables, and numeric strings are invalid. Choice values must match exactly.
 Strings preserve empty values, spaces, Unicode, and shell syntax. NUL is
 invalid. Each configured literal or input produces exactly one argument, in list
 order. Repeated input references produce repeated arguments. Errors identify the
@@ -95,11 +130,11 @@ define a request wire format or duplicate-key handling for a future transport.
 
 ## Dependencies and open decisions
 
-Use Serde derive for typed decoding and `serde_yaml_ng` 0.10 for YAML parsing.
-The lockfile records exact dependency versions. Serde supports rejection of
-[unknown fields](https://serde.rs/container-attrs.html). The parser documents
-[YAML 1.1 support](https://docs.rs/serde_yaml_ng/0.10.0/serde_yaml_ng/). Tests
-check the schema rules instead of assuming scalar conversion is safe.
+Use Serde derive for typed decoding and the `toml` 1.2 crate with Serde support
+for TOML 1.1 parsing. The lockfile records exact dependency versions. The
+[parser documentation](https://docs.rs/toml/1.2.1/toml/) and
+[TOML specification](https://toml.io/en/v1.1.0) define syntax. Tests check strict
+types, duplicate fields, unsupported values, and quoted ambiguous-looking text.
 
 This version is the first implementation contract, authorized by the task
 configuration slice. It does not accept unrelated plan proposals. Review schema

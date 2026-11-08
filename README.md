@@ -7,13 +7,13 @@ provide a web UI for inputs, logs, and status. Ansible is the first workload.
 Status: version 1 configuration validation, request input validation,
 argument generation, durable manual admission, and queued cancellation are
 implemented. The binary
-validates YAML files. The Rust library validates submitted values, returns
+validates TOML files. The Rust library validates submitted values, returns
 separate arguments, and records queued manual runs; it cannot run tasks. See the
 [configuration schema](docs/temporary/configuration.md) and
-[synthetic example](examples/tasks.yaml).
+[synthetic example](examples/tasks.toml).
 
 ```sh
-cargo run --locked -- validate examples/tasks.yaml
+cargo run --locked -- validate examples/tasks.toml
 ```
 
 ## Documentation
@@ -38,8 +38,12 @@ Start with architecture and the temporary execution contracts, then consult the
 implementation work list. Accepted rules and contracts take precedence over
 unaccepted proposals. Acceptance does not prove implementation or testing.
 
+Configuration uses TOML only. The earlier YAML syntax is no longer accepted.
+See [conversion and Rust API changes](docs/temporary/configuration.md#format-change-and-compatibility).
+Existing admission records and queued runs remain valid.
+
 The library exposes `config::validate` and `Config::arguments(task_id,
-&values)`. Values use `BTreeMap<String, serde_yaml_ng::Value>`. See the [request
+&values)`. Values use `BTreeMap<String, toml::Value>`. See the [request
 contract](docs/temporary/configuration.md#request-inputs-and-arguments) for details.
 
 The `admission::Store` library issues manual request keys and atomically records

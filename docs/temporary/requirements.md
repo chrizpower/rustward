@@ -15,7 +15,7 @@ Use [Gravity](../GRAVITY.md) for accepted architecture rules,
 
 Replace Semaphore with Rustward, a small generic task executor written in Rust.
 Ansible is the first workload. Confirmed scope is Rust, manual requests, UTC
-cron, Git-managed YAML definitions, a web UI, one trusted administrator, and
+cron, Git-managed TOML definitions, a web UI, one trusted administrator, and
 skipping missed occurrences while reporting gaps. Application code belongs in
 `chrizpower/rustward`; deployment belongs in `the deployment repository`.
 
@@ -46,7 +46,7 @@ requirement below; partial acceptance does not accept the rest of a requirement.
 
 | ID | Requirement | Acceptance condition |
 | --- | --- | --- |
-| F01 | Load versioned YAML task and schedule definitions. Each task has a stable ID, label, executable, argument list, working directory, and input schema. | Reject duplicate IDs, unknown keys, invalid references, and invalid schedules before activation. A failed reload leaves the previous valid configuration active. |
+| F01 | Load versioned TOML task and schedule definitions. Each task has a stable ID, label, executable, argument list, working directory, and input schema. | Reject duplicate IDs, unknown keys, invalid references, and invalid schedules before activation. A failed reload leaves the previous valid configuration active. |
 | F02 | Run a defined task from the web UI with optional inputs. | Accept a Rustward-issued manual request key and return the same durable run ID for retries with the same payload; reject reuse with a different payload. Refreshing or closing the page does not stop the run. Show a clear error when the request is rejected. |
 | F03 | Support required inputs, defaults, strings, integers, booleans, and explicit choice lists. | Validate on the server for both manual and scheduled requests. Reject undeclared inputs and values outside the schema. |
 | F04 | Execute a program with separate arguments and a controlled environment. | Inputs remain data. Never insert them into a shell command string. Scripts use an explicit interpreter or executable. |

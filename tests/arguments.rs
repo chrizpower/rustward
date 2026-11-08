@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use rustward::config::validate;
-use serde_yaml_ng::Value;
+use toml::Value;
 
-const EXAMPLE: &str = include_str!("../examples/tasks.yaml");
+const EXAMPLE: &str = include_str!("../examples/tasks.toml");
 
 fn values(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
     entries
@@ -15,8 +15,8 @@ fn values(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
 #[test]
 fn preserves_argument_boundaries_and_repeated_references() {
     let source = EXAMPLE.replace(
-        "      - literal: --name",
-        "      - literal: ''\n      - literal: 'literal with spaces; $HOME'\n      - input: name",
+        "    { literal = \"--name\" },",
+        "    { literal = '' },\n    { literal = 'literal with spaces; $HOME' },\n    { input = 'name' },",
     );
     let config = validate(&source).unwrap();
     for text in [
@@ -39,7 +39,7 @@ fn preserves_argument_boundaries_and_repeated_references() {
 #[test]
 fn applies_defaults_and_explicit_overrides() {
     let config =
-        validate(&EXAMPLE.replace("required: true", "required: true\n        default: sample"))
+        validate(&EXAMPLE.replace("required = true", "required = true, default = 'sample'"))
             .unwrap();
     assert_eq!(
         config
@@ -64,7 +64,7 @@ fn applies_defaults_and_explicit_overrides() {
 
 #[test]
 fn formats_signed_integer_limits() {
-    let config = validate(&EXAMPLE.replace("        choices: [1, 2, 3]\n", "")).unwrap();
+    let config = validate(&EXAMPLE.replace(", choices = [1, 2, 3]", "")).unwrap();
     for number in [i64::MIN, -1, 0, i64::MAX] {
         let args = config
             .arguments(
@@ -80,20 +80,20 @@ fn formats_signed_integer_limits() {
 fn rejects_invalid_values_without_default_fallback() {
     let config = validate(EXAMPLE).unwrap();
     for (id, invalid) in [
-        ("name", Value::Null),
+        ("name", Value::Datetime("1979-05-27".parse().unwrap())),
         ("name", 2.into()),
         ("name", true.into()),
         ("name", "bad\0value".into()),
         ("count", "2".into()),
         ("count", true.into()),
         ("count", 2.5.into()),
-        ("count", Value::from(u64::MAX)),
+        ("count", Value::Float(f64::INFINITY)),
         ("count", 4.into()),
         ("enabled", "false".into()),
         ("enabled", 0.into()),
-        ("enabled", Value::Null),
-        ("name", Value::Sequence(vec![])),
-        ("name", Value::Mapping(Default::default())),
+        ("enabled", Value::Datetime("1979-05-27".parse().unwrap())),
+        ("name", Value::Array(vec![])),
+        ("name", Value::Table(Default::default())),
     ] {
         let mut submitted = values(&[("name", "sample".into())]);
         submitted.insert(id.into(), invalid);
@@ -134,7 +134,18 @@ fn rejects_missing_and_unknown_inputs_and_unknown_tasks() {
 #[test]
 fn selects_task_and_validates_unused_inputs() {
     let source = format!(
-        "{EXAMPLE}\n  - id: other\n    label: Other\n    executable: /synthetic/other\n    working_directory: /synthetic\n    arguments: []\n    inputs:\n      - id: unused\n        type: boolean\n        required: true\n        choices: [true]\n      - id: optional\n        type: string\n"
+        r#"{EXAMPLE}
+[[tasks]]
+id = "other"
+label = "Other"
+executable = "/synthetic/other"
+working_directory = "/synthetic"
+arguments = []
+inputs = [
+    {{ id = "unused", type = "boolean", required = true, choices = [true] }},
+    {{ id = "optional", type = "string" }},
+]
+"#
     );
     let config = validate(&source).unwrap();
     assert!(config.arguments("other", &BTreeMap::new()).is_err());
@@ -167,8 +178,8 @@ fn selects_task_and_validates_unused_inputs() {
 #[test]
 fn checks_string_choices_without_conversion() {
     let config = validate(&EXAMPLE.replace(
-        "required: true",
-        "required: true\n        choices: ['', '日本語', 'true']",
+        "required = true",
+        "required = true, choices = ['', '日本語', 'true']",
     ))
     .unwrap();
     for text in ["", "日本語", "true"] {
@@ -190,7 +201,7 @@ fn checks_string_choices_without_conversion() {
 
 #[test]
 fn keeps_submitted_values_separate_from_defaults_and_arguments() {
-    let source = EXAMPLE.replace("required: true", "required: true\n        default: sample");
+    let source = EXAMPLE.replace("required = true", "required = true, default = 'sample'");
     let config = validate(&source).unwrap();
     let submitted = values(&[("count", 3.into())]);
     let original = submitted.clone();
@@ -206,26 +217,25 @@ fn keeps_submitted_values_separate_from_defaults_and_arguments() {
         ["--name", "sample", "2", "false"]
     );
     let error = config
-        .arguments("synthetic-report", &values(&[("name", Value::Null)]))
+        .arguments(
+            "synthetic-report",
+            &values(&[("name", Value::Datetime("1979-05-27".parse().unwrap()))]),
+        )
         .unwrap_err();
     assert!(error.contains("input name:"));
 }
 
 #[test]
 fn validates_unreferenced_values_without_generating_arguments() {
-    let source = "version: 1
-tasks:
-   - id: sample
-     label: Sample
-     executable: /synthetic/program
-     working_directory: /synthetic
-     arguments: []
-     inputs:
-       - id: selection
-         type: string
-         default: allowed
-         choices: [allowed]
-";
+    let source = r#"version = 1
+[[tasks]]
+id = "sample"
+label = "Sample"
+executable = "/synthetic/program"
+working_directory = "/synthetic"
+arguments = []
+inputs = [{ id = "selection", type = "string", default = "allowed", choices = ["allowed"] }]
+"#;
     let config = validate(source).unwrap();
     assert!(
         config
@@ -233,7 +243,11 @@ tasks:
             .unwrap()
             .is_empty()
     );
-    for invalid in [Value::Null, "synthetic-private-value".into(), 1.into()] {
+    for invalid in [
+        Value::Datetime("1979-05-27".parse().unwrap()),
+        "synthetic-private-value".into(),
+        1.into(),
+    ] {
         let submitted = values(&[("selection", invalid)]);
         let original = submitted.clone();
         let error = config.arguments("sample", &submitted).unwrap_err();

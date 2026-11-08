@@ -3,16 +3,16 @@ use rustward::{
     admission::{Admission, Error, Store},
     config::{Config, validate},
 };
-use serde_yaml_ng::Value;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Barrier},
     thread,
 };
 use tempfile::TempDir;
+use toml::Value;
 
 fn config() -> Config {
-    validate(include_str!("../examples/tasks.yaml")).unwrap()
+    validate(include_str!("../examples/tasks.toml")).unwrap()
 }
 fn values() -> BTreeMap<String, Value> {
     BTreeMap::from([("name".into(), "sample".into())])
@@ -54,7 +54,7 @@ fn retains_identity_and_snapshot_across_reopen_and_definition_changes() {
     let mut store = Store::open(directory.path().join("state.db")).unwrap();
     store.set_closed(true).unwrap();
     store.set_queue_limit(0).unwrap();
-    let empty = validate("version: 1\ntasks: []").unwrap();
+    let empty = validate("version = 1\ntasks = []").unwrap();
     assert_eq!(
         store.admit(&key, &empty, "synthetic-report", &values(), ""),
         Ok(Admission::AlreadyAdmitted { run_id: id.clone() })
@@ -149,11 +149,11 @@ fn compares_typed_submitted_values_before_defaults() {
         );
     }
     for invalid in [
-        Value::Null,
+        Value::Datetime("1979-05-27".parse().unwrap()),
         Value::from(2.5),
-        Value::from(u64::MAX),
-        Value::Sequence(vec![]),
-        Value::Mapping(Default::default()),
+        Value::Float(f64::INFINITY),
+        Value::Array(vec![]),
+        Value::Table(Default::default()),
     ] {
         let fresh = store.issue_key().unwrap();
         assert_eq!(
@@ -242,9 +242,9 @@ fn enforces_payload_and_snapshot_bounds() {
         ),
         Err(Error::InvalidRuntime)
     );
-    let source = include_str!("../examples/tasks.yaml").replace(
-        "literal: --name",
-        &format!("literal: {}", "x".repeat(1024 * 1024)),
+    let source = include_str!("../examples/tasks.toml").replace(
+        "literal = \"--name\"",
+        &format!("literal = \"{}\"", "x".repeat(1024 * 1024)),
     );
     assert_eq!(
         store.admit(
@@ -358,8 +358,8 @@ fn equivalent_schema_defaults_have_equal_revisions() {
     let first = store.issue_key().unwrap();
     admit(&mut store, &first).unwrap();
     let second = store.issue_key().unwrap();
-    let source = include_str!("../examples/tasks.yaml")
-        .replace("type: integer", "type: integer\n        required: false");
+    let source = include_str!("../examples/tasks.toml")
+        .replace("type = \"integer\"", "type = \"integer\", required = false");
     store
         .admit(
             &second,
@@ -443,14 +443,14 @@ fn request_encoding_has_a_stable_version_one_fingerprint() {
 #[test]
 fn definition_revision_tracks_labels_defaults_and_argument_order() {
     let (directory, mut store) = setup();
-    let example = include_str!("../examples/tasks.yaml");
+    let example = include_str!("../examples/tasks.toml");
     for source in [
         example.to_owned(),
         example.replace("Synthetic report", "Changed label"),
-        example.replace("default: 2", "default: 3"),
+        example.replace("default = 2", "default = 3"),
         example.replace(
-            "      - literal: --name\n      - input: name",
-            "      - input: name\n      - literal: --name",
+            "    { literal = \"--name\" },\n    { input = \"name\" },",
+            "    { input = \"name\" },\n    { literal = \"--name\" },",
         ),
     ] {
         let key = store.issue_key().unwrap();
@@ -471,4 +471,41 @@ fn definition_revision_tracks_labels_defaults_and_argument_order() {
         })
         .unwrap();
     assert_eq!(distinct, 4);
+}
+
+#[test]
+fn toml_keeps_the_original_normalized_snapshot_and_revisions() {
+    use sha2::{Digest, Sha256};
+    let (directory, mut store) = setup();
+    let key = store.issue_key().unwrap();
+    admit(&mut store, &key).unwrap();
+    let expected = serde_json::json!({
+        "id": "synthetic-report", "label": "Synthetic report",
+        "executable": "/synthetic/runtime/bin/report", "working_directory": "/synthetic/runtime",
+        "arguments": [{"literal":"--name"},{"input":"name"},{"input":"count"},{"input":"enabled"}],
+        "inputs": [
+            {"id":"name","type":"string","required":true,"default":null,"choices":null},
+            {"id":"count","type":"integer","required":false,"default":2,"choices":[1,2,3]},
+            {"id":"enabled","type":"boolean","required":false,"default":false,"choices":null}
+        ]
+    });
+    let snapshot = serde_json::to_vec(&expected).unwrap();
+    let connection = Connection::open(directory.path().join("state.db")).unwrap();
+    let stored: (Vec<u8>, Vec<u8>, Vec<u8>) = connection
+        .query_row(
+            "SELECT task_snapshot, task_revision, config_revision FROM runs",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(stored.0, snapshot);
+    for (bytes, revision) in [
+        (snapshot, stored.1),
+        (serde_json::to_vec(&vec![expected]).unwrap(), stored.2),
+    ] {
+        let mut hash = Sha256::new();
+        hash.update(b"rustward-definition-v1");
+        hash.update(bytes);
+        assert_eq!(hash.finalize().to_vec(), revision);
+    }
 }

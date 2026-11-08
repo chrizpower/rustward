@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 
 use hmac::{Hmac, Mac};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
-use serde_yaml_ng::Value;
 use sha2::{Digest, Sha256};
+use toml::Value;
 
 use crate::config::Config;
 
@@ -131,12 +131,11 @@ fn fingerprint(task_id: &str, values: &BTreeMap<String, Value>) -> Result<Vec<u8
                 bytes.push(b's');
                 put_text(&mut bytes, text)?;
             }
-            Value::Number(number) => {
+            Value::Integer(number) => {
                 bytes.push(b'i');
-                bytes
-                    .extend_from_slice(&number.as_i64().ok_or(Error::InvalidInputs)?.to_be_bytes());
+                bytes.extend_from_slice(&number.to_be_bytes());
             }
-            Value::Bool(value) => bytes.extend_from_slice(&[b'b', u8::from(*value)]),
+            Value::Boolean(value) => bytes.extend_from_slice(&[b'b', u8::from(*value)]),
             _ => return Err(Error::InvalidInputs),
         }
     }
