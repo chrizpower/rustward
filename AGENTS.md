@@ -42,5 +42,7 @@ paths as implementation grows. Report failed and skipped checks. Keep the Cargo
 lockfile in version control and include dependency changes when a commit is
 requested. Do not treat placeholder checks as evidence of executor behavior.
 
-Keep changes within the task. Commit and push only when requested. Stage only
-task files. Use feat/, fix/, docs/, refactor/, test/, or chore/ branch prefixes.
+Keep changes within the task. Work directly on main; create a branch only when
+explicitly requested. Commit and push only when requested. Stage only task files.
+If a branch is requested, use feat/, fix/, docs/, refactor/, test/, or chore/
+prefixes.
