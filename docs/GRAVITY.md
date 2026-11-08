@@ -167,6 +167,14 @@ The [file contract](temporary/configuration.md#accepted-file-layout) owns the
 detailed rules and open schema, compatibility, and loading decisions. A change
 to definition ownership or identity requires a new user decision.
 
+## Accepted telemetry scope
+
+On 2026-11-08, the user accepted structured service logs and private
+Prometheus-compatible `/metrics` for the monitoring service. The [telemetry contract](temporary/telemetry.md)
+owns events, measurements, data exclusion, bounds, and open decisions. This is
+unimplemented. P06 still governs state and task-log failures; service-log failure
+handling remains open. Production collection stays in the deployment repository.
+
 ## Accepted operational controls
 
 The user accepted these effects in the glossary interview on 2026-11-08:

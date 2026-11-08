@@ -71,6 +71,10 @@ It continues draining after truncation and reports storage failures separately.
 See the [capture contract](docs/temporary/capture.md). Aggregate reservations,
 retention, and service-wide storage-failure handling remain unimplemented.
 
+Structured service logs and a private Prometheus-compatible `/metrics` endpoint
+for the monitoring service are accepted future work. See the [telemetry contract](docs/temporary/telemetry.md).
+Task output capture does not implement service telemetry.
+
 ## Development
 
 Use the Rustward devbox on the development host. Its checkout is `the checkout`.

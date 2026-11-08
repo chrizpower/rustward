@@ -67,6 +67,20 @@ pause state or replay missed occurrences. Editing a schedule must not make a
 handled occurrence eligible again. Loader tests do not prove these runtime rules.
 Dispatch, production migration, and deployment remain outside this change.
 
+## Telemetry work
+
+Implement the accepted [telemetry contract](telemetry.md): structured service
+logs and a private Prometheus-compatible `/metrics` endpoint for the monitoring service. Neither is
+implemented. Task output capture remains separate.
+
+Specify event fields, log transport and retention, metric names/types/units and
+bounded labels, duration and reset semantics, telemetry settings, and endpoint
+access. Resolve service-log sink failure handling against P06. Set numeric
+resource bounds and overload behavior. Instrument durable decisions without
+counting matching retries as new runs. Add the contract's synthetic failure,
+sensitive-data, exposition, and load checks. Collector configuration and proof
+of collection from the monitoring service belong in separately authorized deployment work.
+
 ## Remaining specifications and evidence
 
 The policy interview is complete for these contract groups. The following work

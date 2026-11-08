@@ -41,6 +41,7 @@ authorize live execution, production deployment, or schedule migration.
 | N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
 | F11 queued cancellation | Implemented in the library with separate phase and result; active cancellation and timeouts remain future work |
 | F01/F03/F04/F15 configuration and inputs | Implemented version 2 contract in configuration.md; remaining execution/UI portions are not implied |
+| F15 telemetry | Accepted structured service logs and private Prometheus-compatible `/metrics` for the monitoring service in telemetry.md; not implemented |
 | N02/N03 performance | Proposed targets only; no measurements or guarantees |
 
 Use requirement and rule IDs in reviews. Read current contracts before using a
@@ -71,7 +72,7 @@ execution remain future work. The web UI does not create or edit definitions.
 | F12 | Recover conservatively after process or host failure. | Mark uncertain active runs interrupted. Cancellation, timeout, and shutdown also block dispatch when external work remains uncertain. Do not rerun automatically. Block further execution until the administrator acknowledges uncertain external work. Preserve accepted queued requests under Gravity P02. |
 | F13 | Send failure alerts through the established mail relay. | Alert on failure, timeout, interruption, and schedule gaps. Record notification failure separately from task failure. Batch gap reports after restart. |
 | F14 | Support an operational pause for schedules. | A global schedule pause stops new scheduled requests and reports the paused interval. Accepted queued requests can still start, and manual requests remain available. A separate dispatch pause prevents all queued work from starting without stopping active runs. Resume does not replay skipped occurrences. Task and schedule editing remains in Git. |
-| F15 | Provide configuration validation and service diagnostics. | A CLI validation command needs no live hosts or production secrets. Health, readiness, and bounded metrics expose scheduler/storage failures without secrets. |
+| F15 | Provide configuration validation and service diagnostics. | A CLI validation command needs no live hosts or production secrets. Health, readiness, and bounded metrics expose scheduler/storage failures without secrets. The accepted [telemetry contract](telemetry.md) requires structured service logs and private `/metrics` collection by the monitoring service. |
 
 ## Non-functional requirements
 

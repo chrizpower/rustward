@@ -71,10 +71,9 @@ task and schedule files, including references and fixed inputs. Relative paths
 supply IDs. Linux `openat2` rejects symlinks, with no weaker fallback.
 See the [loading contract](temporary/configuration.md).
 
-`config::load(path)` returns a complete `Config` or an error. Relative service
-paths use the service file's directory. Roots must exist but can be empty.
-Loading is bounded. Callers must keep files unchanged; two matching reads detect
-observed changes but are not an atomic snapshot. Errors preserve prior values.
+`config::load(path)` returns a complete `Config` or an error. Roots must exist;
+relative paths use the service file's directory. Bounded loading requires
+unchanged files; two matching reads are not an atomic snapshot.
 
 `Config::arguments` validates values, applies defaults, and returns separate
 arguments. Values use `BTreeMap<String, toml::Value>`. Accessors expose read-only
@@ -83,6 +82,9 @@ settings, task IDs, and schedules. Runtime setting integration remains deferred.
 Activation, reload, scheduling, and dispatch remain unimplemented. TOML owns
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
+
+Structured service logs and private `/metrics` for the monitoring service remain unimplemented.
+See [telemetry](temporary/telemetry.md).
 
 ## Design boundaries
 
