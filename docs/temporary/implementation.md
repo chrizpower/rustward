@@ -45,6 +45,35 @@ isolation, and uncertain external effects. Test systemd on an isolated Linux
 system with the selected manager. Do not expose the production host bus or grant
 privileged access to the devbox merely to make integration tests pass.
 
+## Configuration layout work
+
+Implement the [accepted file contract](configuration.md#accepted-file-layout).
+The current `config::validate` and CLI read one TOML document; `TaskDefinition`
+has an explicit ID, and `valid_id` is shared by task and input validation.
+Task path IDs need separate validation without changing input IDs.
+
+- Specify exact service, single-task, and single-schedule TOML schemas, versions,
+  old-format compatibility, CLI behavior, and Rust API changes. Keep task input
+  and argument semantics. Do not treat layout acceptance as a settled wire schema.
+- Load nested task and schedule files without symlinks. Derive IDs from relative
+  paths and validate components. Specify root resolution, missing roots,
+  non-TOML entries, loading bounds, and concurrent-edit handling.
+- Validate the complete set, including duplicate IDs, schedule references, and
+  fixed inputs. Prepare a complete validated value before any future activation;
+  an invalid update must preserve the previous set.
+- Define deterministic snapshots and revision encoding with derived IDs. Review
+  `Config::arguments`, admission snapshots, and request fingerprints. Preserve
+  existing stored identities and matching retries after definition removal;
+  do not rewrite admitted runs or history after file moves.
+- Update synthetic examples and CLI/API tests. Cover the boundary cases in the
+  file contract, including equal basenames in different folders and symlinks.
+  Run `just check` and distinguish loader tests from scheduler/runtime evidence.
+
+File loading and validation do not require execution or a scheduler. Schedule
+pause-state handling, occurrence history, activation, and reload integration
+remain separate work under the accepted contracts. Do not implement dispatch,
+production migration, or deployment as part of the loader change.
+
 ## Remaining specifications and evidence
 
 The policy interview is complete for these contract groups. The following work
@@ -100,8 +129,10 @@ review a proposal before implementing it.
   an existing exception.
 - **P03:** Display the selected runtime revision and test dependency updates and
   failed preparation. Keep runtime references protected from premature removal.
-- **P04:** Reload configuration atomically through an explicit local action.
-  Store schedule identity/revision with checkpoints and persistent pause state.
+- **P04:** Use an explicit local action to trigger reload; the trigger remains
+  proposed. Whole-set validation and activation are now accepted in the file
+  contract. Store schedule identity/revision with checkpoints and persistent
+  pause state.
   Report the lack of a prior checkpoint on first installation. Test forward and
   backward clock changes without replaying admitted occurrences.
 - **P05:** Use a supported SQLite backup procedure with consistent logs and

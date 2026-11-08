@@ -18,6 +18,12 @@ dispatch loop is not implemented. See the
 cargo run --locked -- validate examples/tasks.toml
 ```
 
+The accepted next layout separates `rustward.toml`, one file per task under
+`tasks/`, and one file per schedule under `schedules/`. Both roots allow folders;
+relative paths without `.toml` supply IDs. This layout is not implemented. See the
+[accepted file contract](docs/temporary/configuration.md#accepted-file-layout).
+The command above still validates the single-document version 1 format.
+
 ## Documentation
 
 The long-lived documentation is README.md, AGENTS.md, and the uppercase-named

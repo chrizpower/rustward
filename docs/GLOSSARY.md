@@ -20,13 +20,26 @@ uncertain work. Operator names the same role in existing documents.
 **Task** or **task definition**: A reusable definition of work with an ID,
 label, executable, working directory, arguments, and input schema.
 
-**Task ID**: The stable identifier used to select a task definition. Version 1
-requires it to be unique within a configuration.
+**Task ID**: The identifier used to select a task definition, unique within the
+complete task set. Under the accepted file layout, it is the path relative to
+the task root without `.toml`. It remains stable while that relative path stays
+the same; moving or renaming the file within the root changes its identity.
+The implemented version 1 format still uses an explicit ID field.
 
 **Label**: Human-readable text for a task. It does not replace the task ID.
 
-**Configuration**: A versioned TOML document containing task definitions.
-Version 1 contains no schedule definitions.
+**Configuration**: The service settings and complete set of task and schedule
+definitions. The accepted layout separates these into TOML files. The
+implemented version 1 format contains only task definitions in one document.
+
+**Service configuration**: Settings for Rustward itself, including definition
+locations, storage paths, global resource limits, and retention. It is separate
+from task and schedule definitions.
+
+These configuration meanings and path-based identities were accepted by the
+user on 2026-11-08 to separate service settings and allow grouped definitions
+without duplicate ID fields. The [file contract](temporary/configuration.md#accepted-file-layout)
+owns syntax, validation, and migration work.
 
 **Configuration validation**: Checking a configuration against its schema and
 reference rules. It does not check program availability or execute a command.
@@ -134,6 +147,11 @@ run; a failed launch holds its slot until local cleanup is confirmed.
 **Schedule**: A rule that selects a task, fixed inputs, and UTC times at which
 to request runs.
 
+**Schedule ID**: The identifier of a schedule, unique within the complete
+schedule set. It is the path relative to the schedule root without `.toml`.
+Moving or renaming a file within that root changes its identity. Task and
+schedule IDs have separate scopes.
+
 **Occurrence**: One due time of a schedule. It exists even if no request is
 admitted.
 
@@ -210,8 +228,8 @@ dependencies. Changing that selection creates a different identity.
 reference them.
 
 **Task definition revision**: Identifies one version of a task definition's
-parsed content. Changing its normalized content, including its label, creates a
-different revision. Apply schema defaults before computing that content; an
+normalized content, including its ID. A change to that content, including its
+label, creates a different revision. Apply schema defaults before computing that content; an
 omitted field and an explicit equivalent default have the same revision.
 
 **Configuration revision**: Identifies one version of the complete set of parsed

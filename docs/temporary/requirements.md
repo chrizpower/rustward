@@ -9,7 +9,8 @@ the original executor plan. Partial acceptance does not accept the rest of a
 requirement. Unaccepted clauses and proposed performance targets remain proposals.
 Use [Gravity](../GRAVITY.md) for accepted architecture rules,
 [execution.md](execution.md) for accepted execution contracts, and
-[configuration.md](configuration.md) for implemented schema behavior.
+[configuration.md](configuration.md) for implemented schema behavior and the
+accepted future file layout.
 
 ## Purpose and authority
 
@@ -35,7 +36,7 @@ authorize live execution, production deployment, or schedule migration.
 | P02 planned shutdown | Drain active runs before planned restart; do not apply the original stop-on-shutdown proposal |
 | F02 and P02 request keys | Manual admission library implemented; web UI and service integration remain future work. Rustward-issued permanent manual keys have a narrow P07 metadata exception |
 | F06–F08 scheduling | Accepted occurrence identity, cron day matching, and one queued run per schedule in execution.md |
-| P04 controls | Accepted independent pause/admission controls; reload and checkpoint mechanisms remain open |
+| P04 controls | Accepted independent pause/admission controls and whole-set configuration activation; reload trigger and checkpoint mechanisms remain open |
 | P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |
 | N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
 | F11 queued cancellation | Implemented in the library with separate phase and result; active cancellation and timeouts remain future work |
@@ -45,11 +46,18 @@ authorize live execution, production deployment, or schedule migration.
 Use requirement and rule IDs in reviews. Read current contracts before using a
 requirement below; partial acceptance does not accept the rest of a requirement.
 
+The configuration discussion on 2026-11-08 accepts separate service, task, and
+schedule TOML files, nested task and schedule folders, relative-path IDs,
+lowercase component rules, and no symlinks. TOML alone controls definitions;
+SQLite retains runtime state. This is future behavior, specified in the
+[file contract](configuration.md#accepted-file-layout), not implemented schema
+support. The web UI does not create or edit definitions.
+
 ## Functional requirements
 
 | ID | Requirement | Acceptance condition |
 | --- | --- | --- |
-| F01 | Load versioned TOML task and schedule definitions. Each task has a stable ID, label, executable, argument list, working directory, and input schema. | Reject duplicate IDs, unknown keys, invalid references, and invalid schedules before activation. A failed reload leaves the previous valid configuration active. |
+| F01 | Load versioned TOML task and schedule definitions. Each task has a path-derived ID, label, executable, argument list, working directory, and input schema under the accepted file layout. | Reject duplicate IDs, unknown keys, invalid references, and invalid schedules before activation. A failed reload leaves the previous valid configuration active. |
 | F02 | Run a defined task from the web UI with optional inputs. | Accept a Rustward-issued manual request key and return the same durable run ID for retries with the same payload; reject reuse with a different payload. Refreshing or closing the page does not stop the run. Show a clear error when the request is rejected. |
 | F03 | Support required inputs, defaults, strings, integers, booleans, and explicit choice lists. | Validate on the server for both manual and scheduled requests. Reject undeclared inputs and values outside the schema. |
 | F04 | Execute a program with separate arguments and a controlled environment. | Inputs remain data. Never insert them into a shell command string. Scripts use an explicit interpreter or executable. |

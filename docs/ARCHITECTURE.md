@@ -72,18 +72,18 @@ rejects unknown fields and duplicate IDs. It does not execute commands or check
 program availability. See the [configuration schema](temporary/configuration.md) and
 [synthetic example](../examples/tasks.toml).
 
-The Rust library exposes `config::validate` and `Config::arguments`. A validated
-configuration selects a task by ID, rejects undeclared or invalid values,
-applies defaults, and rejects missing required inputs. It returns an ordered
-`Vec<String>` with one value per configured argument. It validates unused inputs
-too. Internally, `TaskDefinition` contains `InputDeclaration` and
-`ArgumentSource` entries. Request input validation resolves typed values without
-changing the submitted map. Argument generation converts only referenced values
-to strings. Defaults and submitted values use the same type and choice checks.
-It does not split, expand, or interpolate values. There is no submission
-CLI or integrated task execution path. The separate supervision adapter can
-request generic process starts. The implemented library is shown inside the planned
-service boundary; service integration is future work.
+`config::validate` constructs a validated `Config`. `Config::arguments` selects
+a task by ID, validates all submitted inputs, applies defaults, and rejects
+missing required values. It returns one `String` per configured argument without
+splitting, expansion, or interpolation. The input map is unchanged. See the [request contract](temporary/configuration.md#request-inputs-and-arguments).
+There is no submission CLI or integrated execution path.
+
+The accepted [file layout](temporary/configuration.md#accepted-file-layout) is
+not implemented: separate service, task, and schedule files; nested folders;
+relative-path IDs; no symlinks; and complete validation before activation.
+TOML controls definitions; SQLite retains runtime state. File moves change IDs,
+while accepted runs retain their definitions. See the
+[implementation work](temporary/implementation.md#configuration-layout-work).
 
 ## Design boundaries
 

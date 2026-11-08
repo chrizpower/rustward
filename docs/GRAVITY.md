@@ -139,6 +139,33 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   RSS and latency figures remain proposed measurement targets, not accepted
   guarantees or measured results.
 
+## Accepted configuration ownership and identity
+
+Source: User configuration discussion on 2026-11-08. Status: Accepted future
+contract; the single-document version 1 parser remains implemented behavior.
+
+Use separate service configuration, one TOML file per task, and one TOML file per
+schedule. TOML is the sole source of definitions; SQLite retains runtime state.
+Allow nested folders in both definition roots. Derive IDs from relative paths
+without `.toml`, with separate task and schedule scopes. Each component starts
+with a lowercase ASCII letter and then uses lowercase ASCII letters, digits, or
+hyphens. Do not allow symlinks or a second ID field in definition files.
+
+Validate the complete set before activation. Reject invalid updates as a whole
+and retain the previous set. Preserve accepted runs across definition changes.
+A move within a root changes identity; moving the root does not. A renamed
+schedule gets no automatic transfer of pause state or occurrence history and
+must not replay missed occurrences.
+
+Reason and cost: Separate service settings from work definitions and allow
+folder grouping without duplicate names for identity. Folder reorganization
+changes IDs and requires reference updates. Review file and folder moves as
+identity changes, not cosmetic edits. Check nested equal basenames, invalid
+references, symlinks, rejected updates, and preservation of admitted work.
+The [file contract](temporary/configuration.md#accepted-file-layout) owns the
+detailed rules and open schema, compatibility, and loading decisions. A change
+to definition ownership or identity requires a new user decision.
+
 ## Accepted operational controls
 
 The user accepted these effects in the glossary interview on 2026-11-08:
@@ -257,3 +284,9 @@ manager-free tests. Target systemd 257. Real host verification, runtime and
 output integration, and durable launch recovery remain required before the
 admission store can dispatch. Transient service settings are implementation
 mechanisms, not permission to weaken P02, P06, or P07.
+
+2026-11-08: Accept separate service, task, and schedule files, TOML-only
+definition ownership, nested folders, and relative-path IDs without duplicate
+ID fields. Accept lowercase letter/digit/hyphen components, no symlinks, and
+whole-set validation before activation. Preserve accepted work; a rename changes
+identity. Exact schemas, compatibility, and loading mechanisms remain open.

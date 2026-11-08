@@ -1,9 +1,119 @@
-# Task configuration version 1
+# Configuration contracts
 
-Status: Temporary reference for implemented version 1 behavior. Absorb the full
+Status: Temporary reference for implemented version 1 behavior and the accepted
+future file layout. The file layout is not implemented. Absorb the full
 schema, API contract, examples, and compatibility rules into ARCHITECTURE.md,
 and relevant domain meanings into GLOSSARY.md before removing this file. Preserve
-the implemented contract and update inbound links. See [folder guidance](README.md).
+both contracts and update inbound links. See [folder guidance](README.md).
+
+## Accepted file layout
+
+Source: User decisions in the configuration discussion on 2026-11-08. These
+rules replace the single-document layout and explicit task IDs for the future
+loader. They do not change the current CLI or version 1 parser by documentation
+alone. Exact schemas and compatibility remain open below.
+
+### Files and ownership
+
+Use one `rustward.toml` for service configuration, one TOML file per task,
+and one TOML file per schedule. Allow nested folders under both definition roots:
+
+```text
+rustward.toml
+tasks/
+  backup/
+    database.toml
+    files.toml
+schedules/
+  backup/
+    database-nightly.toml
+```
+
+Service configuration owns definition locations, state and log paths, global
+execution and queue limits, and retention settings. Task files own executable,
+working directory, arguments, label, and input schema. Schedule files select a
+task, fixed inputs, and UTC times. Several schedules can select the same task.
+Exact TOML keys, tables, required fields, and version placement are not yet set.
+
+Git-managed TOML is the sole source of task and schedule definitions. The web UI
+does not create or edit these definitions. SQLite retains runtime state,
+including occurrence records, evaluation state, and schedule pause state; it is
+not a second source of schedule definitions. Operational controls remain
+separate from definition editing.
+
+### Path identity
+
+Derive each task or schedule ID from its path relative to its definition root.
+Remove the final `.toml` suffix and use `/` between path components. Do not put a
+second ID field in the definition file. Task and schedule IDs have separate
+scopes; IDs must be unique within each complete set.
+
+Every folder name and filename stem must match `[a-z][a-z0-9-]*`: start with a
+lowercase ASCII letter, then use only lowercase ASCII letters, digits, or
+hyphens. Use the lowercase `.toml` suffix. Empty components, `.` and `..`,
+uppercase letters, underscores, and backslashes are not valid ID components.
+Symlinks are not allowed for definition files or folders; discovery must not
+follow them. Input IDs remain single names under the current input rules.
+
+| Definition file | ID |
+| --- | --- |
+| `tasks/backup/database.toml` | Task `backup/database` |
+| `tasks/maintenance/database.toml` | Task `maintenance/database` |
+| `schedules/backup/database-nightly.toml` | Schedule `backup/database-nightly` |
+
+A schedule selects the exact task ID, for example `backup/database`. Moving a
+whole definition root preserves IDs. Renaming or moving a file within its root
+changes its ID and means removal plus addition. Moving a folder changes every
+ID below it. Update affected references in the same configuration update.
+Folders group definitions; they do not introduce inherited task settings.
+
+### Validation and retained work
+
+Validate the complete candidate set before activation, including unique IDs,
+path rules, task definitions, schedule task references, and fixed input values.
+Reject an invalid update as a whole and retain the previous active set. Do not
+silently omit an invalid definition or activate only the valid files. Activation
+and reload are not implemented; the trigger and consistent-read mechanism remain
+open. This contract accepts whole-set validation and activation, not a file
+watcher or a specific reload command.
+
+Queued and active runs retain their accepted definitions and original identities
+after edits, moves, or removal. Keep existing request-key comparison rules: a
+retry with the original task ID can return its original run after removal;
+changing the task ID changes the request payload.
+
+A renamed schedule is a new schedule. Do not automatically transfer pause state
+or occurrence history to its new ID. Preserve the old records under their
+original identity. Apply first-installation behavior to the new schedule and
+never replay missed occurrences. Exact initial pause and checkpoint mechanisms
+remain to be specified. Editing a schedule at the same path preserves its ID
+and must not make a handled occurrence eligible again.
+
+### Implementation decisions and evidence
+
+Before changing the parser, specify the service, task, and schedule schemas,
+versioning, CLI and Rust API changes, and whether the old single-document format
+is rejected or supported during migration. Specify definition-root resolution,
+missing and empty roots, non-TOML entries, discovery bounds, and consistent
+reads during concurrent file edits. Enforce the no-symlink rule during loading;
+resolve root and ancestor checks without following definition symlinks.
+Do not infer these details from the directory example.
+
+Define deterministic normalization for the complete set, including derived IDs,
+and its revision encoding. Directory traversal order must not define identity.
+Preserve stored snapshots, revision meanings, request fingerprints, and admitted
+runs; do not rewrite history to use new paths. Service-setting participation in
+configuration revisions remains open. Review schema and API compatibility before
+implementation; the earlier YAML-to-TOML conversion below does not settle it.
+
+Required checks include nested paths with equal basenames, invalid components,
+file and folder symlinks, duplicate IDs, unresolved schedule references, invalid
+fixed inputs, complete rejection of invalid updates, root relocation, file and
+folder moves, and retained admission identity after task removal. Schedule
+integration must also check rename behavior without pause-state transfer or
+missed-occurrence replay. These are required future checks, not test results.
+
+## Implemented version 1
 
 Use `cargo run --locked -- validate examples/tasks.toml` to validate a file. The
 installed binary accepts `rustward validate <config.toml>`. Success returns exit
@@ -50,7 +160,7 @@ valid. Equivalent validated definitions produce the same normalized JSON and
 revisions. New TOML values use the same scalar fingerprint encoding. No queued
 run is rewritten or recreated during this format change.
 
-## Schema
+## Version 1 schema
 
 All object fields are listed below. Unknown fields are errors at every level.
 Duplicate object keys are errors. Fields are required unless stated otherwise.
@@ -74,8 +184,9 @@ An empty task list is valid. Use `[]` for empty argument and input lists.
 | Input | `default` | Optional scalar of the declared type; omit it when no default is needed |
 | Input | `choices` | Optional nonempty list of distinct values of the declared type |
 
-IDs start with an ASCII lowercase letter. Remaining characters are ASCII
-lowercase letters, digits, or hyphens. Each argument object contains exactly one
+In the implemented version 1 schema, task and input IDs start with an ASCII
+lowercase letter. Remaining characters are ASCII lowercase letters, digits, or
+hyphens. Each argument object contains exactly one
 field: `literal` or `input`. Strings must be quoted TOML strings. For example,
 `"NO"`, `"yes"`, and `"on"` are strings; bare `NO`, `yes`, and `on` are syntax
 errors. Booleans are only `true` and `false`. Integers must fit a signed 64-bit
@@ -136,8 +247,8 @@ for TOML 1.1 parsing. The lockfile records exact dependency versions. The
 [TOML specification](https://toml.io/en/v1.1.0) define syntax. Tests check strict
 types, duplicate fields, unsupported values, and quoted ambiguous-looking text.
 
-This version is the first implementation contract, authorized by the task
-configuration slice. It does not accept unrelated plan proposals. Review schema
+The implemented version 1 schema is the first implementation contract,
+authorized by the task configuration slice. It does not accept unrelated plan proposals. Review schema
 compatibility and migration before changing version 1 or publishing a release.
 [Execution contracts](execution.md) define accepted future behavior. The
 [temporary implementation work list](implementation.md#remaining-specifications-and-evidence)

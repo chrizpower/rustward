@@ -12,7 +12,8 @@ all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).
 
 Follow [Gravity](../GRAVITY.md) for architecture policy and [the glossary](../GLOSSARY.md)
-for terms. [Configuration](configuration.md) describes the implemented schema.
+for terms. [Configuration](configuration.md) describes the implemented schema
+and the accepted future file layout.
 [Requirements](requirements.md) preserves requirement IDs and unaccepted proposals.
 Remaining engineering work is tracked in the [temporary implementation handoff](implementation.md).
 
@@ -104,8 +105,17 @@ until cleanup is confirmed.
 
 ## Scheduling contract decisions
 
-Each schedule has a stable ID. Occurrence identity is schedule ID plus UTC due
-time; record the schedule-definition revision separately. Editing a schedule
+Schedule definitions come only from TOML files under the accepted
+[file contract](configuration.md#accepted-file-layout). The database retains
+runtime state, not editable schedule definitions. A schedule ID is its path
+relative to the schedule root without `.toml`. A rename or move within the root
+removes one identity and adds another. Do not transfer old pause state or
+occurrence history automatically. Preserve accepted runs and old records; apply
+first-installation behavior to the new schedule without replaying missed work.
+Initial pause and checkpoint mechanisms remain open.
+
+At an unchanged path, the schedule ID stays stable. Occurrence identity is
+schedule ID plus UTC due time; record the schedule-definition revision separately. Editing a schedule
 does not make an already handled due time eligible again. Updated definitions
 apply to future occurrences.
 
