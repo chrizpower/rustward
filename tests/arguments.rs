@@ -187,3 +187,58 @@ fn checks_string_choices_without_conversion() {
         );
     }
 }
+
+#[test]
+fn keeps_submitted_values_separate_from_defaults_and_arguments() {
+    let source = EXAMPLE.replace("required: true", "required: true\n        default: sample");
+    let config = validate(&source).unwrap();
+    let submitted = values(&[("count", 3.into())]);
+    let original = submitted.clone();
+    assert_eq!(
+        config.arguments("synthetic-report", &submitted).unwrap(),
+        ["--name", "sample", "3", "false"]
+    );
+    assert_eq!(submitted, original);
+    assert_eq!(
+        config
+            .arguments("synthetic-report", &BTreeMap::new())
+            .unwrap(),
+        ["--name", "sample", "2", "false"]
+    );
+    let error = config
+        .arguments("synthetic-report", &values(&[("name", Value::Null)]))
+        .unwrap_err();
+    assert!(error.contains("input name:"));
+}
+
+#[test]
+fn validates_unreferenced_values_without_generating_arguments() {
+    let source = "version: 1
+tasks:
+   - id: sample
+     label: Sample
+     executable: /synthetic/program
+     working_directory: /synthetic
+     arguments: []
+     inputs:
+       - id: selection
+         type: string
+         default: allowed
+         choices: [allowed]
+";
+    let config = validate(source).unwrap();
+    assert!(
+        config
+            .arguments("sample", &BTreeMap::new())
+            .unwrap()
+            .is_empty()
+    );
+    for invalid in [Value::Null, "synthetic-private-value".into(), 1.into()] {
+        let submitted = values(&[("selection", invalid)]);
+        let original = submitted.clone();
+        let error = config.arguments("sample", &submitted).unwrap_err();
+        assert!(error.contains("task sample: input selection:"));
+        assert!(!error.contains("synthetic-private-value"));
+        assert_eq!(submitted, original);
+    }
+}

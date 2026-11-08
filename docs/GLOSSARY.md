@@ -98,7 +98,7 @@ task's input schema, including inputs that no argument references.
 
 **Argument**: One value in the ordered list passed to a program. In version 1,
 each configured entry produces exactly one argument. A string with spaces
-remains one argument. The code type `Argument` describes its configured source.
+remains one argument. The private code type `ArgumentSource` describes its configured source.
 
 **Literal argument**: An argument whose value comes directly from the task
 definition.
@@ -297,12 +297,21 @@ provides evidence of usage; it does not decide domain meaning.
 
 | Code name | Current meaning | Remaining distinction |
 | --- | --- | --- |
-| `Task` | A task definition decoded from configuration. | Task names reusable work; run names one accepted execution. |
-| `Input` | A declared input with type, required flag, default, and choices. | Distinguish the declaration from a supplied input value. |
-| `Argument` | A configured literal or input reference. | Distinguish this entry from the generated string passed to a program. |
+| `TaskDefinition` | A task definition decoded from configuration. | Task names reusable work; run names one accepted execution. |
+| `InputDeclaration` | A declared input with type, required flag, default, and choices. | Distinguish the declaration from a supplied input value. |
+| `ArgumentSource` | A configured literal or input reference. | Distinguish this entry from the generated string passed to a program. |
 | `Config` | Validated task configuration. | `Document` represents the YAML document before validation. |
 
-These mappings do not authorize code renames or public interface changes.
+`Config::arguments` takes submitted values without changing them. The private
+`TaskDefinition::validate_submitted_values` method checks all input declarations
+and resolves typed input values from submitted values or defaults. Argument
+generation then converts referenced values to strings. Unused input values are
+validated but do not produce arguments. Generated arguments are `Vec<String>`;
+they are not task definitions or configured argument sources.
+
+The private names were aligned with the accepted meanings during the code
+review requested on 2026-11-08. Public Rust interfaces and YAML version 1 fields
+are unchanged. These mappings do not authorize public interface changes.
 
 ## Contract status
 

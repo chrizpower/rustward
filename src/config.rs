@@ -6,19 +6,19 @@ use serde_yaml_ng::Value;
 
 #[derive(Debug)]
 pub struct Config {
-    tasks: Vec<Task>,
+    tasks: Vec<TaskDefinition>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
     version: u32,
-    tasks: Vec<Task>,
+    tasks: Vec<TaskDefinition>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Task {
+struct TaskDefinition {
     #[serde(deserialize_with = "read_string")]
     id: String,
     #[serde(deserialize_with = "read_string")]
@@ -27,20 +27,20 @@ struct Task {
     executable: String,
     #[serde(deserialize_with = "read_string")]
     working_directory: String,
-    arguments: Vec<Argument>,
-    inputs: Vec<Input>,
+    arguments: Vec<ArgumentSource>,
+    inputs: Vec<InputDeclaration>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum Argument {
-    Literal(Literal),
-    Input(InputReference),
+enum ArgumentSource {
+    Literal(LiteralArgument),
+    InputReference(InputReference),
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Literal {
+struct LiteralArgument {
     #[serde(deserialize_with = "read_string")]
     literal: String,
 }
@@ -54,7 +54,7 @@ struct InputReference {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Input {
+struct InputDeclaration {
     #[serde(deserialize_with = "read_string")]
     id: String,
     #[serde(rename = "type")]
@@ -90,8 +90,22 @@ enum InputType {
     Boolean,
 }
 
-impl Input {
-    fn accepts(&self, value: &Value) -> bool {
+impl InputDeclaration {
+    fn validate_value(&self, value: &Value) -> Result<(), &'static str> {
+        if !self.accepts_type(value) {
+            return Err("value must match the input type and contain no NUL");
+        }
+        if self
+            .choices
+            .as_ref()
+            .is_some_and(|choices| !choices.contains(value))
+        {
+            return Err("value is not a declared choice");
+        }
+        Ok(())
+    }
+
+    fn accepts_type(&self, value: &Value) -> bool {
         match self.kind {
             InputType::String => value.as_str().is_some_and(|text| !text.contains('\0')),
             InputType::Integer => value.as_i64().is_some(),
@@ -141,7 +155,7 @@ pub fn validate(source: &str) -> Result<Config, String> {
                 return Err(input_fail("invalid or duplicate input ID"));
             }
             if let Some(choices) = &input.choices {
-                if choices.is_empty() || choices.iter().any(|value| !input.accepts(value)) {
+                if choices.is_empty() || choices.iter().any(|value| !input.accepts_type(value)) {
                     return Err(input_fail(
                         "choices must be nonempty and match the input type",
                     ));
@@ -153,21 +167,17 @@ pub fn validate(source: &str) -> Result<Config, String> {
                 }
             }
             if let Some(default) = &input.default
-                && (!input.accepts(default)
-                    || input
-                        .choices
-                        .as_ref()
-                        .is_some_and(|choices| !choices.contains(default)))
+                && input.validate_value(default).is_err()
             {
                 return Err(input_fail("invalid default"));
             }
         }
         for argument in &task.arguments {
             match argument {
-                Argument::Literal(value) if value.literal.contains('\0') => {
+                ArgumentSource::Literal(value) if value.literal.contains('\0') => {
                     return Err(fail("literal argument contains NUL"));
                 }
-                Argument::Input(reference) => {
+                ArgumentSource::InputReference(reference) => {
                     let Some(input) = task.inputs.iter().find(|input| input.id == reference.input)
                     else {
                         return Err(fail("argument references an undeclared input"));
@@ -198,49 +208,54 @@ impl Config {
             .iter()
             .find(|task| task.id == task_id)
             .ok_or_else(|| format!("task {task_id}: unknown task ID"))?;
-        for id in values.keys() {
-            if !task.inputs.iter().any(|input| input.id == *id) {
-                return Err(format!("task {task_id}: input {id}: undeclared input"));
-            }
-        }
-        let mut resolved = BTreeMap::new();
-        for input in &task.inputs {
-            let fail = |message| format!("task {task_id}: input {}: {message}", input.id);
-            let Some(value) = values.get(&input.id).or(input.default.as_ref()) else {
-                if input.required {
-                    return Err(fail("missing required input"));
-                }
-                continue;
-            };
-            if !input.accepts(value) {
-                return Err(fail("value must match the input type and contain no NUL"));
-            }
-            if input
-                .choices
-                .as_ref()
-                .is_some_and(|choices| !choices.contains(value))
-            {
-                return Err(fail("value is not a declared choice"));
-            }
-            let text = match input.kind {
-                InputType::String => value.as_str().unwrap().to_owned(),
-                InputType::Integer => value.as_i64().unwrap().to_string(),
-                InputType::Boolean => value.as_bool().unwrap().to_string(),
-            };
-            resolved.insert(&input.id, text);
-        }
+        let input_values = task.validate_submitted_values(values)?;
         Ok(task
             .arguments
             .iter()
             .map(|argument| match argument {
-                Argument::Literal(value) => value.literal.clone(),
-                Argument::Input(reference) => resolved[&reference.input].clone(),
+                ArgumentSource::Literal(value) => value.literal.clone(),
+                ArgumentSource::InputReference(reference) => {
+                    let value = input_values[reference.input.as_str()];
+                    match value {
+                        Value::String(text) => text.clone(),
+                        Value::Number(number) => number.as_i64().unwrap().to_string(),
+                        Value::Bool(value) => value.to_string(),
+                        _ => unreachable!("input values have validated scalar types"),
+                    }
+                }
             })
             .collect())
     }
 
     pub fn task_count(&self) -> usize {
         self.tasks.len()
+    }
+}
+
+impl TaskDefinition {
+    fn validate_submitted_values<'a>(
+        &'a self,
+        submitted_values: &'a BTreeMap<String, Value>,
+    ) -> Result<BTreeMap<&'a str, &'a Value>, String> {
+        let task_id = &self.id;
+        for id in submitted_values.keys() {
+            if !self.inputs.iter().any(|input| input.id == *id) {
+                return Err(format!("task {task_id}: input {id}: undeclared input"));
+            }
+        }
+        let mut input_values = BTreeMap::new();
+        for input in &self.inputs {
+            let fail = |message| format!("task {task_id}: input {}: {message}", input.id);
+            let Some(value) = submitted_values.get(&input.id).or(input.default.as_ref()) else {
+                if input.required {
+                    return Err(fail("missing required input"));
+                }
+                continue;
+            };
+            input.validate_value(value).map_err(fail)?;
+            input_values.insert(input.id.as_str(), value);
+        }
+        Ok(input_values)
     }
 }
 

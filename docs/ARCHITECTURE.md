@@ -74,7 +74,11 @@ The Rust library exposes `config::validate` and `Config::arguments`. A validated
 configuration selects a task by ID, rejects undeclared or invalid values,
 applies defaults, and rejects missing required inputs. It returns an ordered
 `Vec<String>` with one value per configured argument. It validates unused inputs
-too. It does not split, expand, or interpolate values. There is no submission
+too. Internally, `TaskDefinition` contains `InputDeclaration` and
+`ArgumentSource` entries. Request input validation resolves typed values without
+changing the submitted map. Argument generation converts only referenced values
+to strings. Defaults and submitted values use the same type and choice checks.
+It does not split, expand, or interpolate values. There is no submission
 CLI or command execution. The implemented library is shown inside the planned
 service boundary; service integration is future work.
 
