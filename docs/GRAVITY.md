@@ -25,8 +25,8 @@ required evidence; they are not test results.
 ## Domain language
 
 Read [GLOSSARY.md](GLOSSARY.md) before work that uses domain concepts. Use
-accepted terms within their contexts and follow its DDD and maintenance
-instructions.
+accepted terms within their contexts and follow the [domain language
+maintenance rules](../AGENTS.md#domain-language-maintenance).
 
 ## Rules
 

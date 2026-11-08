@@ -7,7 +7,7 @@ and [Gravity](docs/GRAVITY.md). While present, also read
 [implementation work list](docs/temporary/implementation.md).
 Follow accepted rules and contracts within scope; unaccepted proposals remain
 proposals. Read [the glossary](docs/GLOSSARY.md) for domain work and follow its
-maintenance instructions. Use ASD-STE100 Simplified Technical English for prose
+maintenance instructions in this file. Use ASD-STE100 Simplified Technical English for prose
 and new names. Preserve required interfaces and established technical terms.
 
 The long-lived documentation is README.md, AGENTS.md, and the uppercase-named
@@ -46,3 +46,73 @@ Keep changes within the task. Work directly on main; create a branch only when
 explicitly requested. Commit and push only when requested. Stage only task files.
 If a branch is requested, use feat/, fix/, docs/, refactor/, test/, or chore/
 prefixes.
+
+## Domain language maintenance
+
+### Terminology principles
+
+The user selected these practices. Source attributions are user-supplied;
+see [DDD sources](#ddd-sources).
+
+- Foundational DDD (Evans, 2003; Vernon): use precise shared language in code,
+  scope it to bounded contexts, and revise it as domain understanding improves.
+- Explicit DDD guidance (Evans, Fowler): remove ambiguity and inconsistencies.
+- CQRS / EventStorming convention: use imperative command names (`CancelRun`)
+  and past-tense event names (`RunCancelled`). These examples do not define
+  interfaces or transitions, or require CQRS or event sourcing.
+- Rustward-selected optional practice: maintain the formal glossary.
+- User recommendation, not foundational DDD: automate terminology checks.
+  Checks are not implemented here. Agree terms before selecting check scope;
+  review meaning because text matches alone cannot prove consistent usage.
+
+A bounded context defines where a domain model and its language have one
+meaning. Rustward has not assigned separate contexts. Record different meanings
+with their contexts when needed; resolve inconsistent meanings within a context.
+Use agreed terms in code, tests, documentation, and discussions.
+
+### Use and maintain
+
+Use the precise term when a distinction matters, such as task definition versus
+input value. Preserve required public interfaces when terminology changes.
+
+After a terminology decision, update its definition and any proposed marker in
+the glossary and record its source. Keep implementation contracts and
+accepted policy in their source documents. A glossary edit alone must not accept
+a proposed behavior. Use examples to resolve ambiguity before introducing new
+synonyms. Revise definitions as domain understanding improves. Check affected
+code, tests, and documents for inconsistent usage when a definition changes.
+Record context boundaries when they become necessary; do not infer them from
+module names alone.
+
+During every task that uses domain concepts:
+
+- Read relevant entries, use accepted terms, and avoid listed alternatives within
+  their contexts. Preserve
+  external interface names and explain their mappings when needed.
+- Ask the user about a new concept, ambiguous use, changed meaning, or obsolete
+  term. Propose wording and explain its effect with a concrete example. Use a
+  structured question tool when available.
+- Reuse known answers and authorization. Wait for required answers before
+  dependent work. Silence is not acceptance. Continue independent work and
+  record deferred meanings and consequences without repeatedly asking.
+- Check definitions and relationships with normal and boundary scenarios.
+  Compare them with code and report differences. Identify when domain expertise
+  is missing; code does not establish intended meaning.
+- Record resolved changes during the task, with their source and reason. Keep
+  unconfirmed meanings proposed. Check affected references and record remaining
+  naming differences after changes or deletions. Do not rename unrelated code or
+  change public interfaces without authorization. If edits are outside scope,
+  present the proposed glossary change instead.
+
+Determine context boundaries from domain meaning, not repository or deployment
+structure. Include technical terms only when they have a project-specific
+meaning. No task must complete the whole glossary. These practices do not
+require aggregates, repositories, events, or other DDD patterns.
+
+### DDD sources
+
+References for the project terminology principles:
+
+- [Eric Evans, Domain-Driven Design Reference](https://www.domainlanguage.com/ddd/)
+- [Martin Fowler, Ubiquitous Language](https://martinfowler.com/bliki/UbiquitousLanguage.html)
+- [Vaughn Vernon, Domain-Driven Design Distilled](https://www.informit.com/store/domain-driven-design-distilled-9780134434421)

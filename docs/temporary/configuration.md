@@ -110,7 +110,7 @@ configuration fields are private, and only configuration validation can
 construct a `Config`. The method does not change the configuration or submitted values. Internal
 request input validation retains typed input values, including defaults, until
 argument generation converts referenced values to strings. Unused input values
-are validated but produce no arguments. See the [code mappings](../GLOSSARY.md#current-code-mappings)
+are validated but produce no arguments. See the [implementation overview](../ARCHITECTURE.md#current-implementation)
 for the private types; their names do not change TOML field names.
 
 Task selection uses an exact ID match. Unknown task IDs and undeclared input

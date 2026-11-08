@@ -1,57 +1,14 @@
 # Rustward glossary
 
-Scope: Rustward application concepts. Bounded-context boundaries remain open.
+Shared terms for Rustward requirements, code, tests, and operator discussions.
+These meanings were agreed in the user interviews of 2026-11-07 and 2026-11-08
+and the implemented configuration contract. Unconfirmed meanings must be marked
+proposed. Separate bounded contexts have not been assigned.
 
-Use this glossary as the shared language for requirements, code, tests, and
-operator discussions. Domain experts and developers define this language
-together. In domain-driven design, this is the ubiquitous language: within a
-bounded context, the same concept has the same name across these uses.
-
-Definitions come from the [configuration contract](temporary/configuration.md), [accepted
-architecture rules](GRAVITY.md), and [confirmed scope](temporary/requirements.md#purpose-and-authority). A
-definition does not mean that a feature is implemented. See the [architecture
-overview](ARCHITECTURE.md) for implementation status. Contract status is listed
-below.
-
-## Terminology principles
-
-The user selected the following guidance for Rustward. Source attributions in
-this table are supplied by the user.
-
-| Principle | Status | Source |
-| --- | --- | --- |
-| Use shared, precise domain language. | Foundational DDD | Eric Evans, 2003 |
-| Reflect the domain language in code. | Foundational DDD | Eric Evans, 2003 |
-| Scope language to bounded contexts. | Foundational DDD | Evans, Vernon |
-| Evolve language as domain understanding improves. | Foundational DDD | Evans |
-| Remove ambiguity and inconsistencies. | Explicit DDD guidance | Evans, Fowler |
-| Use imperative names for commands and past tense for events. | Widely used convention | CQRS / EventStorming |
-| Maintain a formal glossary. | Optional practice, selected for Rustward | Not required by DDD |
-| Enforce terms with automated tooling. | User recommendation | Not a foundational DDD practice |
-
-A bounded context is a boundary within which a domain model and its language
-have a defined meaning. This document currently covers Rustward application
-concepts; it does not establish separate bounded contexts. If contexts need
-different meanings for a term, record each meaning and its context explicitly.
-Resolve inconsistent meanings within a context instead of treating them as
-synonyms.
-
-Use agreed terms in code names, tests, documentation, and discussions. For a
-domain command, use an imperative name such as `CancelRun`. For a domain event,
-use a past-tense name such as `RunCancelled`. These names are examples, not
-implemented interfaces or accepted state transitions. This convention does not
-require CQRS or event sourcing.
-
-Automated terminology checks are recommended but are not implemented by this
-document. Select their scope after terms are agreed. Use review to check
-meaning; a text match alone cannot establish consistent domain language.
-
-## Language
-
-These meanings come from the implemented configuration contract and the user
-interviews of 2026-11-07 and 2026-11-08. All entries apply to Rustward
-application concepts; this scope does not establish separate bounded contexts.
-Future unconfirmed definitions must be marked proposed.
+A definition does not prove implementation. See [architecture](ARCHITECTURE.md)
+for implementation status and [Gravity](GRAVITY.md) for accepted policy. Follow
+[domain language maintenance](../AGENTS.md#domain-language-maintenance) when
+changing terms. Keep mechanisms, code mappings, and work lists outside this glossary.
 
 ### Tasks and inputs
 
@@ -60,11 +17,8 @@ Future unconfirmed definitions must be marked proposed.
 **Administrator**: The one trusted person who operates Rustward and reviews
 uncertain work. Operator names the same role in existing documents.
 
-**Task**: A reusable definition of work, including the program, arguments, and
-input schema. Task definition is the explicit form of this term.
-
-**Task definition**: The explicit name for a task: its ID, label, executable,
-working directory, arguments, and input schema describe reusable work.
+**Task** or **task definition**: A reusable definition of work with an ID,
+label, executable, working directory, arguments, and input schema.
 
 **Task ID**: The stable identifier used to select a task definition. Version 1
 requires it to be unique within a configuration.
@@ -98,7 +52,7 @@ task's input schema, including inputs that no argument references.
 
 **Argument**: One value in the ordered list passed to a program. In version 1,
 each configured entry produces exactly one argument. A string with spaces
-remains one argument. The private code type `ArgumentSource` describes its configured source.
+remains one argument.
 
 **Literal argument**: An argument whose value comes directly from the task
 definition.
@@ -264,9 +218,8 @@ omitted field and an explicit equivalent default have the same revision.
 definitions. A changed definition changes the configuration revision.
 
 Comments, whitespace, and TOML key order do not change definition revisions.
-Argument order does. See the [revision
-contract](temporary/execution.md#definition-revision-contract) for the distinction
-between normalized definitions and submitted request values.
+Argument order does. Request comparison instead uses submitted values before
+defaults; see [request identity](ARCHITECTURE.md#request-identity).
 
 ### Logs and retention
 
@@ -289,103 +242,3 @@ acknowledgement. Completed history can expire.
 
 **Storage failure**: A failure to store state or logs. Accepted policy closes
 admission and dispatch and stops active local work.
-
-## Current code mappings
-
-These mappings describe current usage in [src/config.rs](../src/config.rs). Code
-provides evidence of usage; it does not decide domain meaning.
-
-| Code name | Current meaning | Remaining distinction |
-| --- | --- | --- |
-| `TaskDefinition` | A task definition decoded from configuration. | Task names reusable work; run names one accepted execution. |
-| `InputDeclaration` | A declared input with type, required flag, default, and choices. | Distinguish the declaration from a supplied input value. |
-| `ArgumentSource` | A configured literal or input reference. | Distinguish this entry from the generated string passed to a program. |
-| `Config` | Validated task configuration. | `Document` represents the TOML document before validation. |
-
-`Config::arguments` takes submitted values without changing them. The private
-`TaskDefinition::validate_submitted_values` method checks all input declarations
-and resolves typed input values from submitted values or defaults. Argument
-generation then converts referenced values to strings. Unused input values are
-validated but do not produce arguments. Generated arguments are `Vec<String>`;
-they are not task definitions or configured argument sources.
-
-The `admission::Store` library issues manual request keys and records queued runs.
-`Admission::Admitted` returns a new run ID. `AlreadyAdmitted` returns the original
-run ID; `HistoryRemoved` also reports that its run history is absent. None of
-these results reports execution success. `Store::cancel_queued` records
-`RunPhase::Completed` and `RunResult::Cancellation` for a queued run.
-`Store::run_state` reads phase and result separately. `Cancellation::AlreadyCancelled`
-reports that the queued cancellation was already recorded; `NotFound` reports
-that no run history exists for the ID. These results do not describe active
-process cancellation. The library retains submitted values
-separately from defaults and generated arguments. See the [admission storage
-contract](ARCHITECTURE.md#manual-admission-library).
-
-The private names were aligned with the accepted meanings during the code
-review requested on 2026-11-08. The later user request to replace YAML with
-TOML changes the public submitted-value type to `toml::Value` and the file syntax.
-Domain meanings and field names remain unchanged. These mappings do not authorize public interface changes.
-
-## Contract status
-
-The terminology and main policy choices were agreed with the user on 2026-11-08.
-[Execution contracts](temporary/execution.md#admission-contract-decisions)
-records admission, lifecycle, scheduling, retention, restore, runtime, and
-revision contracts. Keep mechanisms in that document rather than this glossary.
-
-[Remaining specifications and
-evidence](temporary/implementation.md#remaining-specifications-and-evidence) include
-lifecycle transitions, systemd integration, scheduling
-checkpoints, runtime manifests, and backup consistency. These are implementation
-gates, not evidence that behavior works. New policy trade-offs need review.
-
-Bounded-context boundaries remain unassigned. Ask about a boundary when a
-concrete difference in domain meaning requires it; do not infer one from
-modules.
-
-## Use and maintain
-
-Use the precise term when a distinction matters, such as task definition versus
-input value. Preserve required public interfaces when terminology changes.
-
-After a terminology decision, update its definition and any proposed marker in
-the language section and record its source. Keep implementation contracts and
-accepted policy in their source documents. A glossary edit alone must not accept
-a proposed behavior. Use examples to resolve ambiguity before introducing new
-synonyms. Revise definitions as domain understanding improves. Check affected
-code, tests, and documents for inconsistent usage when a definition changes.
-Record context boundaries when they become necessary; do not infer them from
-module names alone.
-
-During every task that uses domain concepts:
-
-- Read relevant entries, use accepted terms, and avoid listed alternatives within
-  their contexts. Preserve
-  external interface names and explain their mappings when needed.
-- Ask the user about a new concept, ambiguous use, changed meaning, or obsolete
-  term. Propose wording and explain its effect with a concrete example. Use a
-  structured question tool when available.
-- Reuse known answers and authorization. Wait for required answers before
-  dependent work. Silence is not acceptance. Continue independent work and
-  record deferred meanings and consequences without repeatedly asking.
-- Check definitions and relationships with normal and boundary scenarios.
-  Compare them with code and report differences. Identify when domain expertise
-  is missing; code does not establish intended meaning.
-- Record resolved changes during the task, with their source and reason. Keep
-  unconfirmed meanings proposed. Check affected references and record remaining
-  naming differences after changes or deletions. Do not rename unrelated code or
-  change public interfaces without authorization. If edits are outside scope,
-  present the proposed glossary change instead.
-
-Determine context boundaries from domain meaning, not repository or deployment
-structure. Include technical terms only when they have a project-specific
-meaning. No task must complete the whole glossary. These practices do not
-require aggregates, repositories, events, or other DDD patterns.
-
-## DDD sources
-
-References for the project terminology principles:
-
-- [Eric Evans, Domain-Driven Design Reference](https://www.domainlanguage.com/ddd/)
-- [Martin Fowler, Ubiquitous Language](https://martinfowler.com/bliki/UbiquitousLanguage.html)
-- [Vaughn Vernon, Domain-Driven Design Distilled](https://www.informit.com/store/domain-driven-design-distilled-9780134434421)

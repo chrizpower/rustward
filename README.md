@@ -23,10 +23,10 @@ references directly in docs/:
 
 | Document | Purpose |
 | --- | --- |
-| [Agent instructions](AGENTS.md) | Repository work and documentation maintenance rules |
+| [Agent instructions](AGENTS.md) | Repository work, documentation, and domain language maintenance rules |
 | [Architecture](docs/ARCHITECTURE.md) | System structure and implementation boundaries |
 | [Gravity](docs/GRAVITY.md) | Accepted architecture rules, authority, and exceptions |
-| [Glossary](docs/GLOSSARY.md) | Shared domain language and maintenance guidance |
+| [Glossary](docs/GLOSSARY.md) | Shared domain definitions |
 
 [Temporary documentation](docs/temporary/README.md) holds requirements, execution
 contracts, the configuration reference, implementation work, and migration
