@@ -19,7 +19,8 @@ cron, Git-managed YAML definitions, a web UI, one trusted administrator, and
 skipping missed occurrences while reporting gaps. Application code belongs in
 `chrizpower/rustward`; deployment belongs in `the deployment repository`.
 
-Configuration validation, argument generation, and durable manual admission are implemented. Execution,
+Configuration validation, argument generation, durable manual admission, and
+queued cancellation are implemented. Execution,
 scheduling, and operational behavior remain unimplemented. This reference does not
 authorize live execution, production deployment, or schedule migration.
 
@@ -34,6 +35,7 @@ authorize live execution, production deployment, or schedule migration.
 | P04 controls | Accepted independent pause/admission controls; reload and checkpoint mechanisms remain open |
 | P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |
 | N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
+| F11 queued cancellation | Implemented in the library with separate phase and result; active cancellation and timeouts remain future work |
 | F01/F03/F04/F15 configuration and inputs | Implemented version 1 contract in configuration.md; remaining execution/UI portions are not implied |
 | N02/N03 performance | Proposed targets only; no measurements or guarantees |
 

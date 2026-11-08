@@ -5,7 +5,8 @@ run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
 Status: version 1 configuration validation, request input validation,
-argument generation, and durable manual admission are implemented. The binary
+argument generation, durable manual admission, and queued cancellation are
+implemented. The binary
 validates YAML files. The Rust library validates submitted values, returns
 separate arguments, and records queued manual runs; it cannot run tasks. See the
 [configuration schema](docs/temporary/configuration.md) and
@@ -42,7 +43,8 @@ The library exposes `config::validate` and `Config::arguments(task_id,
 contract](docs/temporary/configuration.md#request-inputs-and-arguments) for details.
 
 The `admission::Store` library issues manual request keys and atomically records
-queued runs in a dedicated local SQLite database. See the [admission interface
+queued runs in a dedicated local SQLite database. It can read retained run state
+and cancel a queued run without deleting its history or admission record. See the [admission interface
 and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
 submission CLI, HTTP service, or dispatch implementation.
 

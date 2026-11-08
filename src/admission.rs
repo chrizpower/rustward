@@ -31,6 +31,55 @@ pub enum Admission {
     HistoryRemoved { run_id: String },
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum RunPhase {
+    Queued,
+    Completed,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RunResult {
+    Cancellation,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct RunState {
+    pub phase: RunPhase,
+    pub result: Option<RunResult>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Cancellation {
+    Cancelled,
+    AlreadyCancelled,
+    NotFound,
+}
+
+fn read_run_state(connection: &Connection, run_id: &str) -> Result<Option<RunState>, Error> {
+    let state: Option<(String, Option<String>)> = connection
+        .query_row(
+            "SELECT phase, result FROM runs WHERE run_id=?1",
+            [run_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(storage)?;
+    match state {
+        None => Ok(None),
+        Some((phase, None)) if phase == "queued" => Ok(Some(RunState {
+            phase: RunPhase::Queued,
+            result: None,
+        })),
+        Some((phase, Some(result))) if phase == "completed" && result == "cancellation" => {
+            Ok(Some(RunState {
+                phase: RunPhase::Completed,
+                result: Some(RunResult::Cancellation),
+            }))
+        }
+        _ => Err(Error::Storage),
+    }
+}
+
 /// Durable manual admission. This store cannot dispatch or execute runs.
 pub struct Store {
     connection: Connection,
@@ -158,8 +207,39 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if version != 1 {
+        } else if version != 1 && version != 2 {
             return Err(Error::UnsupportedSchema);
+        }
+        if version == 0 || version == 1 {
+            transaction
+                .execute_batch(
+                    "CREATE TABLE runs_v2 (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL UNIQUE,
+                    task_id TEXT NOT NULL,
+                    task_snapshot BLOB NOT NULL,
+                    task_revision BLOB NOT NULL,
+                    config_revision BLOB NOT NULL,
+                    submitted_inputs TEXT NOT NULL,
+                    arguments TEXT NOT NULL,
+                    runtime_id TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    result TEXT,
+                    CHECK ((phase='queued' AND result IS NULL) OR
+                           (phase='completed' AND result IS NOT NULL AND result='cancellation'))
+                 );
+                 INSERT INTO runs_v2 SELECT *, NULL FROM runs;
+                 INSERT INTO sqlite_sequence (name, seq)
+                    SELECT 'runs_v2', seq FROM sqlite_sequence WHERE name='runs'
+                    AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name='runs_v2');
+                 UPDATE sqlite_sequence SET seq=max(seq, COALESCE(
+                    (SELECT seq FROM sqlite_sequence WHERE name='runs'), 0))
+                    WHERE name='runs_v2';
+                 DROP TABLE runs;
+                 ALTER TABLE runs_v2 RENAME TO runs;
+                 PRAGMA user_version=2;",
+                )
+                .map_err(storage)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {
@@ -220,6 +300,45 @@ impl Store {
                 .execute("UPDATE issuer SET closed=?1 WHERE id=1", [closed])
                 .map_err(storage)?;
             Ok(())
+        })
+    }
+
+    /// Read retained lifecycle state without changing the run.
+    pub fn run_state(&mut self, run_id: &str) -> Result<Option<RunState>, Error> {
+        self.perform(|connection| read_run_state(connection, run_id))
+    }
+
+    /// Complete a queued run with a cancellation result and preserve its admission.
+    pub fn cancel_queued(&mut self, run_id: &str) -> Result<Cancellation, Error> {
+        self.perform(|connection| {
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(storage)?;
+            match read_run_state(&transaction, run_id)? {
+                None => return Ok(Cancellation::NotFound),
+                Some(RunState {
+                    phase: RunPhase::Completed,
+                    ..
+                }) => {
+                    return Ok(Cancellation::AlreadyCancelled);
+                }
+                Some(RunState {
+                    phase: RunPhase::Queued,
+                    ..
+                }) => {}
+            }
+            let changed = transaction
+                .execute(
+                    "UPDATE runs SET phase='completed', result='cancellation'
+                 WHERE run_id=?1 AND phase='queued' AND result IS NULL",
+                    [run_id],
+                )
+                .map_err(storage)?;
+            if changed != 1 {
+                return Err(Error::Storage);
+            }
+            transaction.commit().map_err(storage)?;
+            Ok(Cancellation::Cancelled)
         })
     }
 

@@ -312,7 +312,12 @@ they are not task definitions or configured argument sources.
 The `admission::Store` library issues manual request keys and records queued runs.
 `Admission::Admitted` returns a new run ID. `AlreadyAdmitted` returns the original
 run ID; `HistoryRemoved` also reports that its run history is absent. None of
-these results reports execution success. The library retains submitted values
+these results reports execution success. `Store::cancel_queued` records
+`RunPhase::Completed` and `RunResult::Cancellation` for a queued run.
+`Store::run_state` reads phase and result separately. `Cancellation::AlreadyCancelled`
+reports that the queued cancellation was already recorded; `NotFound` reports
+that no run history exists for the ID. These results do not describe active
+process cancellation. The library retains submitted values
 separately from defaults and generated arguments. See the [admission storage
 contract](ARCHITECTURE.md#manual-admission-library).
 

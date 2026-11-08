@@ -1,7 +1,7 @@
 # Implementation work
 
 Status: Temporary work list. Configuration validation, request input validation,
-argument generation, and durable manual admission are implemented. The execution
+argument generation, durable manual admission, and queued cancellation are implemented. The execution
 backend is not implemented.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
@@ -18,8 +18,10 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Specify persisted lifecycle transitions and launch recovery under the accepted
-   execution contracts. Manual key verification and atomic admission are implemented. Configuration and argument
+1. Specify dispatch, launch recovery, and the remaining persisted lifecycle
+   transitions under the accepted execution contracts. Manual key verification,
+   atomic admission, and queued cancellation with separate phase and result
+   storage are implemented. Configuration and argument
    mapping are already implemented; extend their schema only through an explicit
    compatible contract change.
 2. Select the Linux/systemd baseline, manager, and narrowly scoped permissions.
@@ -46,7 +48,8 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   and verified prepared runtime selection. Preserve the [admission contract](../ARCHITECTURE.md#manual-admission-library).
   Define restore tooling and monitoring of permanent-record growth. Transport
   parsing and global metadata/buffer bounds remain open.
-- Define the complete state-transition table and durable launch protocol.
+- Define the remaining state-transition table and durable launch protocol.
+  Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
   Reconcile recorded runs against systemd evidence after a crash. Test loss of
   confirmation before and after launch; do not automatically retry uncertain work.
 - Specify schedule fields and supported cron syntax, including wildcard handling.
@@ -67,7 +70,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
 These are engineering specifications and validation gates. Host-specific
 choices, new behavior trade-offs, and any conflicts with accepted policy need
 further review. Backup tooling, production integration, and workload-specific
-evidence remain outside this interview. Admission storage is tested; process execution behavior is not verified.
+evidence remain outside this interview. Admission storage, queued cancellation, and schema migration are tested; process execution behavior is not verified.
 
 ## Retained mechanism proposals
 

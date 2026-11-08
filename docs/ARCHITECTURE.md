@@ -2,7 +2,7 @@
 
 Rustward will run generic command tasks for one trusted administrator. Version 1
 configuration validation, request input validation, argument generation, and
-durable manual admission are implemented. The diagram shows the planned system and marks the implemented
+durable manual admission and queued cancellation are implemented. The diagram shows the planned system and marks the implemented
 parts in green.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
@@ -24,7 +24,7 @@ flowchart TB
         UI["Web UI and API"]
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
-        Queue["Manual admission and bounded queue<br/>Implemented library"]
+        Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
         Dispatch["Dispatch and recovery controls"]
         Capture["Output capture"]
     end
@@ -107,14 +107,15 @@ remaining specifications and required evidence. They include launch recovery, th
 runtime layout, scheduling checkpoints, retention, and restore mechanisms.
 Private proxy access and environment/secret references also need specifications.
 
-The current tests cover configuration, argument generation, and manual admission. They do not prove
+The current tests cover configuration, argument generation, manual admission,
+queued cancellation, and database migration. They do not prove
 execution, recovery, scheduling, or deployment behavior. License selection is a
 release gate; workload compatibility and production migration require separate
 review and authorization.
 
 ## Manual admission library
 
-This slice implements manual admission only. There is no dispatch interface.
+This library implements manual admission and queued cancellation. There is no dispatch interface.
 The caller selects an opaque prepared runtime identity; admission retains it but
 does not verify runtime files. Runtime preparation, restore procedures, and
 execution integration remain gated by their accepted contracts.
@@ -122,7 +123,7 @@ execution integration remain gated by their accepted contracts.
 ### Storage and transactions
 
 `admission::Store::open` opens a dedicated local SQLite database. Empty paths, `:memory:`, and SQLite URI handling are excluded. Schema version
-1 uses rollback journaling and `synchronous=FULL`. An immediate transaction
+2 uses rollback journaling and `synchronous=FULL`. An immediate transaction
 serializes request lookup, queue capacity checks, and insertion of both a queued
 run and its permanent admission record. A response is returned only after commit.
 Run IDs are random 256-bit hexadecimal strings. Queue order is the insertion
@@ -165,8 +166,8 @@ An omitted value thus differs from an explicit default.
 A matching admitted key returns the original run ID before consulting the
 current task, runtime selection, admission control, or queue capacity. A changed
 payload is rejected. A missing history row returns `HistoryRemoved`; it does not
-create a run. Records are not expired. History deletion and lifecycle transitions
-are not exposed here; future retention must preserve queued runs.
+create a run. Records are not expired. History deletion is not exposed here. The only implemented lifecycle transition
+is queued cancellation; future retention must preserve queued runs.
 
 Requests are limited to 256 inputs and 64 KiB of canonical request bytes; runtime
 identities are nonempty and at most 1024 bytes. Task snapshots and generated
@@ -187,6 +188,52 @@ and hardware durability. Storage diagnostics and request-size limits are tested.
 
 Full restore, history retention, definition migration, prepared runtime
 verification, admission/dispatch service integration, and launch recovery remain
-unimplemented. The schema currently permits only queued runs. Extend it through
-an explicit migration when lifecycle work begins. No run can be executed through
+unimplemented. The schema permits queued runs and runs completed by queued
+cancellation. Other lifecycle transitions require an explicit migration. No run can be executed through
 this library.
+
+## Queued cancellation library
+
+`admission::Store::cancel_queued(run_id)` completes a queued run with the result
+`Cancellation`. It does not start a process or perform local process cleanup:
+this run has never dispatched. The method works while admission is closed.
+`Cancellation::Cancelled` is returned only after the transaction commits.
+A repeated cancellation returns `AlreadyCancelled` without changing the record.
+A missing run returns `NotFound`, including when only its permanent admission
+record remains. It does not recreate removed history.
+
+Cancellation uses an immediate transaction to read the run state and update
+phase and result together. Admission uses the same SQLite write lock. Queue
+capacity counts only queued rows, so a committed cancellation releases capacity
+without deleting history. Competing cancellations produce one change. A
+concurrent admission sees capacity before or after the committed cancellation;
+a queue-full response can be retried with its unbound key. A failed transaction
+leaves the run queued and uses the existing storage-error handling.
+
+`Store::run_state(run_id)` returns `Option<RunState>`. A present state contains
+separate `RunPhase` and optional `RunResult` fields. Only implemented states are
+exposed: `Queued` with no result and `Completed` with result `Cancellation`.
+An inconsistent stored state is a storage error and closes the handle. This is
+a read of retained history, not evidence of process execution or external effects.
+
+Database schema version 2 enforces these two state combinations with a table
+constraint. Opening version 1 migrates it in one transaction: rebuild the run
+table, preserve each row and insertion sequence, set its result to NULL, preserve
+the insertion sequence high-water mark, and update the schema version. Issuer
+state and permanent admission records do not change. New databases use version
+2. A migration failure leaves version 1 intact; later schema versions are
+rejected. Older binaries reject version 2. This database migration does not
+change the public configuration interfaces, YAML version 1, request keys,
+fingerprints, or definition revisions.
+
+Running cancellation, dispatch, other phases and results, stop reasons,
+completion timestamps for retention, and full launch recovery remain future
+work. They require a new migration and their accepted execution contracts.
+
+Cancellation tests cover preserved admission identity, released queue capacity,
+repeated and concurrent cancellation, concurrent admission, missing history,
+and rejected inconsistent states. Migration tests use a retained version 1 SQL
+fixture and check row data, issuer state, request fingerprints, sequence order,
+and the insertion sequence high-water mark. A failure at table rename verifies
+rollback after table replacement has begun. These checks do not prove active
+process cancellation or host recovery.

@@ -1,8 +1,8 @@
 # Execution contracts
 
 Status: Temporary reference for contracts accepted on 2026-11-08. Manual
-admission is implemented as a library; lifecycle, scheduling, restore, and
-execution integration are not implemented. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
+admission and queued cancellation are implemented as a library. Other lifecycle
+transitions, scheduling, restore, and execution integration are not implemented. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).
@@ -52,7 +52,13 @@ backup that lacks newer admissions.
 
 ## Run lifecycle contract decisions
 
-Store phase and result separately:
+Store phase and result separately. The implemented queued cancellation
+transition stores `Completed` and `Cancellation` atomically, preserves the
+admission record, and releases queue capacity. No process cleanup is needed
+because the run has not dispatched. Repeated cancellation does not change the
+record. See the [library and migration contract](../ARCHITECTURE.md#queued-cancellation-library).
+The other lifecycle transitions below remain accepted future behavior:
+
 
 | Phase | Meaning |
 | --- | --- |
