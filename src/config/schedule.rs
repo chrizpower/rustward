@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+use croner::{
+    Cron,
+    parser::{CronParser, Seconds, Year},
+};
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
@@ -29,42 +33,115 @@ impl Schedule {
     }
 
     pub(super) fn validate_cron(&mut self) -> Result<(), String> {
-        let fields: Vec<_> = self.cron.split_whitespace().collect();
-        let bounds = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)];
-        if fields.len() != 5
-            || fields
-                .iter()
-                .zip(bounds)
-                .any(|(field, (min, max))| !field.split(',').all(|part| valid_part(part, min, max)))
-        {
-            return Err(format!("schedule {}: invalid five-field UTC cron", self.id));
-        }
-        self.cron = fields.join(" ");
+        parse_cron(&self.cron).map_err(|reason| format!("schedule {}: {reason}", self.id))?;
+        self.cron = self.cron.split_whitespace().collect::<Vec<_>>().join(" ");
         Ok(())
     }
 }
 
-fn number(text: &str) -> Option<u32> {
-    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
+fn parse_cron(source: &str) -> Result<Cron, &'static str> {
+    let fields: Vec<_> = source.split_whitespace().collect();
+    if fields.len() != 5 {
+        return Err("cron must have five UTC fields");
     }
-    text.parse().ok()
+    if fields.iter().any(|field| {
+        *field != "*"
+            && (!field
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b',' | b'-'))
+                || field.split(',').any(str::is_empty))
+    }) {
+        return Err(
+            "cron permits only *, numbers, lists, and ascending ranges; steps are not supported",
+        );
+    }
+    if fields[2] != "*" && fields[4] != "*" {
+        return Err("cron day of month or day of week must be exactly *");
+    }
+    // Croner also accepts 7 for Sunday; Rustward permits only 0 through 6.
+    if fields[4] != "*"
+        && fields[4]
+            .split([',', '-'])
+            .any(|value| !value.parse::<u16>().is_ok_and(|number| number <= 6))
+    {
+        return Err("cron day of week must use 0 through 6; Sunday is 0");
+    }
+    CronParser::builder()
+        .seconds(Seconds::Disallowed)
+        .year(Year::Disallowed)
+        .build()
+        .parse(source)
+        .map_err(|_| "invalid five-field UTC cron")
 }
 
-fn valid_part(part: &str, min: u32, max: u32) -> bool {
-    let (range, step) = match part.split_once('/') {
-        Some((range, step)) => (range, number(step)),
-        None => (part, Some(1)),
-    };
-    if !step.is_some_and(|n| n > 0) {
-        return false;
+#[cfg(test)]
+mod tests {
+    use super::parse_cron;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn matches_utc_lists_ranges_and_day_fields() {
+        let time = Utc.with_ymd_and_hms(2026, 11, 9, 2, 15, 0).unwrap();
+        for (source, matches) in [
+            ("0,15,30,45 2 * * *", true),
+            ("0,15,30,45 2 * * 1-5", true),
+            ("15 2 9 11 *", true),
+            ("15 2 1 11 *", false),
+            ("15 2 * * 0", false),
+            ("15 2 * 10 *", false),
+            ("15 3 * * *", false),
+            ("14 2 * * *", false),
+            ("0-10,15 2 * * *", true),
+        ] {
+            assert_eq!(
+                parse_cron(source).unwrap().is_time_matching(&time).unwrap(),
+                matches,
+                "{source}"
+            );
+        }
+        let sunday = Utc.with_ymd_and_hms(2026, 11, 8, 2, 15, 0).unwrap();
+        assert!(
+            parse_cron("15 2 * * 0")
+                .unwrap()
+                .is_time_matching(&sunday)
+                .unwrap()
+        );
+        assert!(
+            !parse_cron("15 2 * * 1-5")
+                .unwrap()
+                .is_time_matching(&sunday)
+                .unwrap()
+        );
     }
-    if range == "*" {
-        return true;
+
+    #[test]
+    fn evaluates_month_year_and_leap_day_boundaries() {
+        for (source, start, expected) in [
+            ("0 2 1 * *", (2026, 12, 31, 23, 59), (2027, 1, 1, 2, 0)),
+            ("0 2 31 * *", (2026, 4, 1, 0, 0), (2026, 5, 31, 2, 0)),
+            ("0 2 29 2 *", (2027, 1, 1, 0, 0), (2028, 2, 29, 2, 0)),
+            (
+                "0,15,30,45 * * * *",
+                (2026, 12, 31, 23, 45),
+                (2027, 1, 1, 0, 0),
+            ),
+        ] {
+            let start = Utc
+                .with_ymd_and_hms(start.0, start.1, start.2, start.3, start.4, 0)
+                .unwrap();
+            let expected = Utc
+                .with_ymd_and_hms(
+                    expected.0, expected.1, expected.2, expected.3, expected.4, 0,
+                )
+                .unwrap();
+            assert_eq!(
+                parse_cron(source)
+                    .unwrap()
+                    .find_next_occurrence(&start, false)
+                    .unwrap(),
+                expected,
+                "{source}"
+            );
+        }
     }
-    let (start, end) = match range.split_once('-') {
-        Some((start, end)) => (number(start), number(end)),
-        None => (number(range), number(range)),
-    };
-    matches!((start, end), (Some(start), Some(end)) if min <= start && start <= end && end <= max)
 }

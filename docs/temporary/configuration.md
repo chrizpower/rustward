@@ -270,22 +270,44 @@ Cron has five whitespace-separated numeric fields in UTC:
 | Month | 1–12 |
 | Day of week | 0–6; Sunday is 0 |
 
-Each field accepts `*`, numbers, inclusive ascending ranges, comma-separated
-lists, and `/step` on a wildcard, range, or number. Steps are positive `u32`
-integers. A step starts at the range minimum; `5/10` starts at 5 and extends
-through the field maximum. Reject empty list entries, signs, descending ranges,
-zero steps, names, macros, seconds, and years. Syntax validation permits calendar
-combinations with no occurrence, such as February 31; it does not search dates.
-Normalize whitespace between fields to one ASCII space before revision encoding.
+Each field accepts a standalone `*`, numbers, inclusive ascending ranges, or
+comma-separated lists of numbers and ranges. Reject empty list entries, signs,
+descending ranges, all `/` steps, names, macros, seconds, years, and special
+operators such as `?`, `L`, `W`, and `#`. A wildcard cannot be part of a list.
+Syntax validation permits calendar combinations with no occurrence, such as
+February 31; it does not search dates. Normalize whitespace between fields to
+one ASCII space before revision encoding.
 
-Only plain `*` is an unrestricted day field. Other spellings, including `*/2`,
-are restricted. When both day fields are restricted, either match is sufficient;
-a time matching both has one occurrence. `0 2 1 * 1` selects the first day of each
-month and every Monday at 02:00 UTC. With one unrestricted day field, use the
-other day field; with both unrestricted, every calendar day is eligible.
-These matching rules were accepted by the user during implementation, retaining
-the earlier OR decision. Syntax is tested; calendar matching and occurrence
-execution remain unimplemented.
+Day of month or day of week must be exactly `*`; both may be `*`. Restricting both
+is an error, even if a range covers every value. Thus `0 2 1 * 1` is rejected.
+With one unrestricted day field, use the other; with both unrestricted, every
+calendar day is eligible. All other fields must match. UTC remains fixed.
+
+| Expression | Meaning |
+| --- | --- |
+| `0 2 * * *` | Daily at 02:00 |
+| `0 2 * * 1-5` | Weekdays at 02:00 |
+| `0 2 1 * *` | First day of each month at 02:00 |
+| `0,15,30,45 * * * *` | Every quarter hour |
+
+Source: The user accepted this smaller subset in the cron review on 2026-11-08.
+It replaces the earlier acceptance of steps and combined restricted day fields.
+Use established cron syntax within this subset, with a library parser/evaluator;
+do not implement custom occurrence calculations. The
+[Debian cron reference](https://manpages.debian.org/trixie/cron/crontab.5.en.html)
+documents lists and ranges and the day-field differences that this subset avoids.
+
+The loader enforces the subset before parsing with `croner`. Its tests also check
+the library's UTC matching and next occurrences across weekdays, month ends,
+year ends, and leap days. These tests do not implement a scheduler or prove
+persistent occurrence handling, missed-work policy, or dispatch.
+
+This intentionally narrows version 2 validation: existing files with steps or
+both day fields restricted now fail complete-set loading. Replace steps with
+explicit values where needed. Unsupported day combinations are not converted
+automatically. Existing admitted runs, request fingerprints, and stored revision
+bytes remain unchanged. The normalization and encoding of still-valid definitions
+do not change; no database migration is required.
 
 ## Normalization and revisions
 
@@ -339,8 +361,12 @@ define a request wire format or duplicate-key handling for a future transport.
 ## Dependencies and remaining runtime work
 
 Serde and `toml` provide strict TOML decoding; `rustix` exposes Linux `openat2`
-and directory reads. The lockfile records exact versions. Cron validation checks
-the bounded numeric field grammar; it is not an occurrence evaluator.
+and directory reads. [croner](https://docs.rs/croner/4.0.3/croner/) parses cron
+after the subset check. The lockfile
+pins version 4.0.3. Its optional time-library support is enabled only for tests,
+using `chrono` UTC values without clock or local-time access. The future scheduler
+must use this parser/evaluator through the same subset rules. Runtime occurrence
+evaluation and scheduling remain unimplemented.
 
 The user accepted schema version 2 and its compatibility decisions before
 implementation on 2026-11-08. This does not accept unrelated plan proposals.

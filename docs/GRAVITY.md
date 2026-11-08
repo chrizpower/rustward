@@ -305,5 +305,9 @@ version 2, removal of the old parser API and single-document format, strict
 bounded discovery, two reads with a caller-enforced unchanged-files condition,
 and a separate configuration revision encoding that excludes service settings.
 Keep task snapshot encoding, stored revisions, and request identity unchanged.
-Accept numeric cron syntax and plain-star wildcard classification; preserve the
-existing day-field OR rule. See the configuration contract for exact schemas.
+The cron review below supersedes the initial step and combined-day rules.
+
+2026-11-08: The user accepts five UTC fields with numbers, lists, ascending ranges,
+and standalone `*`. Reject steps and extensions; require one day field to be `*`.
+Use an established parser/evaluator after subset checks. Preserve stored revisions
+and admitted work. See the configuration contract.

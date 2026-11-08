@@ -67,8 +67,8 @@ capture supplies descriptors to the adapter; service integration remains future 
 ## Current implementation
 
 `rustward validate <rustward.toml>` validates version 2 service settings and nested
-task and schedule files, including references and fixed inputs. Relative paths
-supply IDs. Linux `openat2` rejects symlinks, with no weaker fallback.
+task and schedule files. Cron uses a strict subset and `croner`.
+Paths supply IDs; Linux `openat2` rejects symlinks.
 See the [loading contract](temporary/configuration.md).
 
 `config::load(path)` returns a complete `Config` or an error. Roots must exist;

@@ -22,6 +22,8 @@ The loader reads `rustward.toml`, one file per task, and one file per schedule.
 Both definition roots allow folders; relative paths without `.toml` supply IDs.
 It rejects symlinks and validates the complete set. The old single-document
 format is rejected. See the [file contract](docs/temporary/configuration.md#accepted-file-layout).
+Cron accepts numeric values, lists, ranges, and `*`. Steps are rejected, and at
+least one day field must be `*`. See the [schedule schema](docs/temporary/configuration.md#schedule-schema).
 Loading does not activate settings, reload a service, or execute schedules.
 
 ## Documentation

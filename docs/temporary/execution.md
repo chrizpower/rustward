@@ -119,12 +119,16 @@ schedule ID plus UTC due time; record the schedule-definition revision separatel
 does not make an already handled due time eligible again. Updated definitions
 apply to future occurrences.
 
-Use five-field UTC cron. When both day-of-month and day-of-week are restricted,
-either match is sufficient; a time matching both still has one occurrence.
-The [configuration contract](configuration.md#schedule-schema) specifies numeric
-syntax and wildcard handling, accepted during implementation on 2026-11-08.
-Syntax validation is implemented. Occurrence evaluation and time-boundary tests
-remain scheduler work.
+Use the strict five-field UTC cron subset in the
+[configuration contract](configuration.md#schedule-schema). Allow numeric values,
+lists, ranges, and standalone `*`; reject steps and extensions. Day of month or
+day of week must be exactly `*`. The user accepted this restriction in the cron
+review on 2026-11-08, replacing the earlier acceptance of combined day fields
+with OR matching. Use an established parser/evaluator for accepted expressions.
+
+Subset validation and library matching tests are implemented with `croner`.
+Scheduler execution, durable occurrence decisions, and clock-change handling
+remain future work.
 
 Allow at most one queued run per schedule. Further due occurrences are recorded
 as skipped while that queued run remains. An active run may have one queued

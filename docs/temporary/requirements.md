@@ -35,7 +35,7 @@ authorize live execution, production deployment, or schedule migration.
 | C01, P01, P02, P03 | Accepted constraints and principles in Gravity; detailed execution contracts in execution.md |
 | P02 planned shutdown | Drain active runs before planned restart; do not apply the original stop-on-shutdown proposal |
 | F02 and P02 request keys | Manual admission library implemented; web UI and service integration remain future work. Rustward-issued permanent manual keys have a narrow P07 metadata exception |
-| F06–F08 scheduling | Accepted occurrence identity, cron day matching, and one queued run per schedule in execution.md |
+| F06–F08 scheduling | Accepted occurrence identity, strict cron subset, and one queued run per schedule in execution.md |
 | P04 controls | Accepted independent pause/admission controls and whole-set configuration activation; reload trigger and checkpoint mechanisms remain open |
 | P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |
 | N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
@@ -63,7 +63,7 @@ execution remain future work. The web UI does not create or edit definitions.
 | F03 | Support required inputs, defaults, strings, integers, booleans, and explicit choice lists. | Validate on the server for both manual and scheduled requests. Reject undeclared inputs and values outside the schema. |
 | F04 | Execute a program with separate arguments and a controlled environment. | Inputs remain data. Never insert them into a shell command string. Scripts use an explicit interpreter or executable. |
 | F05 | Run Ansible through ordinary task definitions and an optional small wrapper. | A synthetic playbook receives the selected inventory, limit, and extra variables correctly. A second task runs a non-Ansible command through the same execution path. |
-| F06 | Support five-field cron expressions in UTC. Schedules reference a task and fixed, validated inputs. | Show enabled state, last occurrence, next occurrence, and related runs. Test month boundaries and day-of-month/day-of-week semantics. Document the selected cron semantics. |
+| F06 | Support the accepted strict subset of five-field cron in UTC. Schedules reference a task and fixed, validated inputs. | Show enabled state, last occurrence, next occurrence, and related runs. Test month boundaries and day-of-month/day-of-week semantics. Document the selected cron semantics. |
 | F07 | Skip missed occurrences and report schedule gaps. | Restart after downtime creates no catch-up runs. Retain the affected schedule, interval, and missed count when known; mark uncertain intervals explicitly. |
 | F08 | Use one shared queue for manual and scheduled requests, with a configurable execution limit. | Default to one active run globally. Bound the queue and report rejected requests. Coalesce further occurrences while the same schedule already has a queued request, and report them as skipped. |
 | F09 | Preserve run state and execution identity. | Store task/configuration identity, validated non-secret inputs, trigger, scheduled time if present, timestamps, exit status, and reason for failure or interruption. |

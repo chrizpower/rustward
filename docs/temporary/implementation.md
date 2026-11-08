@@ -50,7 +50,9 @@ privileged access to the devbox merely to make integration tests pass.
 The [file contract](configuration.md#accepted-file-layout) is implemented by
 `config::load` and the validation CLI. Version 2 separates service settings,
 task files, and schedule files. Nested relative paths supply IDs. Complete-set
-validation includes cron syntax, task references, and fixed input values.
+validation includes the strict cron subset, task references, and fixed input values.
+`croner` parses allowed expressions. UTC matching tests cover weekday selection,
+month/year boundaries, and leap days; no scheduler is connected.
 Input validation and argument generation retain their existing behavior.
 
 Tests cover nested equal basenames, invalid paths, symlinks including ancestors,
@@ -94,7 +96,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
   Reconcile recorded runs against systemd evidence after a crash. Test loss of
   confirmation before and after launch; do not automatically retry uncertain work.
-- Implement the accepted schedule fields and cron semantics in the scheduler.
+- Integrate `croner` with the scheduler through the accepted strict subset check.
   Persist evaluation checkpoints together with occurrence decisions. Demonstrate
   reliable coverage; report intervals with insufficient evidence as gaps. Test
   clock changes, outages, schedule edits, and first installation.
@@ -122,7 +124,8 @@ These unresolved proposals came from the original requirements reference. They a
 accepted rules. Apply accepted execution contracts where a proposal overlaps;
 review a proposal before implementing it.
 
-- **P01:** Use an internal Rust scheduler with an established cron parser;
+- **P01:** The cron review selects an established parser/evaluator; `croner` now
+  parses the supported subset. An internal scheduler remains proposed;
   systemd timers remain an alternative only if they preserve accepted occurrence,
   admission, and missed-work behavior. Keep one schedule owner. Consider SSE or
   bounded polling for output, and derive per-run unit identity from the run ID.
