@@ -1,0 +1,5 @@
+task = "synthetic-report"
+cron = "0 2 * * *"
+
+[inputs]
+name = "Scheduled report"

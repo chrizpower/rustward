@@ -1,7 +1,7 @@
 # Configuration contracts
 
-Status: Temporary reference for implemented version 1 behavior and the accepted
-future file layout. The file layout is not implemented. Absorb the full
+Status: Temporary reference for implemented version 2 loading and validation,
+and accepted future activation and schedule behavior. Absorb the full
 schema, API contract, examples, and compatibility rules into ARCHITECTURE.md,
 and relevant domain meanings into GLOSSARY.md before removing this file. Preserve
 both contracts and update inbound links. See [folder guidance](README.md).
@@ -9,9 +9,9 @@ both contracts and update inbound links. See [folder guidance](README.md).
 ## Accepted file layout
 
 Source: User decisions in the configuration discussion on 2026-11-08. These
-rules replace the single-document layout and explicit task IDs for the future
-loader. They do not change the current CLI or version 1 parser by documentation
-alone. Exact schemas and compatibility remain open below.
+rules replace the single-document layout and explicit task IDs. The user accepted
+the exact schema, compatibility, loading, and revision choices below during the
+implementation discussion on the same date.
 
 ### Files and ownership
 
@@ -33,7 +33,7 @@ Service configuration owns definition locations, state and log paths, global
 execution and queue limits, and retention settings. Task files own executable,
 working directory, arguments, label, and input schema. Schedule files select a
 task, fixed inputs, and UTC times. Several schedules can select the same task.
-Exact TOML keys, tables, required fields, and version placement are not yet set.
+The implemented schemas below define the keys, fields, defaults, and version.
 
 Git-managed TOML is the sole source of task and schedule definitions. The web UI
 does not create or edit these definitions. SQLite retains runtime state,
@@ -89,88 +89,119 @@ never replay missed occurrences. Exact initial pause and checkpoint mechanisms
 remain to be specified. Editing a schedule at the same path preserves its ID
 and must not make a handled occurrence eligible again.
 
-### Implementation decisions and evidence
+### Loading and evidence
 
-Before changing the parser, specify the service, task, and schedule schemas,
-versioning, CLI and Rust API changes, and whether the old single-document format
-is rejected or supported during migration. Specify definition-root resolution,
-missing and empty roots, non-TOML entries, discovery bounds, and consistent
-reads during concurrent file edits. Enforce the no-symlink rule during loading;
-resolve root and ancestor checks without following definition symlinks.
-Do not infer these details from the directory example.
+`config::load(path)` and `rustward validate <rustward.toml>` implement the layout.
+The service file must be named `rustward.toml`. Relative definition and storage
+paths resolve from its directory, independent of the process working directory.
+Absolute paths are allowed. Both definition roots must exist and be directories;
+empty roots and empty nested folders are valid. Storage paths need not exist:
+loading does not open the database, create log folders, or inspect executables.
+Paths must be nonempty and contain no NUL.
 
-Define deterministic normalization for the complete set, including derived IDs,
-and its revision encoding. Directory traversal order must not define identity.
-Preserve stored snapshots, revision meanings, request fingerprints, and admitted
-runs; do not rewrite history to use new paths. Service-setting participation in
-configuration revisions remains open. Review schema and API compatibility before
-implementation; the earlier YAML-to-TOML conversion below does not settle it.
+Reject all non-TOML entries, invalid folder names, special files, and non-UTF-8
+names or file content. This includes hidden files and editor backups. No files
+are silently omitted. Use Linux `openat2` with `RESOLVE_NO_SYMLINKS` for every
+opened path; reject symlinks in service and definition paths, including roots
+and ancestors. Open discovered children relative to held directory descriptors.
+Do not use canonicalization to follow a symlink first. This requires Linux with
+`openat2` support (available on the selected Debian 13 target); no weaker fallback
+is used. Storage paths are configuration values, not loaded files.
 
-Required checks include nested paths with equal basenames, invalid components,
-file and folder symlinks, duplicate IDs, unresolved schedule references, invalid
-fixed inputs, complete rejection of invalid updates, root relocation, file and
-folder moves, and retained admission identity after task removal. Schedule
-integration must also check rename behavior without pause-state transfer or
-missed-occurrence replay. These are required future checks, not test results.
+Bounds are 1 MiB per file, 16 MiB total file content including the service file,
+10,000 discovered entries across both roots, and 32 nested folders below each
+root. Each folder and file counts as one entry; root directories do not count.
+Reads are bounded before parsing. Limit failures reject the complete set.
 
-## Implemented version 1
+The caller must keep files unchanged during loading. The loader reads the
+complete service file and both roots twice. It compares file paths, content,
+and folder sets and rejects observed changes or any read failure. This is not
+an atomic filesystem snapshot and cannot detect every concurrent edit. There
+is no claim of reliable live reload. A future service must provide a consistent
+candidate set before activation. A failed load returns an error and leaves an
+existing caller-owned `Config` unchanged.
 
-Use `cargo run --locked -- validate examples/tasks.toml` to validate a file. The
-installed binary accepts `rustward validate <config.toml>`. Success returns exit
-code 0. Invalid configuration, read errors, and incorrect CLI arguments return
-exit code 1. Validation reads one UTF-8 TOML document. It does not run commands,
+Tests exercise nested equal basenames, invalid paths, duplicate identity checks,
+symlink files/folders/ancestors, missing and empty roots, loading bounds, invalid
+references and fixed values, whole-set failure, observed edits, root relocation,
+definition moves, and retained admission identity. Scheduler integration must
+still test rename behavior without pause-state transfer or missed-work replay.
+
+## Implemented version 2
+
+Use `cargo run --locked -- validate examples/rustward.toml`. Success returns exit
+code 0 and task and schedule counts. Invalid configuration, read errors, and
+incorrect CLI arguments return exit code 1. Validation does not run commands,
 inspect program availability, contact hosts, or load credentials.
 
-This implemented contract covers the configuration and input portions of [plan
-requirements F01, F03, F04, and F15](requirements.md#functional-requirements).
-It implements configuration validation, request input validation, and argument
-generation. It does not implement activation, reload, schedules, or execution.
+This implements the configuration and input portions of F01, F03, F04, F06,
+and F15. Activation, reload, occurrence evaluation, scheduler execution, and
+dispatch are not implemented. Service settings are exposed but not connected
+to admission, capture, retention, or other runtime components.
 
 ## Format change and compatibility
 
-The user requested replacement of YAML with TOML. This deliberately replaces
-the earlier YAML version 1 contract. Rustward accepts TOML only; renaming an old
-file does not convert its content. The schema keeps `version = 1` and the same
-field names, supported input types, defaults, choices, and argument rules.
-The file format and Rust value type change: callers of `Config::arguments` and
-`Store::admit` must use `BTreeMap<String, toml::Value>`. TOML has no null or
-unsigned integer value. Out-of-range integers fail during parsing. Floating
-point and datetime values exist in TOML but are not accepted input values.
+Version 2 deliberately rejects the old single-document version 1 format.
+There is no legacy parser or automatic converter. Put `version = 2` only in the
+service file. Split `[[tasks]]` entries into individual task files, remove each
+task `id`, and select its filename to retain the original ID. Keep input `id`
+fields. Move schedules into their own files and use exact task path IDs.
+For example, old task ID `country-report` becomes `tasks/country-report.toml`;
+`tasks/reports/country-report.toml` would create a different identity.
 
-Convert task lists to `[[tasks]]` tables. Set `arguments` and `inputs` to arrays
-of inline tables, as in the example, or use arrays of tables. Quote every string;
-write key/value pairs with `=`. Use `tasks = []` for an empty configuration.
-For example:
+`config::load(path)` replaces `config::validate(source)`. It returns
+`Result<Config, String>`. `Config::arguments` and `Store::admit` still use
+`BTreeMap<String, toml::Value>`. The task input types, defaults, choices, and
+argument generation rules do not change. YAML remains unsupported.
+
+SQLite schema version 2 and its existing migration are unchanged. No stored
+snapshots, arguments, runtime IDs, request keys, fingerprints, or revisions are
+rewritten. A retry with an admitted key and original payload returns the original
+run even after task removal; a new task path is a changed payload. Existing
+version 1 configuration revisions retain their meaning. New configuration
+revisions use the separate encoding below. No queued run is recreated.
+
+## Service schema
+
+All object fields are strict: unknown fields and duplicate keys are errors.
+The service file has these tables and defaults:
 
 ```toml
-version = 1
+version = 2
 
-[[tasks]]
-id = "country-report"
-label = "Country report"
-executable = "/synthetic/bin/report"
-working_directory = "/synthetic"
-arguments = [{ input = "country" }]
-inputs = [{ id = "country", type = "string", default = "NO" }]
+[definitions] # The table and each field can be omitted.
+tasks = "tasks"
+schedules = "schedules"
+
+[storage] # Both fields are required.
+state_database = "/synthetic/state/rustward.db"
+log_directory = "/synthetic/logs"
+
+[limits] # The table and each field can be omitted.
+active_runs = 1
+queued_runs = 100
+log_bytes_per_run = 10485760
+retained_log_bytes = 1073741824
+
+[retention] # The table and field can be omitted.
+days = 30
 ```
 
-SQLite schema version 2 and its migration remain unchanged. Existing stored JSON
-snapshots, submitted values, arguments, keys, and request fingerprints remain
-valid. Equivalent validated definitions produce the same normalized JSON and
-revisions. New TOML values use the same scalar fingerprint encoding. No queued
-run is rewritten or recreated during this format change.
+Limits and retention are nonnegative integers. Run counts and days fit `u32`;
+byte limits fit `u64` but must also fit TOML's signed 64-bit integer syntax.
+Zero is accepted as a configuration value. The loader does not apply limits or
+retention, or infer an execution timeout from these settings. Runtime wiring
+must preserve the accepted resource and retention contracts. Task files contain
+no service settings, environment/secret policy, or prepared runtime selection.
 
-## Version 1 schema
+## Task schema
 
 All object fields are listed below. Unknown fields are errors at every level.
 Duplicate object keys are errors. Fields are required unless stated otherwise.
-An empty task list is valid. Use `[]` for empty argument and input lists.
+Empty task roots are valid. Use `[]` for empty argument and input lists.
 
 | Object | Field | Type and rule |
 | --- | --- | --- |
-| Configuration | `version` | Integer; must be `1` |
-| Configuration | `tasks` | List of task objects; task IDs must be unique |
-| Task | `id` | Stable ID |
 | Task | `label` | String with non-whitespace text; no NUL |
 | Task | `executable` | Absolute program path; no NUL |
 | Task | `working_directory` | Absolute directory path; no NUL |
@@ -184,9 +215,8 @@ An empty task list is valid. Use `[]` for empty argument and input lists.
 | Input | `default` | Optional scalar of the declared type; omit it when no default is needed |
 | Input | `choices` | Optional nonempty list of distinct values of the declared type |
 
-In the implemented version 1 schema, task and input IDs start with an ASCII
-lowercase letter. Remaining characters are ASCII lowercase letters, digits, or
-hyphens. Each argument object contains exactly one
+Task IDs come only from paths. Input IDs remain single names: start with an
+ASCII lowercase letter, followed by lowercase ASCII letters, digits, or hyphens. Each argument object contains exactly one
 field: `literal` or `input`. Strings must be quoted TOML strings. For example,
 `"NO"`, `"yes"`, and `"on"` are strings; bare `NO`, `yes`, and `on` are syntax
 errors. Booleans are only `true` and `false`. Integers must fit a signed 64-bit
@@ -208,13 +238,80 @@ generation. A program can still interpret an argument as an option. Task owners
 must use program options such as `--` where needed. Validation does not inspect
 program behavior.
 
-[The synthetic example](../../examples/tasks.toml) uses paths that need not exist.
-The generic schema contains no Ansible-specific fields, secrets, schedules,
-runtime selection, environment configuration, or execution limits.
+[The synthetic task](../../examples/tasks/synthetic-report.toml) uses paths that
+need not exist. The schema has no Ansible-specific behavior.
+
+## Schedule schema
+
+Each schedule file requires `task` (an exact task ID) and `cron` (a string).
+`inputs` is an optional table of fixed submitted values; it defaults to an empty
+table. No `id`, `version`, pause state, or unknown fields are allowed.
+
+```toml
+task = "backup/database"
+cron = "0 2 * * *"
+
+[inputs]
+name = "Scheduled backup"
+```
+
+Validate every fixed input with the task's normal request validation, including
+unused inputs. Apply task defaults, reject missing required inputs, and reject
+unknown names, incorrect types, NUL, and values outside choices. A missing task
+or one invalid schedule rejects the entire configuration.
+
+Cron has five whitespace-separated numeric fields in UTC:
+
+| Field | Range |
+| --- | --- |
+| Minute | 0–59 |
+| Hour | 0–23 |
+| Day of month | 1–31 |
+| Month | 1–12 |
+| Day of week | 0–6; Sunday is 0 |
+
+Each field accepts `*`, numbers, inclusive ascending ranges, comma-separated
+lists, and `/step` on a wildcard, range, or number. Steps are positive `u32`
+integers. A step starts at the range minimum; `5/10` starts at 5 and extends
+through the field maximum. Reject empty list entries, signs, descending ranges,
+zero steps, names, macros, seconds, and years. Syntax validation permits calendar
+combinations with no occurrence, such as February 31; it does not search dates.
+Normalize whitespace between fields to one ASCII space before revision encoding.
+
+Only plain `*` is an unrestricted day field. Other spellings, including `*/2`,
+are restricted. When both day fields are restricted, either match is sufficient;
+a time matching both has one occurrence. `0 2 1 * 1` selects the first day of each
+month and every Monday at 02:00 UTC. With one unrestricted day field, use the
+other day field; with both unrestricted, every calendar day is eligible.
+These matching rules were accepted by the user during implementation, retaining
+the earlier OR decision. Syntax is tested; calendar matching and occurrence
+execution remain unimplemented.
+
+## Normalization and revisions
+
+Sort tasks and schedules by their complete derived IDs, independent of discovery
+order. Apply schema defaults. JSON object keys are sorted; arrays retain order,
+and values retain type. Comments, TOML formatting, and key order have no effect.
+An omitted schedule `inputs` table and an explicit empty table normalize equally.
+Fixed submitted inputs retain their supplied form; task defaults remain in the
+task definition. Input declarations, choices, and arguments retain list order.
+
+Task snapshots retain the version 1 normalized JSON fields, including derived
+`id`, and the `rustward-definition-v1` hash prefix. For the same ID and task
+content, snapshot and task-revision bytes are unchanged.
+
+New complete-set snapshots are sorted-key JSON objects with `version: 2`,
+`tasks`, and `schedules` arrays. Schedule entries contain `id`, `task`, `cron`,
+and `inputs`. Hash the exact UTF-8 prefix `rustward-configuration-v2`, followed
+by snapshot bytes, with SHA-256. Service settings and root paths are excluded.
+Moving a root preserves revisions. Moving a task changes its ID and both its
+task revision and the complete-set revision. Moving a schedule changes the
+complete-set revision. Stored earlier revisions are never recomputed.
+
 
 ## Request inputs and arguments
 
-Use `rustward::config::validate(source)` to obtain a validated `Config`. Call
+Use `rustward::config::load(path)` to obtain a validated `Config`. Call
 `Config::arguments(task_id, &values)` with a `BTreeMap<String,
 toml::Value>`. It returns `Result<Vec<String>, String>`. The
 configuration fields are private, and only configuration validation can
@@ -239,21 +336,16 @@ order. Repeated input references produce repeated arguments. Errors identify the
 task or input and do not include submitted values. The map interface does not
 define a request wire format or duplicate-key handling for a future transport.
 
-## Dependencies and open decisions
+## Dependencies and remaining runtime work
 
-Use Serde derive for typed decoding and the `toml` 1.2 crate with Serde support
-for TOML 1.1 parsing. The lockfile records exact dependency versions. The
-[parser documentation](https://docs.rs/toml/1.2.1/toml/) and
-[TOML specification](https://toml.io/en/v1.1.0) define syntax. Tests check strict
-types, duplicate fields, unsupported values, and quoted ambiguous-looking text.
+Serde and `toml` provide strict TOML decoding; `rustix` exposes Linux `openat2`
+and directory reads. The lockfile records exact versions. Cron validation checks
+the bounded numeric field grammar; it is not an occurrence evaluator.
 
-The implemented version 1 schema is the first implementation contract,
-authorized by the task configuration slice. It does not accept unrelated plan proposals. Review schema
-compatibility and migration before changing version 1 or publishing a release.
-[Execution contracts](execution.md) define accepted future behavior. The
-[temporary implementation work list](implementation.md#remaining-specifications-and-evidence)
-tracks outstanding integration gates. This schema has no runtime or schedule
-fields. The separate [admission library](../ARCHITECTURE.md#manual-admission-library)
-retains a caller-selected runtime identity without changing this schema.
-Configuration validation alone implies no admission or execution behavior. No live workload
-has been validated.
+The user accepted schema version 2 and its compatibility decisions before
+implementation on 2026-11-08. This does not accept unrelated plan proposals.
+[Execution contracts](execution.md) still govern future runtime work. Activation,
+reload trigger and consistent-read integration, schedule pause/checkpoint state,
+first-installation behavior, missed-occurrence handling, dispatch, and service
+resource-limit integration remain unimplemented. No production schedule migration,
+live workload, or deployment was performed.

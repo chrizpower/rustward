@@ -13,7 +13,7 @@ links. See [folder guidance](README.md).
 
 Follow [Gravity](../GRAVITY.md) for architecture policy and [the glossary](../GLOSSARY.md)
 for terms. [Configuration](configuration.md) describes the implemented schema
-and the accepted future file layout.
+and the implemented version 2 file layout.
 [Requirements](requirements.md) preserves requirement IDs and unaccepted proposals.
 Remaining engineering work is tracked in the [temporary implementation handoff](implementation.md).
 
@@ -121,8 +121,10 @@ apply to future occurrences.
 
 Use five-field UTC cron. When both day-of-month and day-of-week are restricted,
 either match is sufficient; a time matching both still has one occurrence.
-Wildcard handling and supported syntax must be specified and tested with the
-selected parser.
+The [configuration contract](configuration.md#schedule-schema) specifies numeric
+syntax and wildcard handling, accepted during implementation on 2026-11-08.
+Syntax validation is implemented. Occurrence evaluation and time-boundary tests
+remain scheduler work.
 
 Allow at most one queued run per schedule. Further due occurrences are recorded
 as skipped while that queued run remains. An active run may have one queued

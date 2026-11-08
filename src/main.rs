@@ -1,6 +1,6 @@
 use rustward::config;
 
-use std::{env, fs, process::ExitCode};
+use std::{env, process::ExitCode};
 
 fn main() -> ExitCode {
     let mut arguments = env::args_os().skip(1);
@@ -10,19 +10,16 @@ fn main() -> ExitCode {
         || path.is_none()
         || arguments.next().is_some()
     {
-        eprintln!("Usage: rustward validate <config.toml>");
+        eprintln!("Usage: rustward validate <rustward.toml>");
         return ExitCode::FAILURE;
     }
-    let source = match fs::read_to_string(path.unwrap()) {
-        Ok(source) => source,
-        Err(error) => {
-            eprintln!("Cannot read configuration: {error}");
-            return ExitCode::FAILURE;
-        }
-    };
-    match config::validate(&source) {
+    match config::load(path.unwrap()) {
         Ok(config) => {
-            println!("Configuration is valid ({} tasks).", config.task_count());
+            println!(
+                "Configuration is valid ({} tasks, {} schedules).",
+                config.task_count(),
+                config.schedules().len()
+            );
             ExitCode::SUCCESS
         }
         Err(error) => {

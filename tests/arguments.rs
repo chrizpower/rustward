@@ -1,9 +1,10 @@
+mod common;
+use common::validate;
 use std::collections::BTreeMap;
 
-use rustward::config::validate;
 use toml::Value;
 
-const EXAMPLE: &str = include_str!("../examples/tasks.toml");
+const EXAMPLE: &str = include_str!("../examples/tasks/synthetic-report.toml");
 
 fn values(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
     entries
@@ -133,21 +134,17 @@ fn rejects_missing_and_unknown_inputs_and_unknown_tasks() {
 
 #[test]
 fn selects_task_and_validates_unused_inputs() {
-    let source = format!(
-        r#"{EXAMPLE}
-[[tasks]]
-id = "other"
+    let source = r#"
 label = "Other"
 executable = "/synthetic/other"
 working_directory = "/synthetic"
 arguments = []
 inputs = [
-    {{ id = "unused", type = "boolean", required = true, choices = [true] }},
-    {{ id = "optional", type = "string" }},
+    { id = "unused", type = "boolean", required = true, choices = [true] },
+    { id = "optional", type = "string" },
 ]
-"#
-    );
-    let config = validate(&source).unwrap();
+"#;
+    let config = common::validate_set(&[("synthetic-report", EXAMPLE), ("other", source)]).unwrap();
     assert!(config.arguments("other", &BTreeMap::new()).is_err());
     assert!(
         config
@@ -227,16 +224,14 @@ fn keeps_submitted_values_separate_from_defaults_and_arguments() {
 
 #[test]
 fn validates_unreferenced_values_without_generating_arguments() {
-    let source = r#"version = 1
-[[tasks]]
-id = "sample"
+    let source = r#"
 label = "Sample"
 executable = "/synthetic/program"
 working_directory = "/synthetic"
 arguments = []
 inputs = [{ id = "selection", type = "string", default = "allowed", choices = ["allowed"] }]
 "#;
-    let config = validate(source).unwrap();
+    let config = common::validate_set(&[("sample", source)]).unwrap();
     assert!(
         config
             .arguments("sample", &BTreeMap::new())

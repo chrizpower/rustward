@@ -1,0 +1,5 @@
+version = 2
+
+[storage]
+state_database = "/synthetic/state/rustward.db"
+log_directory = "/synthetic/logs"

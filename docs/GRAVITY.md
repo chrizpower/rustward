@@ -141,8 +141,9 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 
 ## Accepted configuration ownership and identity
 
-Source: User configuration discussion on 2026-11-08. Status: Accepted future
-contract; the single-document version 1 parser remains implemented behavior.
+Source: User configuration discussion on 2026-11-08. Status: Accepted
+contract; version 2 loading and complete-set validation are now implemented.
+Activation and runtime schedule behavior remain future work.
 
 Use separate service configuration, one TOML file per task, and one TOML file per
 schedule. TOML is the sole source of definitions; SQLite retains runtime state.
@@ -290,3 +291,11 @@ definition ownership, nested folders, and relative-path IDs without duplicate
 ID fields. Accept lowercase letter/digit/hyphen components, no symlinks, and
 whole-set validation before activation. Preserve accepted work; a rename changes
 identity. Exact schemas, compatibility, and loading mechanisms remain open.
+
+2026-11-08: In the configuration implementation discussion, accept service schema
+version 2, removal of the old parser API and single-document format, strict
+bounded discovery, two reads with a caller-enforced unchanged-files condition,
+and a separate configuration revision encoding that excludes service settings.
+Keep task snapshot encoding, stored revisions, and request identity unchanged.
+Accept numeric cron syntax and plain-star wildcard classification; preserve the
+existing day-field OR rule. See the configuration contract for exact schemas.

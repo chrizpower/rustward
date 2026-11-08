@@ -1,7 +1,9 @@
+mod common;
+use common::validate;
 use rusqlite::Connection;
 use rustward::{
     admission::{Admission, Error, Store},
-    config::{Config, validate},
+    config::Config,
 };
 use std::{
     collections::BTreeMap,
@@ -12,7 +14,7 @@ use tempfile::TempDir;
 use toml::Value;
 
 fn config() -> Config {
-    validate(include_str!("../examples/tasks.toml")).unwrap()
+    validate(include_str!("../examples/tasks/synthetic-report.toml")).unwrap()
 }
 fn values() -> BTreeMap<String, Value> {
     BTreeMap::from([("name".into(), "sample".into())])
@@ -54,7 +56,7 @@ fn retains_identity_and_snapshot_across_reopen_and_definition_changes() {
     let mut store = Store::open(directory.path().join("state.db")).unwrap();
     store.set_closed(true).unwrap();
     store.set_queue_limit(0).unwrap();
-    let empty = validate("version = 1\ntasks = []").unwrap();
+    let empty = common::validate_set(&[]).unwrap();
     assert_eq!(
         store.admit(&key, &empty, "synthetic-report", &values(), ""),
         Ok(Admission::AlreadyAdmitted { run_id: id.clone() })
@@ -242,9 +244,9 @@ fn enforces_payload_and_snapshot_bounds() {
         ),
         Err(Error::InvalidRuntime)
     );
-    let source = include_str!("../examples/tasks.toml").replace(
+    let source = include_str!("../examples/tasks/synthetic-report.toml").replace(
         "literal = \"--name\"",
-        &format!("literal = \"{}\"", "x".repeat(1024 * 1024)),
+        &format!("literal = \"{}\"", "x".repeat(600 * 1024)),
     );
     assert_eq!(
         store.admit(
@@ -358,7 +360,7 @@ fn equivalent_schema_defaults_have_equal_revisions() {
     let first = store.issue_key().unwrap();
     admit(&mut store, &first).unwrap();
     let second = store.issue_key().unwrap();
-    let source = include_str!("../examples/tasks.toml")
+    let source = include_str!("../examples/tasks/synthetic-report.toml")
         .replace("type = \"integer\"", "type = \"integer\", required = false");
     store
         .admit(
@@ -443,7 +445,7 @@ fn request_encoding_has_a_stable_version_one_fingerprint() {
 #[test]
 fn definition_revision_tracks_labels_defaults_and_argument_order() {
     let (directory, mut store) = setup();
-    let example = include_str!("../examples/tasks.toml");
+    let example = include_str!("../examples/tasks/synthetic-report.toml");
     for source in [
         example.to_owned(),
         example.replace("Synthetic report", "Changed label"),
@@ -474,7 +476,7 @@ fn definition_revision_tracks_labels_defaults_and_argument_order() {
 }
 
 #[test]
-fn toml_keeps_the_original_normalized_snapshot_and_revisions() {
+fn layout_keeps_task_snapshot_encoding_and_versions_configuration_revisions() {
     use sha2::{Digest, Sha256};
     let (directory, mut store) = setup();
     let key = store.issue_key().unwrap();
@@ -499,12 +501,19 @@ fn toml_keeps_the_original_normalized_snapshot_and_revisions() {
         )
         .unwrap();
     assert_eq!(stored.0, snapshot);
-    for (bytes, revision) in [
-        (snapshot, stored.1),
-        (serde_json::to_vec(&vec![expected]).unwrap(), stored.2),
+    for (prefix, bytes, revision) in [
+        (b"rustward-definition-v1".as_slice(), snapshot, stored.1),
+        (
+            b"rustward-configuration-v2".as_slice(),
+            serde_json::to_vec(
+                &serde_json::json!({"version": 2, "tasks": [expected], "schedules": []}),
+            )
+            .unwrap(),
+            stored.2,
+        ),
     ] {
         let mut hash = Sha256::new();
-        hash.update(b"rustward-definition-v1");
+        hash.update(prefix);
         hash.update(bytes);
         assert_eq!(hash.finalize().to_vec(), revision);
     }

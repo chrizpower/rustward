@@ -24,13 +24,12 @@ label, executable, working directory, arguments, and input schema.
 complete task set. Under the accepted file layout, it is the path relative to
 the task root without `.toml`. It remains stable while that relative path stays
 the same; moving or renaming the file within the root changes its identity.
-The implemented version 1 format still uses an explicit ID field.
+The version 2 loader implements this identity rule.
 
 **Label**: Human-readable text for a task. It does not replace the task ID.
 
 **Configuration**: The service settings and complete set of task and schedule
-definitions. The accepted layout separates these into TOML files. The
-implemented version 1 format contains only task definitions in one document.
+definitions. The version 2 loader reads these from separate TOML files.
 
 **Service configuration**: Settings for Rustward itself, including definition
 locations, storage paths, global resource limits, and retention. It is separate
@@ -232,8 +231,12 @@ normalized content, including its ID. A change to that content, including its
 label, creates a different revision. Apply schema defaults before computing that content; an
 omitted field and an explicit equivalent default have the same revision.
 
-**Configuration revision**: Identifies one version of the complete set of parsed
-definitions. A changed definition changes the configuration revision.
+**Configuration revision**: Identifies one version of the complete set of normalized
+task and schedule definitions, including their derived IDs. Service settings and
+definition-root paths do not participate. A changed definition changes the revision.
+This boundary was accepted in the configuration implementation discussion on
+2026-11-08: moving a root preserves the revision; moving a definition changes it.
+Stored earlier revisions retain their original meanings.
 
 Comments, whitespace, and TOML key order do not change definition revisions.
 Argument order does. Request comparison instead uses submitted values before

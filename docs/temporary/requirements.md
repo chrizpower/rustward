@@ -10,7 +10,7 @@ requirement. Unaccepted clauses and proposed performance targets remain proposal
 Use [Gravity](../GRAVITY.md) for accepted architecture rules,
 [execution.md](execution.md) for accepted execution contracts, and
 [configuration.md](configuration.md) for implemented schema behavior and the
-accepted future file layout.
+implemented version 2 file layout.
 
 ## Purpose and authority
 
@@ -40,7 +40,7 @@ authorize live execution, production deployment, or schedule migration.
 | P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |
 | N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
 | F11 queued cancellation | Implemented in the library with separate phase and result; active cancellation and timeouts remain future work |
-| F01/F03/F04/F15 configuration and inputs | Implemented version 1 contract in configuration.md; remaining execution/UI portions are not implied |
+| F01/F03/F04/F15 configuration and inputs | Implemented version 2 contract in configuration.md; remaining execution/UI portions are not implied |
 | N02/N03 performance | Proposed targets only; no measurements or guarantees |
 
 Use requirement and rule IDs in reviews. Read current contracts before using a
@@ -49,9 +49,9 @@ requirement below; partial acceptance does not accept the rest of a requirement.
 The configuration discussion on 2026-11-08 accepts separate service, task, and
 schedule TOML files, nested task and schedule folders, relative-path IDs,
 lowercase component rules, and no symlinks. TOML alone controls definitions;
-SQLite retains runtime state. This is future behavior, specified in the
-[file contract](configuration.md#accepted-file-layout), not implemented schema
-support. The web UI does not create or edit definitions.
+SQLite retains runtime state. Loading and validation are implemented under the
+[file contract](configuration.md#accepted-file-layout); activation and scheduler
+execution remain future work. The web UI does not create or edit definitions.
 
 ## Functional requirements
 

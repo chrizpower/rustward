@@ -1,3 +1,5 @@
+mod common;
+use common::validate;
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -7,10 +9,7 @@ use std::{
 
 use hmac::{Hmac, Mac};
 use rusqlite::{Connection, params};
-use rustward::{
-    admission::{Admission, Cancellation, Error, RunPhase, RunResult, RunState, Store},
-    config::validate,
-};
+use rustward::admission::{Admission, Cancellation, Error, RunPhase, RunResult, RunState, Store};
 use sha2::Sha256;
 use tempfile::TempDir;
 
@@ -23,7 +22,7 @@ fn setup() -> (TempDir, Store) {
 fn admit(store: &mut Store, key: &str) -> Result<Admission, Error> {
     store.admit(
         key,
-        &validate(include_str!("../examples/tasks.toml")).unwrap(),
+        &validate(include_str!("../examples/tasks/synthetic-report.toml")).unwrap(),
         "synthetic-report",
         &BTreeMap::from([("name".into(), "sample".into())]),
         "runtime-1",

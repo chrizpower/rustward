@@ -24,7 +24,7 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    transitions under the accepted execution contracts. Manual key verification,
    atomic admission, and queued cancellation with separate phase and result
    storage are implemented. Configuration and argument
-   mapping use the implemented TOML version 1 contract; see its
+   mapping use the implemented TOML version 2 contract; see its
    [format change](configuration.md#format-change-and-compatibility). Further
    schema changes need an explicit compatibility and migration decision.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
@@ -47,32 +47,25 @@ privileged access to the devbox merely to make integration tests pass.
 
 ## Configuration layout work
 
-Implement the [accepted file contract](configuration.md#accepted-file-layout).
-The current `config::validate` and CLI read one TOML document; `TaskDefinition`
-has an explicit ID, and `valid_id` is shared by task and input validation.
-Task path IDs need separate validation without changing input IDs.
+The [file contract](configuration.md#accepted-file-layout) is implemented by
+`config::load` and the validation CLI. Version 2 separates service settings,
+task files, and schedule files. Nested relative paths supply IDs. Complete-set
+validation includes cron syntax, task references, and fixed input values.
+Input validation and argument generation retain their existing behavior.
 
-- Specify exact service, single-task, and single-schedule TOML schemas, versions,
-  old-format compatibility, CLI behavior, and Rust API changes. Keep task input
-  and argument semantics. Do not treat layout acceptance as a settled wire schema.
-- Load nested task and schedule files without symlinks. Derive IDs from relative
-  paths and validate components. Specify root resolution, missing roots,
-  non-TOML entries, loading bounds, and concurrent-edit handling.
-- Validate the complete set, including duplicate IDs, schedule references, and
-  fixed inputs. Prepare a complete validated value before any future activation;
-  an invalid update must preserve the previous set.
-- Define deterministic snapshots and revision encoding with derived IDs. Review
-  `Config::arguments`, admission snapshots, and request fingerprints. Preserve
-  existing stored identities and matching retries after definition removal;
-  do not rewrite admitted runs or history after file moves.
-- Update synthetic examples and CLI/API tests. Cover the boundary cases in the
-  file contract, including equal basenames in different folders and symlinks.
-  Run `just check` and distinguish loader tests from scheduler/runtime evidence.
+Tests cover nested equal basenames, invalid paths, symlinks including ancestors,
+missing and empty roots, file/entry/depth limits, invalid references and values,
+observed concurrent edits, root relocation, definition moves, and retained
+admission identity. Task snapshots keep their existing encoding; new complete-set
+revisions include schedules with a separate version prefix. Stored revisions,
+request fingerprints, and admitted runs are not rewritten.
 
-File loading and validation do not require execution or a scheduler. Schedule
-pause-state handling, occurrence history, activation, and reload integration
-remain separate work under the accepted contracts. Do not implement dispatch,
-production migration, or deployment as part of the loader change.
+Remaining work: activation and its consistent-read mechanism, reload trigger,
+scheduler execution, occurrence history, pause-state handling, first-installation
+checkpoints, and service-setting integration. A renamed schedule must not inherit
+pause state or replay missed occurrences. Editing a schedule must not make a
+handled occurrence eligible again. Loader tests do not prove these runtime rules.
+Dispatch, production migration, and deployment remain outside this change.
 
 ## Remaining specifications and evidence
 
@@ -87,7 +80,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
   Reconcile recorded runs against systemd evidence after a crash. Test loss of
   confirmation before and after launch; do not automatically retry uncertain work.
-- Specify schedule fields and supported cron syntax, including wildcard handling.
+- Implement the accepted schedule fields and cron semantics in the scheduler.
   Persist evaluation checkpoints together with occurrence decisions. Demonstrate
   reliable coverage; report intervals with insufficient evidence as gaps. Test
   clock changes, outages, schedule edits, and first installation.

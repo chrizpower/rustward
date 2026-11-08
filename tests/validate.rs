@@ -4,7 +4,7 @@ use std::process::Command;
 fn validates_without_running_the_program() {
     // The example program and working directory do not exist.
     let output = Command::new(env!("CARGO_BIN_EXE_rustward"))
-        .args(["validate", "examples/tasks.toml"])
+        .args(["validate", "examples/rustward.toml"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -36,7 +36,7 @@ fn reports_invalid_configuration_and_file_errors() {
     assert!(
         String::from_utf8(output.stderr)
             .unwrap()
-            .contains("Cannot read configuration")
+            .contains("Invalid configuration")
     );
 }
 
@@ -44,9 +44,9 @@ fn reports_invalid_configuration_and_file_errors() {
 fn rejects_unsupported_cli_arguments() {
     for arguments in [
         vec![],
-        vec!["run", "examples/tasks.toml"],
+        vec!["run", "examples/rustward.toml"],
         vec!["validate"],
-        vec!["validate", "examples/tasks.toml", "extra"],
+        vec!["validate", "examples/rustward.toml", "extra"],
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_rustward"))
             .args(arguments)

@@ -1,6 +1,6 @@
 # Rustward architecture
 
-Rustward will run generic command tasks for one trusted administrator. Version 1
+Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
 durable manual admission and queued cancellation are implemented. The diagram shows the planned system and marks the implemented
 parts in green. A separate supervision interface and systemd adapter are also
@@ -66,24 +66,23 @@ capture supplies descriptors to the adapter; service integration remains future 
 
 ## Current implementation
 
-`rustward validate <config.toml>` reads one TOML document and checks its
-version, task IDs, typed inputs, defaults, choices, and argument references. It
-rejects unknown fields and duplicate IDs. It does not execute commands or check
-program availability. See the [configuration schema](temporary/configuration.md) and
-[synthetic example](../examples/tasks.toml).
+`rustward validate <rustward.toml>` validates version 2 service settings and nested
+task and schedule files, including references and fixed inputs. Relative paths
+supply IDs. Linux `openat2` rejects symlinks, with no weaker fallback.
+See the [loading contract](temporary/configuration.md).
 
-`config::validate` constructs a validated `Config`. `Config::arguments` selects
-a task by ID, validates all submitted inputs, applies defaults, and rejects
-missing required values. It returns one `String` per configured argument without
-splitting, expansion, or interpolation. The input map is unchanged. See the [request contract](temporary/configuration.md#request-inputs-and-arguments).
-There is no submission CLI or integrated execution path.
+`config::load(path)` returns a complete `Config` or an error. Relative service
+paths use the service file's directory. Roots must exist but can be empty.
+Loading is bounded. Callers must keep files unchanged; two matching reads detect
+observed changes but are not an atomic snapshot. Errors preserve prior values.
 
-The accepted [file layout](temporary/configuration.md#accepted-file-layout) is
-not implemented: separate service, task, and schedule files; nested folders;
-relative-path IDs; no symlinks; and complete validation before activation.
-TOML controls definitions; SQLite retains runtime state. File moves change IDs,
-while accepted runs retain their definitions. See the
-[implementation work](temporary/implementation.md#configuration-layout-work).
+`Config::arguments` validates values, applies defaults, and returns separate
+arguments. Values use `BTreeMap<String, toml::Value>`. Accessors expose read-only
+settings, task IDs, and schedules. Runtime setting integration remains deferred.
+
+Activation, reload, scheduling, and dispatch remain unimplemented. TOML owns
+definitions; SQLite owns runtime state. Definition moves change IDs; root moves
+do not. Admitted runs retain their snapshots and IDs.
 
 ## Design boundaries
 
@@ -136,11 +135,15 @@ be changed through `set_queue_limit`. Lowering the limit preserves existing runs
 
 Queued runs retain the normalized task snapshot, configuration revision,
 generated arguments, submitted inputs, and runtime identity. Schema defaults
-are applied before snapshot serialization. JSON object keys are sorted; lists
-retain order and values retain type. SHA-256 of the version-prefixed JSON bytes
-identifies definition revisions. The task schema keeps its version 1 fields;
-TOML replaces the original YAML syntax at the user's request. See the
-[format change](temporary/configuration.md#format-change-and-compatibility).
+are applied before serialization. JSON object keys are sorted; ordered lists
+and scalar types are preserved. Task snapshot bytes and the
+`rustward-definition-v1` SHA-256 prefix remain unchanged.
+
+New configuration revisions hash `rustward-configuration-v2` and sorted-key JSON
+with `version: 2`, tasks and schedules sorted by derived ID. Service settings
+and root paths are excluded. Task revisions include the task ID. Stored revisions
+retain their meaning and bytes; no database migration or history rewrite is made.
+See [compatibility](temporary/configuration.md#format-change-and-compatibility).
 
 Storage errors close the affected store handle. The service must close all
 admission and dispatch paths on such an error under P06; service integration and

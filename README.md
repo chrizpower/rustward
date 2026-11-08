@@ -4,7 +4,7 @@ Rustward is a small Rust task executor for one trusted administrator. It will
 run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
-Status: version 1 configuration validation, request input validation,
+Status: version 2 configuration validation, request input validation,
 argument generation, durable manual admission, and queued cancellation are
 implemented. The binary
 validates TOML files. The Rust library validates submitted values, returns
@@ -12,17 +12,17 @@ separate arguments, and records queued manual runs. A separate supervision
 library can request process starts through a systemd user manager; the task
 dispatch loop is not implemented. See the
 [configuration schema](docs/temporary/configuration.md) and
-[synthetic example](examples/tasks.toml).
+[synthetic example](examples/rustward.toml).
 
 ```sh
-cargo run --locked -- validate examples/tasks.toml
+cargo run --locked -- validate examples/rustward.toml
 ```
 
-The accepted next layout separates `rustward.toml`, one file per task under
-`tasks/`, and one file per schedule under `schedules/`. Both roots allow folders;
-relative paths without `.toml` supply IDs. This layout is not implemented. See the
-[accepted file contract](docs/temporary/configuration.md#accepted-file-layout).
-The command above still validates the single-document version 1 format.
+The loader reads `rustward.toml`, one file per task, and one file per schedule.
+Both definition roots allow folders; relative paths without `.toml` supply IDs.
+It rejects symlinks and validates the complete set. The old single-document
+format is rejected. See the [file contract](docs/temporary/configuration.md#accepted-file-layout).
+Loading does not activate settings, reload a service, or execute schedules.
 
 ## Documentation
 
@@ -50,7 +50,7 @@ Configuration uses TOML only. The earlier YAML syntax is no longer accepted.
 See [conversion and Rust API changes](docs/temporary/configuration.md#format-change-and-compatibility).
 Existing admission records and queued runs remain valid.
 
-The library exposes `config::validate` and `Config::arguments(task_id,
+The library exposes `config::load(path)` and `Config::arguments(task_id,
 &values)`. Values use `BTreeMap<String, toml::Value>`. See the [request
 contract](docs/temporary/configuration.md#request-inputs-and-arguments) for details.
 

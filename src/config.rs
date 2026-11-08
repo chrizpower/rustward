@@ -4,21 +4,24 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+mod files;
+mod schedule;
+mod service;
+pub use files::load;
+pub use schedule::Schedule;
+pub use service::{Definitions, Limits, Retention, Service, Storage};
+
 #[derive(Debug)]
 pub struct Config {
     tasks: Vec<TaskDefinition>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Document {
-    version: u32,
-    tasks: Vec<TaskDefinition>,
+    schedules: Vec<Schedule>,
+    service: Service,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TaskDefinition {
+    #[serde(skip_deserializing)]
     id: String,
     label: String,
     executable: String,
@@ -100,19 +103,19 @@ fn valid_id(id: &str) -> bool {
         && id.as_bytes()[0].is_ascii_lowercase()
 }
 
+fn valid_definition_id(id: &str) -> bool {
+    id.split('/').all(valid_id)
+}
+
 fn valid_path(path: &str) -> bool {
     Path::new(path).is_absolute() && !path.contains('\0')
 }
 
-pub fn validate(source: &str) -> Result<Config, String> {
-    let config: Document = toml::from_str(source).map_err(|error| error.to_string())?;
-    if config.version != 1 {
-        return Err("version: only version 1 is supported".into());
-    }
+fn validate_tasks(tasks: &[TaskDefinition]) -> Result<(), String> {
     let mut task_ids = HashSet::new();
-    for task in &config.tasks {
+    for task in tasks {
         let fail = |message: &str| format!("task {}: {message}", task.id);
-        if !valid_id(&task.id) {
+        if !valid_definition_id(&task.id) {
             return Err(fail("invalid task ID"));
         }
         if !task_ids.insert(&task.id) {
@@ -168,9 +171,7 @@ pub fn validate(source: &str) -> Result<Config, String> {
             }
         }
     }
-    Ok(Config {
-        tasks: config.tasks,
-    })
+    Ok(())
 }
 
 impl Config {
@@ -178,7 +179,10 @@ impl Config {
         let task = self.tasks.iter().find(|task| task.id == task_id).unwrap();
         (
             serde_json::to_vec(&serde_json::to_value(task).unwrap()).unwrap(),
-            serde_json::to_vec(&serde_json::to_value(&self.tasks).unwrap()).unwrap(),
+            serde_json::to_vec(&serde_json::json!({
+                "version": 2, "tasks": self.tasks, "schedules": self.schedules,
+            }))
+            .unwrap(),
         )
     }
 
@@ -211,6 +215,18 @@ impl Config {
                 }
             })
             .collect())
+    }
+
+    pub fn service(&self) -> &Service {
+        &self.service
+    }
+
+    pub fn schedules(&self) -> &[Schedule] {
+        &self.schedules
+    }
+
+    pub fn task_ids(&self) -> impl Iterator<Item = &str> {
+        self.tasks.iter().map(|task| task.id.as_str())
     }
 
     pub fn task_count(&self) -> usize {
@@ -247,189 +263,31 @@ impl TaskDefinition {
 
 #[cfg(test)]
 mod tests {
-    use super::validate;
-
-    const EXAMPLE: &str = include_str!("../examples/tasks.toml");
+    use super::*;
 
     #[test]
-    fn accepts_typed_inputs_and_synthetic_paths() {
-        assert_eq!(validate(EXAMPLE).unwrap().task_count(), 1);
-        assert!(validate("version = 1\ntasks = []").is_ok());
+    fn checks_complete_identity_uniqueness_and_components() {
+        let task = |id: &str| {
+            let mut task: TaskDefinition =
+                toml::from_str(include_str!("../examples/tasks/synthetic-report.toml")).unwrap();
+            task.id = id.into();
+            task
+        };
+        assert!(validate_tasks(&[task("backup/report"), task("maintenance/report")]).is_ok());
         assert!(
-            validate(
-                &EXAMPLE
-                    .replace("default = 2", "default = -9223372036854775808")
-                    .replace(", choices = [1, 2, 3]", "")
-            )
-            .is_ok()
-        );
-        assert!(validate(&EXAMPLE.replace("--name", "$(touch /synthetic/marker); --flag")).is_ok());
-    }
-
-    #[test]
-    fn rejects_unknown_fields_at_each_level() {
-        for source in [
-            format!("unknown = true\n{EXAMPLE}"),
-            EXAMPLE.replace("label =", "unknown = true\nlabel ="),
-            EXAMPLE.replace("type = \"string\"", "unknown = true, type = \"string\""),
-            EXAMPLE.replace(
-                "literal = \"--name\"",
-                "literal = \"--name\", unknown = true",
-            ),
-            EXAMPLE.replace("input = \"name\"", "input = \"name\", unknown = true"),
-            EXAMPLE.replace(
-                "input = \"name\"",
-                "input = \"name\", literal = \"ambiguous\"",
-            ),
-        ] {
-            assert!(validate(&source).is_err(), "{source}");
-        }
-    }
-
-    #[test]
-    fn rejects_duplicate_ids_and_keys() {
-        let task = EXAMPLE.split_once("[[tasks]]").unwrap().1;
-        assert!(
-            validate(&format!("{EXAMPLE}\n[[tasks]]{task}"))
+            validate_tasks(&[task("backup/report"), task("backup/report")])
                 .unwrap_err()
                 .contains("duplicate task ID")
         );
-        for source in [
-            EXAMPLE.replace("id = \"count\"", "id = \"name\""),
-            EXAMPLE.replace("version = 1", "version = 1\nversion = 1"),
-            EXAMPLE.replace(
-                "type = \"integer\"",
-                "type = \"integer\", type = \"string\"",
-            ),
-            EXAMPLE.replace(
-                "literal = \"--name\"",
-                "literal = \"--name\", literal = \"other\"",
-            ),
-            EXAMPLE.replace("input = \"name\"", "input = \"name\", input = \"count\""),
-        ] {
-            assert!(validate(&source).is_err(), "{source}");
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_defaults_and_choices() {
-        for value in [
-            "'2'",
-            "2.5",
-            "true",
-            "[]",
-            "{}",
-            "4",
-            "1979-05-27",
-            "\"bad\\u0000value\"",
+        for id in [
+            "", "/report", "report/", "a//b", "./a", "a/../b", "A/b", "a/b_c", "a\\b", "1a", "é",
         ] {
             assert!(
-                validate(&EXAMPLE.replace("default = 2", &format!("default = {value}")))
+                validate_tasks(&[task(id)])
                     .unwrap_err()
-                    .contains("invalid default"),
-                "{value}"
+                    .contains("invalid task ID"),
+                "{id}"
             );
         }
-        for choices in ["[]", "[1, 1]", "[1, '2']", "[true]", "[{}]", "[1979-05-27]"] {
-            assert!(
-                validate(&EXAMPLE.replace("[1, 2, 3]", choices)).is_err(),
-                "{choices}"
-            );
-        }
-        assert!(validate(&EXAMPLE.replace("default = false", "default = 'false'")).is_err());
-        assert!(
-            validate(&EXAMPLE.replace("required = true", "required = true, default = 'sample'"))
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn rejects_invalid_references() {
-        assert!(
-            validate(&EXAMPLE.replace("input = \"name\"", "input = \"missing\""))
-                .unwrap_err()
-                .contains("undeclared input")
-        );
-        assert!(
-            validate(&EXAMPLE.replace("required = true", "required = false"))
-                .unwrap_err()
-                .contains("required or have a default")
-        );
-        assert!(validate(&EXAMPLE.replace("input = \"name\"", "input = ''")).is_err());
-    }
-
-    #[test]
-    fn rejects_invalid_structure_and_command_fields() {
-        for source in [
-            EXAMPLE.replace("version = 1", "version = 2"),
-            EXAMPLE.replace("version = 1", ""),
-            EXAMPLE.replace("id = \"synthetic-report\"", "id = \"Invalid\""),
-            EXAMPLE.replace("label = \"Synthetic report\"", "label = ''"),
-            EXAMPLE.replace("/synthetic/runtime/bin/report", "report"),
-            EXAMPLE.replace(
-                "working_directory = \"/synthetic/runtime\"",
-                "working_directory = 'relative'",
-            ),
-            EXAMPLE.replace("literal = \"--name\"", "literal = \"bad\\u0000value\""),
-            EXAMPLE.replace("type = \"string\"", "type = \"float\""),
-            EXAMPLE.replace("literal = \"--name\"", "literal = 123"),
-            EXAMPLE.replace("label = \"Synthetic report\"", "label = 1979-05-27"),
-            EXAMPLE.replace("default = 2", "default = 9223372036854775808"),
-            EXAMPLE.replace("default = 2", "default = null"),
-            "version: 1\ntasks: []".into(),
-        ] {
-            assert!(validate(&source).is_err(), "{source}");
-        }
-    }
-
-    #[test]
-    fn preserves_quoted_strings_and_rejects_bare_words() {
-        for text in ["NO", "yes", "on", "null", "true", "2026-11-08"] {
-            let source = EXAMPLE.replace(
-                "required = true",
-                &format!("required = true, default = '{text}'"),
-            );
-            let config = validate(&source).unwrap();
-            assert_eq!(
-                config
-                    .arguments("synthetic-report", &Default::default())
-                    .unwrap()[1],
-                text
-            );
-        }
-        for text in ["NO", "yes", "on", "null"] {
-            assert!(
-                validate(&EXAMPLE.replace(
-                    "required = true",
-                    &format!("required = true, default = {text}")
-                ))
-                .is_err()
-            );
-        }
-    }
-    #[test]
-    fn accepts_arrays_of_tables_with_the_same_domain_rules() {
-        let source = r#"version = 1
-[[tasks]]
-id = "country-report"
-label = "Country report"
-executable = "/synthetic/report"
-working_directory = "/synthetic"
-[[tasks.arguments]]
-input = "country"
-[[tasks.inputs]]
-id = "country"
-type = "string"
-default = "NO"
-choices = ["NO", "on"]
-"#;
-        let config = validate(source).unwrap();
-        assert_eq!(
-            config
-                .arguments("country-report", &Default::default())
-                .unwrap(),
-            ["NO"]
-        );
-        assert!(validate(&source.replace("default = \"NO\"", "default = false")).is_err());
     }
 }

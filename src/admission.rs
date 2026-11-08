@@ -101,9 +101,9 @@ fn storage(error: rusqlite::Error) -> Error {
     }
 }
 
-fn revision(bytes: &[u8]) -> Vec<u8> {
+fn revision(prefix: &[u8], bytes: &[u8]) -> Vec<u8> {
     let mut hash = Sha256::new();
-    hash.update(b"rustward-definition-v1");
+    hash.update(prefix);
     hash.update(bytes);
     hash.finalize().to_vec()
 }
@@ -404,7 +404,7 @@ impl Store {
             transaction.execute(
                 "INSERT INTO runs (run_id, task_id, task_snapshot, task_revision, config_revision, submitted_inputs, arguments, runtime_id, phase)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued')",
-                params![run_id, task_id, snapshot, revision(&snapshot), revision(&config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id]
+                params![run_id, task_id, snapshot, revision(b"rustward-definition-v1", &snapshot), revision(b"rustward-configuration-v2", &config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id]
             ).map_err(storage)?;
             transaction.execute("INSERT INTO admissions VALUES (?1, ?2, ?3)", params![key, fingerprint, run_id]).map_err(storage)?;
             transaction.commit().map_err(storage)?;
