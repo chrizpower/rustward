@@ -2,13 +2,12 @@
 
 Rustward will run generic command tasks for one trusted administrator. Version 1
 configuration validation, request input validation, and argument generation are
-implemented. The diagram shows the
-planned system and marks the implemented parts in green.
+implemented. The diagram shows the planned system and marks the implemented
+parts in green.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
-Detailed mechanisms that remain proposals in the
-[executor plan](plans/executor.md) remain proposals here. This diagram does
-not authorize execution, migration, or deployment.
+Detailed mechanisms that remain proposals in the [requirements](temporary/requirements.md) remain proposals here. This diagram does not authorize
+execution, migration, or deployment.
 
 ## System diagram
 
@@ -34,7 +33,7 @@ flowchart TB
     Prepare["External runtime preparation"]
     Runtime["Fixed code and dependencies"]
     Systemd["systemd task supervision"]
-    Task["Generic command task"]
+    Task["Run processes"]
     Logs[("Bounded stdout and stderr logs")]
 
     Git --> CLI --> Config
@@ -60,54 +59,52 @@ flowchart TB
 
 The service boundary shows the planned single Rust service. The proxy, systemd,
 task processes, and runtime preparation are outside that service. The local
-SQLite database and log files store retained state and output. Output capture
-is a logical component; its systemd interface remains to be defined.
+SQLite database and log files store retained state and output. Output capture is
+a logical component; its systemd interface remains to be defined.
 
 ## Current implementation
 
-`rustward validate <config.yaml>` reads one YAML document and checks its version,
-task IDs, typed inputs, defaults, choices, and argument references. It rejects
-unknown fields and duplicate IDs. It does not execute commands or check program
-availability. See the [configuration schema](configuration.md) and
+`rustward validate <config.yaml>` reads one YAML document and checks its
+version, task IDs, typed inputs, defaults, choices, and argument references. It
+rejects unknown fields and duplicate IDs. It does not execute commands or check
+program availability. See the [configuration schema](temporary/configuration.md) and
 [synthetic example](../examples/tasks.yaml).
 
 The Rust library exposes `config::validate` and `Config::arguments`. A validated
-configuration selects a task by ID, rejects undeclared or invalid values, applies
-defaults, and rejects missing required inputs. It returns an ordered `Vec<String>`
-with one value per configured argument. It validates unused inputs too. It does
-not split, expand, or interpolate values. There is no submission CLI or command
-execution. The implemented library is shown inside the planned service boundary;
-service integration is future work.
+configuration selects a task by ID, rejects undeclared or invalid values,
+applies defaults, and rejects missing required inputs. It returns an ordered
+`Vec<String>` with one value per configured argument. It validates unused inputs
+too. It does not split, expand, or interpolate values. There is no submission
+CLI or command execution. The implemented library is shown inside the planned
+service boundary; service integration is future work.
 
-## Accepted boundaries
+## Design boundaries
 
-- **C01:** Use Rust and generic command tasks. Keep Ansible-specific behavior
-  outside the execution core. Production deployment belongs in `the deployment repository`.
-- **P01:** Use one service, local SQLite, embedded web assets, and Linux systemd
-  supervision. Authenticate one administrator at the private proxy and protect
-  state-changing browser requests in Rustward.
-- **P02:** Preserve queued work and block new starts when external work is
-  uncertain. Do not retry interrupted work automatically. For planned
-  maintenance, pause new starts and wait for active tasks to finish.
-- **P03:** Prepare fixed code and dependencies outside execution. Queued and
-  active work must retain its selected runtime.
-- **P06:** Close admission and dispatch and stop active local work if state or
-  log storage fails. Normal log truncation must continue to drain output.
-- **P07:** Enforce configurable bounds. Accepted starting values are one active
-  task, 100 queued requests, 10 MiB of logs per run, 1 GiB of retained logs, and
-  30-day retention. These limits are not implemented yet.
+[Gravity](GRAVITY.md) owns the accepted architecture rules. The service handles
+admission, dispatch, scheduling, and retained state. The proxy authenticates the
+administrator; systemd supervises run processes. Runtime preparation and
+production deployment remain outside the service.
 
-## Open decisions
+Runs retain their selected prepared runtime and use separate writable
+directories. Local cleanup is not proof of external completion. Recovery and
+storage failures can block new starts; see the [execution
+contracts](temporary/execution.md#admission-contract-decisions).
 
-Before execution integration, define runtime identity and layout, the systemd
-baseline, manager type and unit permissions, run states, acknowledgement records,
-and launch recovery. Durable admission, configuration activation, schedule
-occurrence tracking, and restore mechanisms still need detailed contracts.
+State and logs have configurable resource bounds, with one explicit exception:
+compact admitted manual-request records remain indefinitely without a fixed
+storage ceiling. Review logs can also prevent dispatch when protected data fills
+the log allowance. See P07 and the retention contract for the exact rules.
 
-Before the related components are implemented, define environment and secret
-references, output capture, metadata and buffer bounds, retention cleanup, and
-the private proxy access mechanism. Select the license before publishing a
-release. Review a sanitized task inventory before claiming workload compatibility.
+## Implementation gates
 
-This document describes structure and policy. It is not evidence that execution,
-recovery, scheduling, or deployment behavior has been tested.
+The [implementation
+handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
+remaining specifications and required evidence. They include atomic admission
+and launch recovery, the systemd manager and permissions, output capture,
+runtime layout, scheduling checkpoints, retention, and restore mechanisms.
+Private proxy access and environment/secret references also need specifications.
+
+The current tests cover configuration and argument generation. They do not prove
+execution, recovery, scheduling, or deployment behavior. License selection is a
+release gate; workload compatibility and production migration require separate
+review and authorization.
