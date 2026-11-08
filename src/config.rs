@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_yaml_ng::Value;
 
 #[derive(Debug)]
@@ -9,14 +9,14 @@ pub struct Config {
     tasks: Vec<TaskDefinition>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
     version: u32,
     tasks: Vec<TaskDefinition>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TaskDefinition {
     #[serde(deserialize_with = "read_string")]
@@ -31,28 +31,28 @@ struct TaskDefinition {
     inputs: Vec<InputDeclaration>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 enum ArgumentSource {
     Literal(LiteralArgument),
     InputReference(InputReference),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct LiteralArgument {
     #[serde(deserialize_with = "read_string")]
     literal: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct InputReference {
     #[serde(deserialize_with = "read_string")]
     input: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct InputDeclaration {
     #[serde(deserialize_with = "read_string")]
@@ -82,7 +82,7 @@ fn read_default<'de, D: Deserializer<'de>>(reader: D) -> Result<Option<Value>, D
     Value::deserialize(reader).map(Some)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum InputType {
     String,
@@ -196,6 +196,14 @@ pub fn validate(source: &str) -> Result<Config, String> {
 }
 
 impl Config {
+    pub(crate) fn admission_snapshot(&self, task_id: &str) -> (Vec<u8>, Vec<u8>) {
+        let task = self.tasks.iter().find(|task| task.id == task_id).unwrap();
+        (
+            serde_json::to_vec(&serde_json::to_value(task).unwrap()).unwrap(),
+            serde_json::to_vec(&serde_json::to_value(&self.tasks).unwrap()).unwrap(),
+        )
+    }
+
     /// Validate submitted values and generate one argument per configured entry.
     /// Missing values use defaults. Errors do not include submitted values.
     pub fn arguments(

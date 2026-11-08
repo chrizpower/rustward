@@ -63,8 +63,8 @@ instructions.
 
 - **Type and status:** Principle; uncertainty handling and planned maintenance
   accepted by the user. The admission and lifecycle contracts are in
-  [execution.md](temporary/execution.md#admission-contract-decisions); transactional
-  mechanisms still need specification.
+  [execution.md](temporary/execution.md#admission-contract-decisions); launch and lifecycle
+  mechanisms still need specification. Manual admission transactions are implemented.
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof
@@ -174,8 +174,8 @@ See [the glossary](GLOSSARY.md).
 
 These scenarios expose sensitive decisions: systemd permissions, the launch and
 recording crash window, storage-independent stopping, runtime retention, and the
-distinction between local cleanup and external completion. No executor behavior
-is implemented or verified yet.
+distinction between local cleanup and external completion. Manual admission is implemented and tested as a library. Process execution
+is not implemented or verified.
 
 ## Coverage and open decisions
 
@@ -186,11 +186,11 @@ accepted future behavior, not implementation evidence.
 
 [Remaining specifications and
 evidence](temporary/implementation.md#remaining-specifications-and-evidence) cover
-admission/launch transactions, systemd integration, schedule checkpoints, record
+launch transactions, admission service integration, systemd integration, schedule checkpoints, record
 formats, runtime layout, and retention/restore mechanisms. Performance
 measurements, other metadata and buffer limits, host resource controls, and the
 private access mechanism remain open. Library choices are made per component;
-the configuration dependencies are already selected.
+the configuration and admission dependencies are already selected.
 
 License selection is a release gate. Workload compatibility, production access,
 and migration require separate evidence and authorization. Distributed execution

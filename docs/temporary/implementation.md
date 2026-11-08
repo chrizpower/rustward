@@ -1,7 +1,8 @@
 # Implementation work
 
 Status: Temporary work list. Configuration validation, request input validation,
-and argument generation are implemented; the execution backend is not.
+argument generation, and durable manual admission are implemented. The execution
+backend is not implemented.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -17,8 +18,8 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Specify atomic admission, key verification, persisted transitions, and launch
-   recovery under the accepted execution contracts. Configuration and argument
+1. Specify persisted lifecycle transitions and launch recovery under the accepted
+   execution contracts. Manual key verification and atomic admission are implemented. Configuration and argument
    mapping are already implemented; extend their schema only through an explicit
    compatible contract change.
 2. Select the Linux/systemd baseline, manager, and narrowly scoped permissions.
@@ -41,10 +42,10 @@ privileged access to the devbox merely to make integration tests pass.
 The policy interview is complete for these contract groups. The following work
 must translate accepted behavior into testable mechanisms, not reopen it:
 
-- Define key format, issuer-generation verification, canonical request encoding,
-  atomic admission, and bounded rejection diagnostics. Test concurrent retries
-  and interrupted admission. Issued but unadmitted keys need no permanent
-  admission record; prove their authenticity through the selected mechanism.
+- Integrate the implemented manual admission library with service safety controls
+  and verified prepared runtime selection. Preserve the [admission contract](../ARCHITECTURE.md#manual-admission-library).
+  Define restore tooling and monitoring of permanent-record growth. Transport
+  parsing and global metadata/buffer bounds remain open.
 - Define the complete state-transition table and durable launch protocol.
   Reconcile recorded runs against systemd evidence after a crash. Test loss of
   confirmation before and after launch; do not automatically retry uncertain work.
@@ -55,7 +56,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
 - Select systemd baseline, manager, and permissions on an isolated test host.
   Validate process-boundary enforcement and cleanup evidence. Define the review
   record with affected runs, evidence, uncertainty, decision, and reason.
-- Specify runtime manifest, paths, ownership, canonical revision encoding,
+- Specify runtime manifest, paths, ownership,
   and safe removal of run work directories after completion.
 - Specify atomic log-capacity reservation, release, record/log deletion, and
   retention age calculation. Test protected evidence and actual storage faults.
@@ -66,7 +67,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
 These are engineering specifications and validation gates. Host-specific
 choices, new behavior trade-offs, and any conflicts with accepted policy need
 further review. Backup tooling, production integration, and workload-specific
-evidence remain outside this interview. No execution behavior is verified yet.
+evidence remain outside this interview. Admission storage is tested; process execution behavior is not verified.
 
 ## Retained mechanism proposals
 
@@ -79,8 +80,9 @@ review a proposal before implementing it.
   admission, and missed-work behavior. Keep one schedule owner. Consider SSE or
   bounded polling for output, and derive per-run unit identity from the run ID.
   Transient services and `KillMode=control-group` are proposed systemd mechanisms.
-- **P02:** Use a SQLite transaction for request identity and run admission, and
-  persist queue order for dispatch. Show queued runs before resuming. Preserve
+- **P02:** SQLite transactions now record manual request identity and queued runs,
+  including insertion order. Dispatch integration remains future work. Show
+  queued runs before resuming. Preserve
   accepted runs across schedule removal/reload. Any proposed task-specific waiver
   of uncertainty blocking needs explicit review against accepted P02; it is not
   an existing exception.

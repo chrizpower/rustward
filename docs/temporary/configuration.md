@@ -107,5 +107,7 @@ compatibility and migration before changing version 1 or publishing a release.
 [Execution contracts](execution.md) define accepted future behavior. The
 [temporary implementation work list](implementation.md#remaining-specifications-and-evidence)
 tracks outstanding integration gates. This schema has no runtime or schedule
-fields, and no admission or execution behavior is implied. No live workload
+fields. The separate [admission library](../ARCHITECTURE.md#manual-admission-library)
+retains a caller-selected runtime identity without changing this schema.
+Configuration validation alone implies no admission or execution behavior. No live workload
 has been validated.

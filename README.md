@@ -4,11 +4,12 @@ Rustward is a small Rust task executor for one trusted administrator. It will
 run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
-Status: version 1 configuration validation, request input validation, and
-argument generation are implemented. The binary validates YAML files. The Rust
-library validates submitted values and returns separate arguments; it cannot run
-tasks. See the [configuration schema](docs/temporary/configuration.md) and [synthetic
-example](examples/tasks.yaml).
+Status: version 1 configuration validation, request input validation,
+argument generation, and durable manual admission are implemented. The binary
+validates YAML files. The Rust library validates submitted values, returns
+separate arguments, and records queued manual runs; it cannot run tasks. See the
+[configuration schema](docs/temporary/configuration.md) and
+[synthetic example](examples/tasks.yaml).
 
 ```sh
 cargo run --locked -- validate examples/tasks.yaml
@@ -39,6 +40,11 @@ unaccepted proposals. Acceptance does not prove implementation or testing.
 The library exposes `config::validate` and `Config::arguments(task_id,
 &values)`. Values use `BTreeMap<String, serde_yaml_ng::Value>`. See the [request
 contract](docs/temporary/configuration.md#request-inputs-and-arguments) for details.
+
+The `admission::Store` library issues manual request keys and atomically records
+queued runs in a dedicated local SQLite database. See the [admission interface
+and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
+submission CLI, HTTP service, or dispatch implementation.
 
 ## Development
 

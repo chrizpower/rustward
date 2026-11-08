@@ -309,6 +309,13 @@ generation then converts referenced values to strings. Unused input values are
 validated but do not produce arguments. Generated arguments are `Vec<String>`;
 they are not task definitions or configured argument sources.
 
+The `admission::Store` library issues manual request keys and records queued runs.
+`Admission::Admitted` returns a new run ID. `AlreadyAdmitted` returns the original
+run ID; `HistoryRemoved` also reports that its run history is absent. None of
+these results reports execution success. The library retains submitted values
+separately from defaults and generated arguments. See the [admission storage
+contract](ARCHITECTURE.md#manual-admission-library).
+
 The private names were aligned with the accepted meanings during the code
 review requested on 2026-11-08. Public Rust interfaces and YAML version 1 fields
 are unchanged. These mappings do not authorize public interface changes.
@@ -322,7 +329,7 @@ revision contracts. Keep mechanisms in that document rather than this glossary.
 
 [Remaining specifications and
 evidence](temporary/implementation.md#remaining-specifications-and-evidence) include
-canonical encoding, atomic transitions, systemd integration, scheduling
+lifecycle transitions, systemd integration, scheduling
 checkpoints, runtime manifests, and backup consistency. These are implementation
 gates, not evidence that behavior works. New policy trade-offs need review.
 

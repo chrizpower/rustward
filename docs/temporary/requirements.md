@@ -19,7 +19,7 @@ cron, Git-managed YAML definitions, a web UI, one trusted administrator, and
 skipping missed occurrences while reporting gaps. Application code belongs in
 `chrizpower/rustward`; deployment belongs in `the deployment repository`.
 
-Configuration validation and argument generation are implemented. Execution,
+Configuration validation, argument generation, and durable manual admission are implemented. Execution,
 scheduling, and operational behavior remain unimplemented. This reference does not
 authorize live execution, production deployment, or schedule migration.
 
@@ -29,7 +29,7 @@ authorize live execution, production deployment, or schedule migration.
 | --- | --- |
 | C01, P01, P02, P03 | Accepted constraints and principles in Gravity; detailed execution contracts in execution.md |
 | P02 planned shutdown | Drain active runs before planned restart; do not apply the original stop-on-shutdown proposal |
-| F02 and P02 request keys | Rustward-issued permanent manual keys, with a narrow P07 metadata exception |
+| F02 and P02 request keys | Manual admission library implemented; web UI and service integration remain future work. Rustward-issued permanent manual keys have a narrow P07 metadata exception |
 | F06–F08 scheduling | Accepted occurrence identity, cron day matching, and one queued run per schedule in execution.md |
 | P04 controls | Accepted independent pause/admission controls; reload and checkpoint mechanisms remain open |
 | P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |

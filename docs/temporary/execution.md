@@ -1,7 +1,8 @@
 # Execution contracts
 
-Status: Temporary reference for contracts accepted on 2026-11-08; not implemented
-yet. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
+Status: Temporary reference for contracts accepted on 2026-11-08. Manual
+admission is implemented as a library; lifecycle, scheduling, restore, and
+execution integration are not implemented. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).
@@ -27,8 +28,9 @@ Storage failure still invokes P06; permanent records do not permit execution
 without durable state. Monitor storage growth.
 
 Rustward is the issuer of manual request keys. Issuing a key does not create a
-run or reserve queue capacity. The key format and handling of issued but
-unadmitted keys remain open.
+run or reserve queue capacity. The implemented key format and handling of issued but unadmitted keys are
+specified in [the admission library contract](../ARCHITECTURE.md#manual-admission-library).
+Issuance creates no permanent record.
 
 After run history is deleted, a matching retry returns the original run ID and
 an explicit already-admitted/history-removed response. It does not recreate the
@@ -42,7 +44,8 @@ at admission. A rejected request can be corrected or retried with the same key
 and is evaluated again. Once admitted, its payload cannot change. Keep rejection
 diagnostics bounded and separate from permanent admission records.
 
-Canonical comparison encoding and issued-key verification remain open. Restore
+Canonical request encoding and issued-key verification are implemented; see the
+admission library contract. Restore
 behavior is defined in the application-state restore contract below. Permanent
 key records do not by themselves prevent duplicate execution after restoring a
 backup that lacks newer admissions.
@@ -158,5 +161,6 @@ and typed values. Labels, argument order, and actual default-value changes
 affect revisions. This refines the glossary's parsed-content definition.
 
 Request comparison is different: compare submitted inputs before defaults so
-that retries remain independent of later configuration changes. Specify stable
-canonical encoding and identity algorithms before persistence is implemented.
+that retries remain independent of later configuration changes. The admission library implements versioned SHA-256 request fingerprints and
+normalized definition revisions; see [the encoding contract](../ARCHITECTURE.md#request-identity).
+Future schema changes must preserve stored revision meanings.
