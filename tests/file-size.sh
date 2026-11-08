@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Hooks export repository paths. Clear them before creating a test repository.
+while IFS= read -r name; do
+    unset "$name"
+done < <(git rev-parse --local-env-vars)
+
 root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-staged-file-size"
 scratch=$(mktemp -d)

@@ -1,5 +1,6 @@
 check: check-commit
     bash tests/file-size.sh
+    bash tests/file-size-isolation.sh
     cargo test --locked --all-targets
     just coverage
 

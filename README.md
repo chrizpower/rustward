@@ -129,7 +129,9 @@ as required by the repository rules.
 machine-generated files, add an exact path with `-token-limit` and stage the rule.
 The check uses staged attributes. Authored source, tests, and documentation must
 stay within the limit. A failure lists the files and gives instructions to split
-them. `just check` tests these rules with a synthetic Git repository.
+them. `just check` tests these rules with a synthetic Git repository. The tests
+clear inherited Git repository settings before creating fixtures. A regression
+test checks that inherited Git paths do not change the parent repository.
 
 Deployment configuration stays in
 [the deployment repository](deployment-repository). Do not copy fleet credentials
