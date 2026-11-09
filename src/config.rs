@@ -28,6 +28,17 @@ struct TaskDefinition {
     working_directory: String,
     arguments: Vec<ArgumentSource>,
     inputs: Vec<InputDeclaration>,
+    #[serde(default = "default_timeout")]
+    timeout_seconds: u32,
+    #[serde(default = "default_grace")]
+    cleanup_grace_seconds: u32,
+}
+
+fn default_timeout() -> u32 {
+    3600
+}
+fn default_grace() -> u32 {
+    30
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -127,6 +138,11 @@ fn validate_tasks(tasks: &[TaskDefinition]) -> Result<(), String> {
         if !valid_path(&task.executable) || !valid_path(&task.working_directory) {
             return Err(fail(
                 "executable and working_directory must be absolute paths without NUL",
+            ));
+        }
+        if task.timeout_seconds == 0 || task.cleanup_grace_seconds == 0 {
+            return Err(fail(
+                "timeout_seconds and cleanup_grace_seconds must be positive",
             ));
         }
         let mut input_ids = HashSet::new();

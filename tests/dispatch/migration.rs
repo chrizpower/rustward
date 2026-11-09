@@ -38,7 +38,7 @@ fn version_two_migration_preserves_rows_and_rolls_back_on_failure() {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            3
+            4
         );
         assert_eq!(
             store.run_state("old-run").unwrap().unwrap().result,
@@ -89,4 +89,73 @@ fn version_two_migration_preserves_rows_and_rolls_back_on_failure() {
         let mut session = Session::open(&path, Limits::default()).unwrap();
         blocked(&mut session, Block::Paused);
     }
+}
+
+#[test]
+fn version_three_migration_preserves_admitted_and_active_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.db");
+    let db = Connection::open(&path).unwrap();
+    db.execute_batch(include_str!("../fixtures/admission-v3.sql"))
+        .unwrap();
+    let id = "a".repeat(64);
+    db.execute(
+        "INSERT INTO issuer VALUES(1,zeroblob(32),zeroblob(32),100,0)",
+        [],
+    )
+    .unwrap();
+    let snapshot = br#"{"executable":"/synthetic/program","working_directory":"/synthetic"}"#;
+    db.execute("INSERT INTO runs VALUES(7,?1,'retained/task',?2,x'1234',x'5678','{}','[]','runtime-old','running',NULL,1)", rusqlite::params![id,snapshot]).unwrap();
+    db.execute("INSERT INTO launches(run_id,start_state,invocation,control_group,log_bytes) VALUES(?1,'accepted',zeroblob(16),'/synthetic/original',1024)", [&id]).unwrap();
+    db.execute(
+        "INSERT INTO admissions VALUES('permanent-key',x'abc0',?1)",
+        [&id],
+    )
+    .unwrap();
+    db.execute("UPDATE sqlite_sequence SET seq=99 WHERE name='runs'", [])
+        .unwrap();
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(
+        store.run_state(&id).unwrap().unwrap().phase,
+        RunPhase::Running
+    );
+    type StoredTiming = (Vec<u8>, Vec<u8>, Vec<u8>, Option<i64>, Option<i64>);
+    let row: StoredTiming = db.query_row("SELECT task_snapshot,task_revision,config_revision,dispatched_at,completed_at FROM runs", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).unwrap();
+    assert_eq!(
+        row,
+        (
+            snapshot.to_vec(),
+            vec![0x12, 0x34],
+            vec![0x56, 0x78],
+            None,
+            None
+        )
+    );
+    assert_eq!(
+        db.query_row("SELECT fingerprint FROM admissions", [], |r| r
+            .get::<_, Vec<u8>>(0))
+            .unwrap(),
+        vec![0xab, 0xc0]
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT seq FROM sqlite_sequence WHERE name='runs'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        99
+    );
+    let mut session = Session::open(&path, Limits::default()).unwrap();
+    let record = session.record(&id).unwrap().unwrap();
+    assert_eq!(
+        record.identity.unwrap().control_group,
+        "/synthetic/original"
+    );
+    assert!(record.review_required);
+    assert_eq!(
+        session.run_state(&id).unwrap().unwrap().result,
+        Some(RunResult::Interruption)
+    );
+    assert_eq!(session.times(&id).unwrap().unwrap().dispatched_at_ms, None);
 }

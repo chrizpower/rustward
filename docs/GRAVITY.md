@@ -305,8 +305,8 @@ identity. Exact schemas, compatibility, and loading mechanisms remain open.
 version 2, removal of the old parser API and single-document format, strict
 bounded discovery, two reads with a caller-enforced unchanged-files condition,
 and a separate configuration revision encoding that excludes service settings.
-Keep task snapshot encoding, stored revisions, and request identity unchanged.
-The cron review below supersedes the initial step and combined-day rules.
+Preserve stored revisions and request identity.
+Later reviews supersede initial cron and timing defaults.
 
 2026-11-08: The user accepts five UTC fields with numbers, lists, ascending ranges,
 and standalone `*`. Reject steps and extensions; require one day field to be `*`.
@@ -314,4 +314,6 @@ Use an established parser/evaluator after subset checks. Preserve stored revisio
 and admitted work. See the configuration contract.
 
 2026-11-08: Accept FIFO, `NotQueued` cancellation races, and conservative recovery.
-Preserve results; require review and cleanup evidence. See [dispatch](temporary/dispatch.md).
+Require review and cleanup evidence. See [dispatch](temporary/dispatch.md).
+
+2026-11-08: Timing and output-failure rules: [stopping](temporary/stopping.md).

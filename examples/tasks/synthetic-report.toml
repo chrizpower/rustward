@@ -1,3 +1,5 @@
+# timeout_seconds = 3600
+# cleanup_grace_seconds = 30
 label = "Synthetic report"
 executable = "/synthetic/runtime/bin/report"
 working_directory = "/synthetic/runtime"

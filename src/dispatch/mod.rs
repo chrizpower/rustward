@@ -1,18 +1,26 @@
 //! Durable launch protocol. Real execution requires the integration gates in
 //! docs/temporary/dispatch.md. Tests use a fake supervisor only.
-use std::{fs::File, path::Path, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    path::Path,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use rustix::fs::{FlockOperation, flock};
 use serde::Deserialize;
 
 use crate::{
-    admission::{Error, RunState, Store, storage},
-    supervision::{self, Launch, Output, RunId, StartOutcome, Supervisor},
+    admission::{Error, RunState, Store, storage, utc_ms},
+    supervision::{Launch, Output, RunId, StartOutcome, Supervisor},
 };
 
 mod evidence;
+mod stopping;
 pub use evidence::Record;
+pub use stopping::{StopDecision, StopReason, Times};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -63,29 +71,50 @@ pub struct Session {
     store: Store,
     owner: Arc<File>,
     limits: Limits,
+    safety: crate::safety::Safety,
+    active: BTreeMap<String, stopping::Active>,
 }
 
 #[derive(Deserialize)]
 struct Command {
     executable: String,
     working_directory: String,
+    #[serde(default)]
+    timeout_seconds: Option<u32>,
+    #[serde(default = "legacy_grace")]
+    cleanup_grace_seconds: u32,
+}
+fn legacy_grace() -> u32 {
+    30
 }
 
 impl Session {
     /// Acquire sole dispatch ownership and recover unfinished launch intents.
     /// Keep the database inode in place while any session or permit exists.
     pub fn open(path: impl AsRef<Path>, limits: Limits) -> Result<Self, Error> {
+        Self::open_with_safety(path, limits, crate::safety::Safety::default())
+    }
+
+    pub fn open_with_safety(
+        path: impl AsRef<Path>,
+        limits: Limits,
+        safety: crate::safety::Safety,
+    ) -> Result<Self, Error> {
         if limits.retained_log_bytes > i64::MAX as u64 || limits.log_bytes_per_run > i64::MAX as u64
         {
             return Err(Error::InvalidLimits);
         }
         let path = path.as_ref();
-        let mut store = Store::open(path)?;
-        let owner = File::open(path).map_err(|_| Error::Storage)?;
+        let mut store = Store::open_with_safety(path, safety.clone())?;
+        let owner = File::open(path).map_err(|_| {
+            safety.fail();
+            Error::Storage
+        })?;
         flock(&owner, FlockOperation::NonBlockingLockExclusive).map_err(|e| {
             if e == rustix::io::Errno::WOULDBLOCK {
                 Error::OwnerBusy
             } else {
+                safety.fail();
                 Error::Storage
             }
         })?;
@@ -115,11 +144,29 @@ impl Session {
             }
             transaction.commit().map_err(storage)
         })?;
-        Ok(Self {
+        let mut active = BTreeMap::new();
+        store.perform(|connection| {
+            let mut statement = connection.prepare("SELECT run_id,task_snapshot FROM runs WHERE dispatched=1 AND phase!='completed'").map_err(storage)?;
+            let rows = statement.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?))).map_err(storage)?;
+            for row in rows {
+                let (id, snapshot) = row.map_err(storage)?;
+                let command: Command = serde_json::from_slice(&snapshot).map_err(|_| Error::Storage)?;
+                active.insert(id, stopping::Active::recovered(Duration::from_secs(command.cleanup_grace_seconds.into())));
+            }
+            Ok(())
+        })?;
+        let mut session = Self {
             store,
             owner: Arc::new(owner),
             limits,
-        })
+            safety,
+            active,
+        };
+        for id in session.active.keys().cloned().collect::<Vec<_>>() {
+            let record = session.record(&id)?.ok_or(Error::Storage)?;
+            session.retain_record(&id, &record);
+        }
+        Ok(session)
     }
 
     pub fn set_paused(&mut self, paused: bool) -> Result<(), Error> {
@@ -140,9 +187,13 @@ impl Session {
 
     /// Reserve a slot and full log allowance for the oldest queued run.
     pub fn claim_next(&mut self) -> Result<Claim, Error> {
+        if self.safety.failed() {
+            return Err(Error::Closed);
+        }
         let limits = self.limits;
         let owner = Arc::clone(&self.owner);
-        self.store.perform(|connection| {
+        let mut timing = None;
+        let claimed = self.store.perform(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let paused: bool = transaction.query_row("SELECT paused FROM dispatch_control WHERE id=1", [], |r| r.get(0)).map_err(storage)?;
             if paused { return Ok(Claim::Blocked(Block::Paused)); }
@@ -160,15 +211,22 @@ impl Session {
                 [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).optional().map_err(storage)?;
             let Some((run_id, snapshot, arguments, runtime_id)) = row else { return Ok(Claim::Blocked(Block::Empty)); };
             let command: Command = serde_json::from_slice(&snapshot).map_err(|_| Error::Storage)?;
+            let now = Instant::now();
+            timing = Some((run_id.clone(), stopping::Active::new(now, command.timeout_seconds, command.cleanup_grace_seconds)?));
             let arguments: Vec<String> = serde_json::from_str(&arguments).map_err(|_| Error::Storage)?;
             let launch = Launch { run_id: RunId::new(&run_id).map_err(|_| Error::Storage)?, executable: command.executable,
-                working_directory: command.working_directory, arguments, cleanup_grace: supervision::DEFAULT_CLEANUP_GRACE };
-            let changed = transaction.execute("UPDATE runs SET phase='launching', dispatched=1 WHERE run_id=?1 AND phase='queued'", [&run_id]).map_err(storage)?;
+                working_directory: command.working_directory, arguments, cleanup_grace: Duration::from_secs(command.cleanup_grace_seconds.into()) };
+            let changed = transaction.execute("UPDATE runs SET phase='launching', dispatched=1,dispatched_at=?2 WHERE run_id=?1 AND phase='queued'", params![run_id,utc_ms()?]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
             transaction.execute("INSERT INTO launches (run_id,start_state,log_bytes) VALUES (?1,'intent',?2)", params![run_id, limits.log_bytes_per_run as i64]).map_err(storage)?;
             transaction.commit().map_err(storage)?;
             Ok(Claim::Ready(Permit { owner, launch, runtime_id }))
-        })
+        });
+        if matches!(&claimed, Ok(Claim::Ready(_))) {
+            let (id, active) = timing.unwrap();
+            self.active.insert(id, active);
+        }
+        claimed
     }
 
     /// Call start once after commit. The caller must first verify the retained
@@ -179,10 +237,21 @@ impl Session {
         supervisor: &mut impl Supervisor,
         output: Output<'_>,
     ) -> Result<StartOutcome, Error> {
+        if self.safety.failed() {
+            return Err(Error::Closed);
+        }
         if !Arc::ptr_eq(&permit.owner, &self.owner) {
             return Err(Error::InvalidTransition);
         }
         let run_id = permit.launch.run_id.as_str();
+        if self
+            .active
+            .get(run_id)
+            .is_some_and(|active| active.expired(Instant::now()))
+        {
+            self.decide_stop(run_id, StopReason::Timeout)?;
+            return Err(Error::Closed);
+        }
         self.store.perform(|connection| {
             let review: bool = connection
                 .query_row(
@@ -207,6 +276,10 @@ impl Session {
             }
             Ok(())
         })?;
+        self.active
+            .get_mut(run_id)
+            .ok_or(Error::InvalidTransition)?
+            .start_called = true;
         let outcome = supervisor
             .start(&permit.launch, output)
             .unwrap_or(StartOutcome::Uncertain);
@@ -245,8 +318,12 @@ impl Session {
         });
         if saved.is_err() {
             self.store.close();
+            self.safety.fail();
         }
         saved?;
+        if outcome == StartOutcome::Rejected {
+            self.active.get_mut(run_id).unwrap().cleaned = true;
+        }
         Ok(outcome)
     }
 }

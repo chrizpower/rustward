@@ -6,9 +6,9 @@ provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
 Status: version 2 configuration validation, request input validation,
 argument generation, durable manual admission, queued cancellation, and the
-durable dispatch protocol are implemented as libraries. The binary
+durable dispatch and active stopping protocols are implemented as libraries. The binary
 validates TOML files. The Rust library validates submitted values, returns
-separate arguments, and records queued manual runs. Dispatch tests use a fake
+separate arguments, and records queued manual runs. Dispatch and stopping tests use a fake
 supervisor. A separate systemd adapter can request process starts; real dispatch
 integration and the service execution loop remain unimplemented. See the
 [configuration schema](docs/temporary/configuration.md) and
@@ -62,7 +62,9 @@ and cancel a queued run without deleting its history or admission record. See th
 and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
 submission CLI or HTTP service. The [dispatch library](docs/temporary/dispatch.md)
 records launch intent, reserves capacity, and preserves uncertain work after a
-crash. Real runtime, capture, and systemd integration remain gated.
+crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
+and failure controls. Task timeouts default to one hour; cleanup grace defaults
+to 30 seconds. Real runtime, capture, and systemd integration remain gated.
 
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user

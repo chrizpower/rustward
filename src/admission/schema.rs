@@ -39,3 +39,29 @@ pub(super) fn migrate(transaction: &Transaction<'_>) -> Result<(), Error> {
     );
     PRAGMA user_version=3;").map_err(storage)
 }
+
+pub(super) fn migrate_stopping(transaction: &Transaction<'_>) -> Result<(), Error> {
+    transaction.execute_batch("CREATE TABLE runs_v4 (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL UNIQUE,
+        task_id TEXT NOT NULL, task_snapshot BLOB NOT NULL, task_revision BLOB NOT NULL,
+        config_revision BLOB NOT NULL, submitted_inputs TEXT NOT NULL, arguments TEXT NOT NULL,
+        runtime_id TEXT NOT NULL, phase TEXT NOT NULL, result TEXT,
+        dispatched INTEGER NOT NULL DEFAULT 0 CHECK(dispatched IN (0,1)),
+        dispatched_at INTEGER, completed_at INTEGER,
+        CHECK ((dispatched=0 AND ((phase='queued' AND result IS NULL) OR
+               (phase='completed' AND result IS NOT NULL AND result='cancellation'))) OR
+               (dispatched=1 AND ((phase IN ('launching','running') AND result IS NULL) OR
+               (phase IN ('cleaning_up','completed') AND result IS NOT NULL AND
+                result IN ('success','failure','interruption','cancellation','timeout')))))
+    );
+    INSERT INTO runs_v4 SELECT *, NULL, NULL FROM runs;
+    INSERT INTO sqlite_sequence (name,seq) SELECT 'runs_v4',seq FROM sqlite_sequence
+        WHERE name='runs' AND NOT EXISTS(SELECT 1 FROM sqlite_sequence WHERE name='runs_v4');
+    UPDATE sqlite_sequence SET seq=max(seq,COALESCE((SELECT seq FROM sqlite_sequence WHERE name='runs'),0))
+        WHERE name='runs_v4';
+    DROP TABLE runs;
+    ALTER TABLE runs_v4 RENAME TO runs;
+    ALTER TABLE launches ADD COLUMN stop_reason TEXT CHECK(stop_reason IN ('cancellation','timeout','capture','storage'));
+    ALTER TABLE launches ADD COLUMN output_failed INTEGER NOT NULL DEFAULT 0 CHECK(output_failed IN (0,1));
+    PRAGMA user_version=4;").map_err(storage)
+}

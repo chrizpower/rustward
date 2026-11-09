@@ -135,7 +135,9 @@ starting or initiates stopping active work. It does not prove remote work
 stopped.
 
 **Timeout**: The configured execution time limit is reached, which initiates
-stopping active work. It does not prove remote work stopped.
+stopping active work. It does not prove remote work stopped. New tasks default
+to one hour from dispatch. Admissions retain their selected time limits. The user
+accepted this default on 2026-11-08; see [stopping](temporary/stopping.md).
 
 Avoid **job** as a synonym within Rustward and **attempt** as a separate entity.
 Preserve external interface names where required. Each execution retry is a new

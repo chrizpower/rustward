@@ -155,7 +155,7 @@ For example, old task ID `country-report` becomes `tasks/country-report.toml`;
 argument generation rules do not change. YAML remains unsupported.
 
 The configuration change did not alter SQLite schema version 2. The later
-[dispatch migration](dispatch.md) adds schema version 3 without rewriting identity. No stored
+[dispatch migration](dispatch.md) now uses schema version 4 without rewriting identity. No stored
 snapshots, arguments, runtime IDs, request keys, fingerprints, or revisions are
 rewritten. A retry with an admitted key and original payload returns the original
 run even after task removal; a new task path is a changed payload. Existing
@@ -208,6 +208,8 @@ Empty task roots are valid. Use `[]` for empty argument and input lists.
 | Task | `working_directory` | Absolute directory path; no NUL |
 | Task | `arguments` | Ordered list of argument objects |
 | Task | `inputs` | List of input objects; IDs must be unique within the task |
+| Task | `timeout_seconds` | Optional integer, 1–4294967295; defaults to 3600 |
+| Task | `cleanup_grace_seconds` | Optional integer, 1–4294967295; defaults to 30 |
 | Argument | `literal` | String, including an empty string; no NUL |
 | Argument | `input` | ID of an input in this task |
 | Input | `id` | Stable ID |
@@ -303,12 +305,8 @@ the library's UTC matching and next occurrences across weekdays, month ends,
 year ends, and leap days. These tests do not implement a scheduler or prove
 persistent occurrence handling, missed-work policy, or dispatch.
 
-This intentionally narrows version 2 validation: existing files with steps or
-both day fields restricted now fail complete-set loading. Replace steps with
-explicit values where needed. Unsupported day combinations are not converted
-automatically. Existing admitted runs, request fingerprints, and stored revision
-bytes remain unchanged. The normalization and encoding of still-valid definitions
-do not change; no database migration is required.
+Unsupported cron files fail complete-set loading. Existing admitted work and
+stored revision bytes are unchanged. Runtime evaluation remains unimplemented.
 
 ## Normalization and revisions
 
@@ -319,9 +317,10 @@ An omitted schedule `inputs` table and an explicit empty table normalize equally
 Fixed submitted inputs retain their supplied form; task defaults remain in the
 task definition. Input declarations, choices, and arguments retain list order.
 
-Task snapshots retain the version 1 normalized JSON fields, including derived
-`id`, and the `rustward-definition-v1` hash prefix. For the same ID and task
-content, snapshot and task-revision bytes are unchanged.
+Task snapshots include derived `id` and timing defaults, with the existing
+`rustward-definition-v1` hash prefix. Timing fields change new task revisions.
+Stored snapshots and revisions remain unchanged. See [stopping](stopping.md)
+for retained timing, legacy behavior, and timeout enforcement.
 
 New complete-set snapshots are sorted-key JSON objects with `version: 2`,
 `tasks`, and `schedules` arrays. Schedule entries contain `id`, `task`, `cron`,

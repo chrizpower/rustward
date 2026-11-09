@@ -173,3 +173,15 @@ choices = ["NO", "on"]
     );
     assert!(validate(&source.replace("default = \"NO\"", "default = false")).is_err());
 }
+
+#[test]
+fn validates_task_timeout_and_cleanup_grace_seconds() {
+    for field in ["timeout_seconds", "cleanup_grace_seconds"] {
+        for value in ["1", "4294967295"] {
+            assert!(validate(&format!("{field} = {value}\n{EXAMPLE}")).is_ok());
+        }
+        for value in ["0", "-1", "4294967296", "1.5", "true", "'3600'"] {
+            assert!(validate(&format!("{field} = {value}\n{EXAMPLE}")).is_err());
+        }
+    }
+}

@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use hmac::{Hmac, Mac};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
@@ -8,6 +12,14 @@ use toml::Value;
 use crate::config::Config;
 
 mod schema;
+
+pub(crate) fn utc_ms() -> Result<i64, Error> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| i64::try_from(duration.as_millis()).ok())
+        .ok_or(Error::Storage)
+}
 
 type KeyMac = Hmac<Sha256>;
 
@@ -51,6 +63,7 @@ pub enum RunResult {
     Success,
     Failure,
     Interruption,
+    Timeout,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -82,11 +95,9 @@ fn read_run_state(connection: &Connection, run_id: &str) -> Result<Option<RunSta
         Some("success") => Some(RunResult::Success),
         Some("failure") => Some(RunResult::Failure),
         Some("interruption") => Some(RunResult::Interruption),
+        Some("timeout") => Some(RunResult::Timeout),
         _ => return Err(Error::Storage),
     };
-    if dispatched && result == Some(RunResult::Cancellation) {
-        return Err(Error::Storage);
-    }
     let phase = match phase.as_str() {
         "queued" if !dispatched && !has_launch && result.is_none() => RunPhase::Queued,
         "completed" if !dispatched && !has_launch && result == Some(RunResult::Cancellation) => {
@@ -107,6 +118,7 @@ fn read_run_state(connection: &Connection, run_id: &str) -> Result<Option<RunSta
 pub struct Store {
     connection: Connection,
     failed: bool,
+    safety: crate::safety::Safety,
 }
 
 fn random_bytes() -> Result<[u8; 32], Error> {
@@ -190,7 +202,21 @@ impl Store {
 
     /// Open a dedicated database in an existing protected directory.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let path = path.as_ref();
+        Self::open_with_safety(path, crate::safety::Safety::default())
+    }
+
+    pub fn open_with_safety(
+        path: impl AsRef<Path>,
+        safety: crate::safety::Safety,
+    ) -> Result<Self, Error> {
+        let result = Self::open_inner(path.as_ref(), safety.clone());
+        if matches!(result, Err(Error::Storage)) {
+            safety.fail();
+        }
+        result
+    }
+
+    fn open_inner(path: &Path, safety: crate::safety::Safety) -> Result<Self, Error> {
         if path.as_os_str().is_empty() || path == Path::new(":memory:") {
             return Err(Error::Storage);
         }
@@ -233,7 +259,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=3).contains(&version) {
+        } else if !(1..=4).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -270,10 +296,14 @@ impl Store {
         if version < 3 {
             schema::migrate(&transaction)?;
         }
+        if version < 4 {
+            schema::migrate_stopping(&transaction)?;
+        }
         transaction.commit().map_err(storage)?;
         Ok(Self {
             connection,
             failed: false,
+            safety,
         })
     }
 
@@ -287,6 +317,7 @@ impl Store {
         let result = action(&mut self.connection);
         if matches!(result, Err(Error::Storage)) {
             self.failed = true;
+            self.safety.fail();
         }
         result
     }
@@ -359,9 +390,9 @@ impl Store {
             }
             let changed = transaction
                 .execute(
-                    "UPDATE runs SET phase='completed', result='cancellation'
+                    "UPDATE runs SET phase='completed', result='cancellation',completed_at=?2
                  WHERE run_id=?1 AND phase='queued' AND result IS NULL",
-                    [run_id],
+                    params![run_id, utc_ms()?],
                 )
                 .map_err(storage)?;
             if changed != 1 {
@@ -381,6 +412,7 @@ impl Store {
         submitted_values: &BTreeMap<String, Value>,
         runtime_id: &str,
     ) -> Result<Admission, Error> {
+        let safety = self.safety.clone();
         self.perform(|connection| {
             let key_bytes = decode_key(key)?;
             let fingerprint = fingerprint(task_id, submitted_values)?;
@@ -415,7 +447,7 @@ impl Store {
             let mut mac = KeyMac::new_from_slice(&secret).unwrap();
             mac.update(&key_bytes[..65]);
             mac.verify_slice(&key_bytes[65..]).map_err(|_| Error::InvalidKey)?;
-            if closed {
+            if closed || safety.failed() {
                 return Err(Error::Closed);
             }
             if runtime_id.is_empty() || runtime_id.len() > 1024 {

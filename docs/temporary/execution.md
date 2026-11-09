@@ -2,8 +2,8 @@
 
 Status: Temporary reference for contracts accepted on 2026-11-08. Manual
 admission, queued cancellation, and the durable dispatch protocol are implemented
-as libraries. Dispatch tests use a fake supervisor. Scheduling, restore, active
-stopping, and real execution integration remain unimplemented.
+as libraries, with [active stopping](stopping.md). Tests use a fake supervisor.
+Scheduling, restore, and real execution integration remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is tested with synthetic manager responses. Real dispatch integration remains gated. [Per-run bounded capture](capture.md) is also implemented;
 Dispatch has conservative log accounting; capture integration, retention, and
@@ -64,8 +64,8 @@ admission record, and releases queue capacity. No process cleanup is needed
 because the run has not dispatched. Repeated cancellation does not change the
 record. See the [library and migration contract](../ARCHITECTURE.md#queued-cancellation-library).
 The [dispatch contract](dispatch.md) specifies implemented launch, observation,
-completion, and recovery transactions. Active cancellation and timeout decisions
-remain future work. The accepted phases are:
+completion, and recovery transactions. Active cancellation, timeout, and failure controls are implemented in the
+[stopping library](stopping.md). The accepted phases are:
 
 
 | Phase | Meaning |
@@ -78,11 +78,15 @@ remain future work. The accepted phases are:
 
 Results distinguish success, failure, cancellation, timeout, and interruption.
 Record stop reasons separately while cleanup is pending. Dispatch retains the
-first decided result and exit evidence. Competing active cancellation/timeout
-transactions and stop-reason storage remain integration work.
+first decided result and exit evidence. Active cancellation/timeout transactions and stop reasons are stored. Output
+failure changes a recorded Success to Interruption and requires review; other
+prior results remain unchanged. The user accepted this rule on 2026-11-08.
 
 The execution timeout starts at dispatch and includes launch and execution, not
-queue waiting. Stopping uses a separate cleanup grace period; the slot remains
+queue waiting. New task definitions default to one hour, with positive
+`timeout_seconds`; `cleanup_grace_seconds` defaults to 30. Admissions retain
+both settings. Legacy snapshots without timing keep no timeout and 30 seconds.
+Stopping uses a separate cleanup grace period; the slot remains
 held until local cleanup is confirmed.
 
 For competing normal exit, cancellation, and timeout, the first durably recorded

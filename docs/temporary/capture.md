@@ -100,7 +100,9 @@ Under P06, the future service must close admission and dispatch and stop all
 active local work on storage failure. It must preserve uncertainty for review.
 `SetupError::Storage` also invokes P06 while other work is active. This library
 exposes failures without requiring a database write; it does
-not implement those service-wide controls. Read and worker failures also mean
+not implement those service-wide controls. The [stopping library](stopping.md)
+consumes failure signals and shares a storage-failure gate; a service must connect
+all handles and continue polling to perform stops. Read and worker failures also mean
 capture is incomplete; they must not support a successful execution result.
 
 Dropping an unfinished `Capture` marks it abandoned, shuts down both readers,

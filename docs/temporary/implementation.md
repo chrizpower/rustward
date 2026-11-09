@@ -23,8 +23,9 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 1. Complete the integration gates in the [dispatch contract](dispatch.md).
    Durable intent, exclusive ownership, FIFO claims, capacity accounting, retained
    launch data, supervisor evidence, and conservative recovery are tested with a
-   fake supervisor. Specify acknowledgement records, active cancellation,
-   timeouts, and completion timestamps before adding those operations.
+   fake supervisor. [Active stopping](stopping.md), timeouts, shared failure gates,
+   and timestamps are implemented. Specify acknowledgement records before adding
+   review release. Connect capture and stopping to the future service.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
    permissions on an isolated host.
    Specify runtime layout, environment and secret references,
@@ -70,12 +71,12 @@ Production migration and deployment remain outside repository implementation.
 ## Dispatch evidence and remaining work
 
 The [dispatch contract](dispatch.md) owns the implemented API and its prerequisites.
-Schema version 3 preserves version 1/2 identities and history. Tests cover lock
+Schema version 4 preserves version 1–3 identities and history. Tests cover lock
 ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollback,
 process exit at launch boundaries, missing/changed identity, first-result retention,
 cleanup/output gates, and durable review. No test starts a real task.
 
-Next: verify prepared runtimes, connect capture and storage-independent stopping,
+Next: verify prepared runtimes, connect capture and the stopping library,
 implement acknowledgement and retention reclamation, and pass isolated systemd
 host checks. The service must enforce all gates before real execution. A review
 block currently has no acknowledgement API. A dropped permit is not reissued.
@@ -103,7 +104,7 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   and verified prepared runtime selection. Preserve the [admission contract](../ARCHITECTURE.md#manual-admission-library).
   Define restore tooling and monitoring of permanent-record growth. Transport
   parsing and global metadata/buffer bounds remain open.
-- Extend the implemented durable launch protocol with active stopping and review.
+- Integrate the implemented durable launch and stopping protocols with review.
   Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
   Integrate recorded recovery decisions with real systemd cleanup. Keep the
   tested no-retry rule at every launch boundary.

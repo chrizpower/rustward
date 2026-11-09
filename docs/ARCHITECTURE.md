@@ -219,14 +219,14 @@ a queue-full response can be retried with its unbound key. A failed transaction
 leaves the run queued and uses the existing storage-error handling.
 
 `Store::run_state(run_id)` returns separate phase and result fields. Invalid
-stored combinations close the handle with a storage error. Schema version 3 adds
-Launching, Running, CleaningUp, Success, Failure, and Interruption; active
-cancellation and timeout decisions remain future work.
+stored combinations close the handle with a storage error. Schema version 4 adds
+active cancellation, timeout, output failure, and timestamps; see
+[stopping](temporary/stopping.md).
 
-Migration from versions 1 and 2 preserves run data, results, issuer state,
+Migration from versions 1–3 preserves run data, results, issuer state,
 admission records, revisions, and sequence high-water marks. Version 1 first gains
-the version 2 cancellation model. Both steps commit together. Failed migrations
-roll back; older binaries reject version 3. Tests retain both SQL fixtures and
+the version 2 cancellation model. All steps commit together. Failed migrations
+roll back; older binaries reject version 4. Tests retain SQL fixtures and
 check failed table replacement, preserved identities, and sequence order.
 
 ## Durable dispatch library
@@ -344,11 +344,10 @@ cleanup, and concurrent-unit isolation. The normal test run skips it. It has not
 been run in this devbox, which has no manager. Private D-Bus tests do not prove
 systemd behavior or host permissions.
 
-Schema version 3 implements durable launch intent, slot/log accounting, and
-conservative recovery with fake supervision. Runtime verification, real capture
-and log-capacity integration, timeout decisions, storage-failure stopping, and
-isolated host tests remain gates before connecting dispatch to this adapter. In
-particular, a missing unit or lost start reply must not cause automatic retry.
+Fake supervision tests cover launch, stopping, and conservative recovery. Runtime
+verification, real capture and log-capacity integration, and isolated host tests
+remain gates before connecting dispatch to this adapter. Missing units or lost
+start replies must not cause automatic retry.
 
 The implementation follows the [systemd 257 D-Bus interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html)
 and its [transient launch property construction](https://github.com/systemd/systemd/blob/v257/src/run/run.c).

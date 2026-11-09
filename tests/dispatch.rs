@@ -1,3 +1,5 @@
+mod common;
+
 use std::{
     collections::BTreeMap,
     os::{fd::AsFd, unix::net::UnixStream},
@@ -22,6 +24,23 @@ use tempfile::TempDir;
 mod migration;
 #[path = "dispatch/recovery.rs"]
 mod recovery;
+#[path = "dispatch/stopping.rs"]
+mod stopping;
+
+#[test]
+fn shared_failure_gate_blocks_an_already_granted_start() {
+    let mut fixture = Fixture::new();
+    fixture.admit();
+    let safety = rustward::safety::Safety::default();
+    let mut session =
+        Session::open_with_safety(&fixture.path, Limits::default(), safety.clone()).unwrap();
+    session.set_paused(false).unwrap();
+    let permit = claim(&mut session);
+    let mut fake = Fake::new(&fixture.path);
+    safety.fail();
+    assert_eq!(start(&mut session, permit, &mut fake), Err(Error::Closed));
+    assert_eq!(fake.calls, 0);
+}
 
 struct Fixture {
     _root: TempDir,

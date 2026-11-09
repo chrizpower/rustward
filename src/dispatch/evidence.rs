@@ -2,7 +2,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use super::Session;
 use crate::{
-    admission::{Error, storage},
+    admission::{Error, storage, utc_ms},
     supervision::{Cleanup, ExecutionIdentity, ExecutionState, Observation, ProcessExit},
 };
 
@@ -14,15 +14,17 @@ pub struct Record {
     pub cleanup_confirmed: bool,
     pub review_required: bool,
     pub log_bytes: u64,
+    pub stop_reason: Option<String>,
+    pub output_failed: bool,
 }
 
 fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> {
-    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value
+    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed
         FROM launches WHERE run_id=?1", [run_id], |r| {
         let invocation: Option<Vec<u8>> = r.get(1)?;
         let group: Option<String> = r.get(2)?;
-        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?))
-    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value)| {
+        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?,r.get::<_, Option<String>>(8)?,r.get::<_, bool>(9)?))
+    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value, stop_reason, output_failed)| {
         let identity = match (invocation, group) {
             (None, None) => None,
             (Some(bytes), Some(control_group)) => Some(ExecutionIdentity {
@@ -36,7 +38,7 @@ fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> 
             (Some("signal"), Some(value)) => Some(ProcessExit::Signal(value)),
             _ => return Err(Error::Storage),
         };
-        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
+        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, stop_reason, output_failed, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
     }).transpose()
 }
 
@@ -48,6 +50,7 @@ impl Session {
     /// Retain supervisor evidence. Uncertainty and identity mismatch require
     /// review and never replace an earlier result or execution identity.
     pub fn observe(&mut self, run_id: &str, observation: &Observation) -> Result<(), Error> {
+        self.retain_observation(run_id, observation);
         let saved = self.store.perform(|connection| {
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -179,6 +182,11 @@ impl Session {
         });
         if matches!(saved, Err(Error::Storage | Error::Busy)) {
             self.store.close();
+            self.safety.fail();
+        }
+        if saved.is_ok() {
+            let record = self.record(run_id)?.ok_or(Error::Storage)?;
+            self.retain_record(run_id, &record);
         }
         saved
     }
@@ -186,13 +194,28 @@ impl Session {
     /// Record final completion only after confirmed cleanup and synchronized
     /// capture. Retained bytes must not exceed this run's reserved allowance.
     pub fn finish(&mut self, run_id: &str, retained_bytes: u64) -> Result<(), Error> {
+        self.finish_output(run_id, retained_bytes, false)
+    }
+
+    /// Complete failed output handling after all workers have ended. This does
+    /// not assert synchronization of bytes whose storage failed.
+    pub fn finish_failed_output(&mut self, run_id: &str, retained_bytes: u64) -> Result<(), Error> {
+        self.finish_output(run_id, retained_bytes, true)
+    }
+
+    fn finish_output(
+        &mut self,
+        run_id: &str,
+        retained_bytes: u64,
+        failed_output: bool,
+    ) -> Result<(), Error> {
         let saved = self.store.perform(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let record = read(&transaction, run_id)?.ok_or(Error::InvalidTransition)?;
-            if !record.cleanup_confirmed || retained_bytes > record.log_bytes { return Err(Error::InvalidTransition); }
+            if record.output_failed != failed_output || !record.cleanup_confirmed || retained_bytes > record.log_bytes { return Err(Error::InvalidTransition); }
             let ready: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM runs WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL)", [run_id], |r| r.get(0)).map_err(storage)?;
             if !ready { return Err(Error::InvalidTransition); }
-            let changed = transaction.execute("UPDATE runs SET phase='completed' WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL", [run_id]).map_err(storage)?;
+            let changed = transaction.execute("UPDATE runs SET phase='completed',completed_at=?2 WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL", params![run_id,utc_ms()?]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
             let changed = transaction.execute("UPDATE launches SET log_bytes=?1 WHERE run_id=?2", params![retained_bytes as i64,run_id]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
@@ -200,6 +223,10 @@ impl Session {
         });
         if matches!(saved, Err(Error::Storage | Error::Busy)) {
             self.store.close();
+            self.safety.fail();
+        }
+        if saved.is_ok() {
+            self.active.remove(run_id);
         }
         saved
     }

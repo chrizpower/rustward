@@ -342,7 +342,7 @@ fn rejects_unsupported_schema_and_storage_failures() {
     ));
     let path = directory.path().join("state.db");
     let connection = Connection::open(&path).unwrap();
-    connection.pragma_update(None, "user_version", 4).unwrap();
+    connection.pragma_update(None, "user_version", 5).unwrap();
     assert!(matches!(Store::open(&path), Err(Error::UnsupportedSchema)));
     let (directory, mut store) = setup();
     let connection = Connection::open(directory.path().join("state.db")).unwrap();
@@ -476,13 +476,14 @@ fn definition_revision_tracks_labels_defaults_and_argument_order() {
 }
 
 #[test]
-fn layout_keeps_task_snapshot_encoding_and_versions_configuration_revisions() {
+fn task_snapshot_retains_timing_defaults_and_revision_encoding() {
     use sha2::{Digest, Sha256};
     let (directory, mut store) = setup();
     let key = store.issue_key().unwrap();
     admit(&mut store, &key).unwrap();
     let expected = serde_json::json!({
         "id": "synthetic-report", "label": "Synthetic report",
+        "timeout_seconds": 3600, "cleanup_grace_seconds": 30,
         "executable": "/synthetic/runtime/bin/report", "working_directory": "/synthetic/runtime",
         "arguments": [{"literal":"--name"},{"input":"name"},{"input":"count"},{"input":"enabled"}],
         "inputs": [

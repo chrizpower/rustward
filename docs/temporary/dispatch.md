@@ -11,8 +11,7 @@ open integration work. Follow execution.md and Gravity P02, P03, P06, and P07.
 Implement database transitions and a one-call launch protocol. Test only with a
 fake Supervisor. There is no daemon, dispatch loop, submission command, scheduler,
 HTTP endpoint, or connection to the systemd adapter. A future service must verify
-prepared runtimes, reserve real log capacity, connect capture, handle active
-stopping and service-wide storage failure, and pass isolated host tests before
+prepared runtimes, reserve real log capacity, connect capture, connect the [stopping library](stopping.md), and pass isolated host tests before
 using this library for execution. Callers must not substitute current task files
 or a newer runtime for admitted values.
 
@@ -49,7 +48,7 @@ disk space or integrate capture. Limits come from the caller, not live reload.
 
 Cancellation and dispatch share the SQLite write lock. Cancellation first means
 Completed/Cancellation and no launch permit. Dispatch first means `NotQueued`
-from `cancel_queued`; active stopping is deferred. FIFO never bypasses a block.
+from `cancel_queued`; active stopping uses `Session::cancel_active` and `poll`. FIFO never bypasses a block.
 Reducing capacity does not evict active runs or alter admitted snapshots.
 
 ## State and evidence
@@ -73,7 +72,7 @@ stop, or release can rely on them. A start acceptance is not process-start
 proof. A definite rejection proves no process was started by that call; conflict
 and transport failure do not. Do not claim completion before output has been
 synchronized. This slice accepts the caller's output confirmation; capture
-integration remains a gate. It does not perform stop or release operations.
+integration remains a gate. Stopping is separate explicit polling; release remains the caller’s responsibility.
 
 ## Recovery and failure
 
@@ -87,22 +86,30 @@ intent commit but before the original start call.
 A review block survives later observations, cleanup, completion, and reopen.
 Acknowledgement needs its own evidence record and remains unimplemented. Pausing
 or resuming dispatch cannot clear review. Absence of a systemd unit alone does
-not release a slot. A future recovery controller must obtain cleanup evidence
-and stop uncertain local work under the accepted contracts.
+not release a slot. Recovery polling stops uncertain local work. The service must obtain cleanup
+evidence under the accepted contracts.
 
 A storage error closes the affected library handle. A busy error while saving
 a start reply or observation also closes dispatch: the external evidence has
 not been retained. No later claim or start is allowed on that handle. Do not return durable
 success after a failed reply/evidence commit. The intent remains available for
-recovery. Closing all service admission paths and stopping active processes
-without requiring another successful write remain mandatory integration work.
+recovery. `safety::Safety` supplies a shared process-local failure gate. Open all
+service admission and dispatch connections with `open_with_safety` and clones of
+the same gate. Storage errors and failed dispatch evidence writes set it without
+another database write. New admissions, claims, and already granted starts are
+blocked. Matching admitted retries retain their original identities on healthy
+connections. The gate cannot be cleared; reopening with the same gate keeps the
+block. Default `open` calls each create a separate gate and do not connect a
+service's failure controls. Polling can stop active work without another write. Recovery and review after
+unrecorded evidence remain conservative; see [stopping](stopping.md).
 
 ## Compatibility and required evidence
 
-Use database schema version 3. Preserve all version 1/2 run fields, results,
+Use database schema version 4. Preserve all version 1–3 run fields, results,
 sequence high-water marks, issuer data, permanent admissions, snapshots, and
-revision bytes. Older binaries reject version 3. Task configuration remains
-version 2; no configuration or request fingerprint encoding changes.
+revision bytes. Older binaries reject version 4. Task configuration remains
+version 2. New snapshots include timing defaults; stored snapshots, revisions,
+and request fingerprint encoding remain unchanged.
 
 Test exclusive ownership, competing claims, FIFO, capacity, pause, admission
 independence, cancellation races, commit rollback, and retained launch inputs.
@@ -125,6 +132,5 @@ evidence, and `run_state` exposes phase/result. `finish` accepts the synchronize
 retained-byte count and never clears review. Repeated finish is an invalid
 transition. Cross-session permits are rejected. No transport API is provided.
 
-Output failure, stop reasons, dispatch/completion timestamps, and timeout
-scheduling are not modeled yet. Their integration must preserve first-result
-ordering and P06; successful local exit alone cannot authorize durable success.
+[Active stopping](stopping.md) adds output failure, stop reasons, timestamps,
+and timeout polling. No daemon or real adapter integration is provided.

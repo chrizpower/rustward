@@ -295,7 +295,7 @@ fn migrates_version_one_without_changing_admission_or_run_data() {
         connection
             .pragma_query_value(None, "user_version", |r| r.get::<_, u32>(0))
             .unwrap(),
-        3
+        4
     );
     assert_eq!(store.run_state("legacy-run"), Ok(Some(queued())));
     assert_eq!(
