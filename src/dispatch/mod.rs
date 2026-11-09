@@ -174,6 +174,29 @@ impl Session {
         Ok(session)
     }
 
+    pub(crate) fn control_records(
+        &mut self,
+    ) -> Result<Vec<(crate::supervision::RunId, Record, Duration, bool)>, Error> {
+        let ids: Vec<_> = self.active.keys().cloned().collect();
+        let mut records = Vec::new();
+        for id in ids {
+            let active = &self.active[&id];
+            let grace = active.grace;
+            let called = active.start_called;
+            let record = self.record(&id)?.ok_or(Error::Storage)?;
+            records.push((
+                crate::supervision::RunId::new(&id).map_err(|_| Error::Storage)?,
+                record,
+                grace,
+                called,
+            ));
+        }
+        Ok(records)
+    }
+    pub(crate) fn limits(&self) -> Limits {
+        self.limits
+    }
+
     pub fn set_paused(&mut self, paused: bool) -> Result<(), Error> {
         self.store.perform(|connection| {
             let changed = connection

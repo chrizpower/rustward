@@ -9,6 +9,8 @@ use super::{Error, Limits};
 #[serde(deny_unknown_fields)]
 pub(super) struct Manifest {
     version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
     #[serde(default)]
     pub directories: Vec<String>,
     pub files: BTreeMap<String, FileSpec>,
@@ -55,6 +57,9 @@ impl Manifest {
             .is_none_or(|n| n > limits.entries)
         {
             return Err(Error::Limit);
+        }
+        if manifest.host.as_ref().is_some_and(|id| !valid_id(id)) {
+            return Err(Error::Invalid);
         }
         let mut dirs = BTreeSet::new();
         for path in &manifest.directories {

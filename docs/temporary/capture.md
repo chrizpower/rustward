@@ -8,9 +8,9 @@ P07 in [Gravity](../GRAVITY.md); the terms are in [the glossary](../GLOSSARY.md)
 
 This library supplies output descriptors to the supervision adapter. It does
 not dispatch tasks, reserve aggregate log space, remove retained logs, or change
-run state. The [dispatch library](dispatch.md) provides conservative log accounting. Real
-capacity integration, protected output, retention, runtime verification, and
-service-wide failure handling remain open.
+run state. The [dispatch library](dispatch.md) provides conservative log accounting. The [controller](controller.md) connects reservations, runtime verification,
+protected roots, and storage-failure stopping. Retention and real-host acceptance
+remain open.
 
 ## Interface and files
 
@@ -27,7 +27,7 @@ Diagnostics omit paths, output, and underlying error messages. The caller must
 stop setup before starting any program if capture cannot be created.
 
 `Options::default()` sets a shared 10 MiB retained-byte limit. The caller can set
-`retained_bytes` for each capture without changing TOML version 1. A zero limit
+`retained_bytes` for each capture without changing service TOML version 2. A zero limit
 keeps no output and still drains both streams. Successful empty output is not
 truncation, even at a zero limit. Filling the limit exactly is not truncation;
 additional observed bytes establish truncation.
@@ -45,7 +45,7 @@ caller can launch a program. Each worker reads one stream with a fixed 8 KiB
 buffer and writes raw bytes to its own file. There is no line buffering, text
 decoding, event queue, or output-sized allocation. Kernel socket buffers are
 finite and are separate from the two application read buffers. Active captures
-must be bounded by the future dispatch limit; there is no global capture registry.
+must be bounded by dispatch capacity. The controller owns a bounded active-run registry.
 
 ## Limit and stream ordering
 
@@ -92,17 +92,15 @@ adapter, first confirm cleanup and durably retain exit/cleanup evidence, then
 release the unit reference before waiting for capture EOF. Record final run
 completion only after successful capture synchronization. Callers must
 check failure while work is active rather than waiting for `finish()` to detect
-a fault that requires stopping the program. Reports and failure signals are
-in-memory results; the future dispatcher must durably record them before
-claiming completed execution.
+a fault that requires stopping the program. The controller records final
+Evidence and retained-byte accounting atomically with run completion.
 
-Under P06, the future service must close admission and dispatch and stop all
+Under P06, the service must close admission and dispatch and stop all
 active local work on storage failure. It must preserve uncertainty for review.
 `SetupError::Storage` also invokes P06 while other work is active. This library
 exposes failures without requiring a database write; it does
-not implement those service-wide controls. The [stopping library](stopping.md)
-consumes failure signals and shares a storage-failure gate; a service must connect
-all handles and continue polling to perform stops. Read and worker failures also mean
+not implement those controls alone. The [controller](controller.md) connects
+monitors to an independent emergency stop worker and the shared Safety gate. Read and worker failures also mean
 capture is incomplete; they must not support a successful execution result.
 
 Dropping an unfinished `Capture` marks it abandoned, shuts down both readers,
@@ -111,6 +109,22 @@ releases idle readers without detached drain threads, but does not stop a
 systemd unit or confirm cleanup. Drop can wait for a storage operation already
 in progress. Abandonment provides no durable-success claim and is not a
 substitute for supervising and stopping active work.
+
+## Nonblocking observation and recovery
+
+`Capture::monitor()` returns a cloned atomic Monitor. It reports the first
+failure, live counters, and a sticky storage_failed signal. A later storage
+fault remains visible even if a read or worker failure was recorded first.
+`try_finish` returns None while a worker is active, including during log sync;
+it never waits on active I/O. Once all workers end it returns the final report
+or failure. The controller uses this method instead of joining live workers.
+
+After durable cleanup and manager release, `capture::recover` checks existing
+private per-run files without following symlinks and synchronizes retained
+prefixes. It rejects unsafe modes, ownership, hard links, and oversized output.
+Recovered Evidence keeps retained lengths but leaves historical observed counts
+and truncation unknown. The controller marks unfinished recovered output failed;
+current synchronization cannot establish complete capture before a crash.
 
 ## Verification and remaining work
 
@@ -122,8 +136,8 @@ worker panic, early failure reporting, protected file creation, and abandonment.
 A `/dev/full` test checks native file-write failure. A fake supervisor duplicates
 the descriptors and writes output without a manager.
 
-These tests do not prove real systemd capture, filesystem behavior after power
-loss, aggregate log bounds, retained review protection, or service-wide P06
-handling. An opt-in Debian 13 host test connects these descriptors to the real adapter,
+These tests do not prove real systemd capture or filesystem behavior after
+power loss. Controller tests add reservation accounting and storage-independent
+stop requests; real-host P06 and retained review protection still need evidence. An opt-in Debian 13 host test connects these descriptors to the real adapter,
 checks both streams and the shared limit, and stops/releases the unit before
 waiting for EOF. It and the earlier manager cleanup test remain unrun here. There is no transport/API or live output stream to a UI in this slice.

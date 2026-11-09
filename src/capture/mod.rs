@@ -1,4 +1,8 @@
+mod evidence;
+mod recovery;
 use crate::supervision::{Output, RunId};
+pub use evidence::{Evidence, StreamEvidence};
+pub use recovery::recover;
 use std::{
     fs::{DirBuilder, File, OpenOptions},
     io::{self, Read, Write},
@@ -124,11 +128,15 @@ struct Counters {
 struct Shared {
     remaining: AtomicU64,
     failure: AtomicU8,
+    storage_failed: AtomicBool,
     counters: [Counters; 2],
     abandoned: AtomicBool,
 }
 impl Shared {
     fn fail(&self, stream: Stream, kind: FailureKind) {
+        if (Failure { stream, kind }).is_storage() {
+            self.storage_failed.store(true, Ordering::Release);
+        }
         let kind = match kind {
             FailureKind::Read => 1,
             FailureKind::Write => 2,
@@ -261,6 +269,27 @@ fn drain(mut reader: impl Read, mut sink: impl LogSink, shared: &Shared, stream:
     }
 }
 
+/// Atomic capture state that remains readable while file I/O is blocked.
+#[derive(Clone)]
+pub struct Monitor {
+    shared: Arc<Shared>,
+}
+impl Monitor {
+    pub fn storage_failed(&self) -> bool {
+        self.shared.storage_failed.load(Ordering::Acquire)
+    }
+    #[cfg(test)]
+    pub(crate) fn inject_failure(&self, kind: FailureKind) {
+        self.shared.fail(Stream::Stdout, kind);
+    }
+    pub fn failure(&self) -> Option<Failure> {
+        self.shared.failure()
+    }
+    pub fn report(&self) -> Report {
+        self.shared.report()
+    }
+}
+
 pub struct Capture {
     shared: Arc<Shared>,
     readers: [UnixStream; 2],
@@ -321,6 +350,7 @@ impl Capture {
         let shared = Arc::new(Shared {
             remaining: AtomicU64::new(options.retained_bytes),
             failure: AtomicU8::new(0),
+            storage_failed: AtomicBool::new(false),
             counters: Default::default(),
             abandoned: AtomicBool::new(false),
         });
@@ -370,6 +400,30 @@ impl Capture {
     /// Read live counters. EOF does not imply that file synchronization has finished.
     pub fn report(&self) -> Report {
         self.shared.report()
+    }
+
+    pub fn monitor(&self) -> Monitor {
+        Monitor {
+            shared: Arc::clone(&self.shared),
+        }
+    }
+
+    /// Return only after both workers have ended, without waiting for active I/O.
+    pub fn try_finish(&mut self) -> Option<Result<Report, CaptureError>> {
+        if self
+            .workers
+            .iter()
+            .flatten()
+            .any(|worker| !worker.is_finished())
+        {
+            return None;
+        }
+        self.join();
+        let report = self.report();
+        Some(match self.failure() {
+            Some(failure) => Err(CaptureError { failure, report }),
+            None => Ok(report),
+        })
     }
 
     /// Wait for both streams to end and both log files to be synchronized.

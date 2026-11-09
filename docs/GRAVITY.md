@@ -286,18 +286,19 @@ format choice and changes the Rust submitted-value type to `toml::Value`.
 Preserve persisted identities and normalized snapshots. External workload
 formats, including Ansible inventory, remain owned by those workloads.
 
-2026-11-08: The user selects a dedicated systemd user manager, confirms Debian
-13 as the fleet baseline, and requests a replaceable supervision adapter for
-manager-free tests. Target systemd 257. Real host verification, runtime and
-output integration, and durable launch recovery remain required before the
-admission store can dispatch. Transient service settings are implementation
-mechanisms, not permission to weaken P02, P06, or P07.
+2026-11-08: Select a dedicated systemd 257 user manager on Debian 13, with an
+adapter for synthetic tests. Isolated-host execution evidence stays
+required; transient-unit settings cannot weaken P02, P06, or P07.
+
+2026-11-09: Bind service, manager, runtime policy, and private roots to one
+non-root UID, with no new privileges or capabilities. Pin host dependencies and
+use a clean environment. Preserve history. See [controller](temporary/controller.md).
 
 2026-11-08: Accept separate service, task, and schedule files, TOML-only
 definition ownership, nested folders, and relative-path IDs without duplicate
 ID fields. Accept lowercase letter/digit/hyphen components, no symlinks, and
 whole-set validation before activation. Preserve accepted work; a rename changes
-identity. Exact schemas, compatibility, and loading mechanisms remain open.
+identity. The later schema decision below supplies compatibility and loading rules.
 
 2026-11-08: In the configuration implementation discussion, accept service schema
 version 2, removal of the old parser API and single-document format, strict

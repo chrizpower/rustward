@@ -34,6 +34,12 @@ pub struct Snapshot {
 
 /// Systemd transport boundary. Implementations must read fresh properties.
 pub trait Manager {
+    fn environment_names(&mut self) -> Result<Vec<String>, ManagerError> {
+        Err(ManagerError::Unavailable)
+    }
+    fn authenticated_uid(&mut self) -> Result<u32, ManagerError> {
+        Err(ManagerError::Unavailable)
+    }
     fn version(&mut self) -> Result<String, ManagerError>;
     fn start(&mut self, name: &str, properties: &[(&str, Value<'_>)]) -> Result<(), ManagerError>;
     fn snapshot(&mut self, name: &str) -> Result<Snapshot, ManagerError>;
@@ -53,6 +59,7 @@ pub trait Cgroups {
     fn state(&mut self, path: &str) -> GroupState;
 }
 
+#[derive(Clone)]
 pub struct Systemd<M, C> {
     manager: M,
     cgroups: C,
@@ -127,8 +134,13 @@ fn valid_group(path: &str) -> bool {
             .all(|c| matches!(c, Component::RootDir | Component::Normal(_)))
 }
 
-impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
-    fn start(&mut self, launch: &Launch, output: Output<'_>) -> Result<StartOutcome, Error> {
+impl<M: Manager, C: Cgroups> Systemd<M, C> {
+    fn start_unit(
+        &mut self,
+        launch: &Launch,
+        output: Output<'_>,
+        profile: Option<&Profile>,
+    ) -> Result<StartOutcome, Error> {
         let valid_path = |text: &str| Path::new(text).is_absolute() && !text.contains('\0');
         if !valid_path(&launch.executable)
             || !valid_path(&launch.working_directory)
@@ -143,10 +155,19 @@ impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
         {
             return Err(Error::InvalidRequest);
         }
-        let mut argv = vec![launch.executable.as_str()];
+        let mut argv = if let Some(profile) = profile {
+            vec![
+                profile.launcher(),
+                profile.runtime_directory(),
+                profile.work_directory(),
+            ]
+        } else {
+            vec![]
+        };
+        argv.push(launch.executable.as_str());
         argv.extend(launch.arguments.iter().map(String::as_str));
         let label = description(&launch.run_id);
-        let properties = vec![
+        let mut properties = vec![
             ("Description", Value::from(label.as_str())),
             ("Type", Value::from("exec")),
             ("Restart", Value::from("no")),
@@ -165,7 +186,7 @@ impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
             (
                 "ExecStartEx",
                 Value::new(vec![(
-                    launch.executable.as_str(),
+                    profile.map_or(launch.executable.as_str(), Profile::launcher),
                     argv,
                     vec!["no-env-expand"],
                 )]),
@@ -180,6 +201,53 @@ impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
                 Value::from(Fd::from(output.stderr)),
             ),
         ];
+        let unset = if profile.is_some() {
+            let mut names = self
+                .manager
+                .environment_names()
+                .map_err(|_| Error::Unavailable)?;
+            if names.len() > 4096
+                || names.iter().map(String::len).sum::<usize>() > 1024 * 1024
+                || names
+                    .iter()
+                    .any(|name| name.is_empty() || name.contains(['=', '\0']))
+            {
+                return Err(Error::InvalidRequest);
+            }
+            names.extend(
+                [
+                    "LD_PRELOAD",
+                    "LD_LIBRARY_PATH",
+                    "LD_AUDIT",
+                    "LD_DEBUG",
+                    "LD_DEBUG_OUTPUT",
+                    "GLIBC_TUNABLES",
+                    "GCONV_PATH",
+                    "LOCPATH",
+                    "NLSPATH",
+                    "MALLOC_TRACE",
+                    "MALLOC_CONF",
+                    "MALLOC_CHECK_",
+                    "MALLOC_PERTURB_",
+                ]
+                .into_iter()
+                .map(str::to_owned),
+            );
+            names.sort();
+            names.dedup();
+            names
+        } else {
+            vec![]
+        };
+        if profile.is_some() {
+            properties.push(("NoNewPrivileges", Value::from(true)));
+            properties.push(("CapabilityBoundingSet", Value::from(0_u64)));
+            properties.push(("AmbientCapabilities", Value::from(0_u64)));
+            properties.push((
+                "UnsetEnvironment",
+                Value::new(unset.iter().map(String::as_str).collect::<Vec<_>>()),
+            ));
+        }
         Ok(
             match self.manager.start(&unit_name(&launch.run_id), &properties) {
                 Ok(()) => StartOutcome::Accepted,
@@ -188,6 +256,28 @@ impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
                 Err(_) => StartOutcome::Uncertain,
             },
         )
+    }
+}
+
+impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
+    fn execution_uid(&mut self) -> Result<u32, Error> {
+        self.manager
+            .authenticated_uid()
+            .map_err(|_| Error::Unavailable)
+    }
+    fn start(&mut self, launch: &Launch, output: Output<'_>) -> Result<StartOutcome, Error> {
+        self.start_unit(launch, output, None)
+    }
+    fn start_controlled(
+        &mut self,
+        launch: &Launch,
+        profile: &Profile,
+        output: Output<'_>,
+    ) -> Result<StartOutcome, Error> {
+        if self.execution_uid()? != profile.execution_uid() {
+            return Err(Error::IdentityMismatch);
+        }
+        self.start_unit(launch, output, Some(profile))
     }
 
     fn observe(

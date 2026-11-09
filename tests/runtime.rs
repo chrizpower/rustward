@@ -1,5 +1,7 @@
 #[path = "runtime/common.rs"]
 mod common;
+#[path = "runtime/host.rs"]
+mod host;
 #[path = "runtime/validation.rs"]
 mod validation;
 #[path = "runtime/work.rs"]

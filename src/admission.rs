@@ -265,7 +265,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=6).contains(&version) {
+        } else if !(1..=7).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -310,6 +310,9 @@ impl Store {
         }
         if version < 6 {
             schema::migrate_runtime(&transaction)?;
+        }
+        if version < 7 {
+            schema::migrate_controller(&transaction)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {

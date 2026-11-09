@@ -10,8 +10,10 @@ const DESTINATION: &str = "org.freedesktop.systemd1";
 const MANAGER: &str = "org.freedesktop.systemd1.Manager";
 const PATH: &str = "/org/freedesktop/systemd1";
 
+#[derive(Clone)]
 pub struct UserBus {
     connection: Connection,
+    owner: Option<String>,
 }
 impl UserBus {
     pub fn connect() -> Result<Self, ManagerError> {
@@ -20,10 +22,21 @@ impl UserBus {
             .method_timeout(Duration::from_secs(5))
             .build()
             .map_err(classify)?;
-        Ok(Self { connection })
+        let mut bus = Self {
+            connection,
+            owner: None,
+        };
+        bus.authenticated_uid()?;
+        Ok(bus)
     }
     fn manager(&self) -> Result<Proxy<'_>, ManagerError> {
-        Proxy::new(&self.connection, DESTINATION, PATH, MANAGER).map_err(classify)
+        Proxy::new(
+            &self.connection,
+            self.owner.as_deref().unwrap_or(DESTINATION),
+            PATH,
+            MANAGER,
+        )
+        .map_err(classify)
     }
     fn properties(
         &self,
@@ -32,7 +45,7 @@ impl UserBus {
     ) -> Result<HashMap<String, OwnedValue>, ManagerError> {
         let proxy = Proxy::new(
             &self.connection,
-            DESTINATION,
+            self.owner.as_deref().unwrap_or(DESTINATION),
             path,
             "org.freedesktop.DBus.Properties",
         )
@@ -65,6 +78,47 @@ where
 }
 
 impl Manager for UserBus {
+    fn environment_names(&mut self) -> Result<Vec<String>, ManagerError> {
+        let values: Vec<String> = get(&mut self.properties(PATH, MANAGER)?, "Environment")?;
+        if values.len() > 4096 || values.iter().map(String::len).sum::<usize>() > 1024 * 1024 {
+            return Err(ManagerError::Unavailable);
+        }
+        values
+            .into_iter()
+            .map(|value| {
+                value
+                    .split_once('=')
+                    .map(|(name, _)| name.to_owned())
+                    .ok_or(ManagerError::Unavailable)
+            })
+            .collect()
+    }
+
+    fn authenticated_uid(&mut self) -> Result<u32, ManagerError> {
+        let bus = Proxy::new(
+            &self.connection,
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+        )
+        .map_err(classify)?;
+        let owner: String = bus
+            .call("GetNameOwner", &(DESTINATION,))
+            .map_err(classify)?;
+        if self
+            .owner
+            .as_ref()
+            .is_some_and(|previous| previous != &owner)
+        {
+            return Err(ManagerError::Unavailable);
+        }
+        let uid: u32 = bus
+            .call("GetConnectionUnixUser", &(owner.as_str(),))
+            .map_err(classify)?;
+        self.owner = Some(owner);
+        Ok(uid)
+    }
+
     fn version(&mut self) -> Result<String, ManagerError> {
         get(&mut self.properties(PATH, MANAGER)?, "Version")
     }

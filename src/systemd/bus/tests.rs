@@ -15,10 +15,16 @@ struct Calls {
     stops: usize,
     kills: usize,
     releases: usize,
+    owner: String,
+    environment: Vec<String>,
 }
 struct FakeManager(Arc<Mutex<Calls>>);
 #[zbus::interface(name = "org.freedesktop.systemd1.Manager")]
 impl FakeManager {
+    #[zbus(property)]
+    fn environment(&self) -> Vec<String> {
+        self.0.lock().unwrap().environment.clone()
+    }
     #[zbus(property)]
     fn version(&self) -> &str {
         "257.13"
@@ -63,6 +69,23 @@ impl FakeManager {
     fn unref_unit(&self, name: &str) {
         assert_eq!(name, "synthetic.service");
         self.0.lock().unwrap().releases += 1;
+    }
+}
+struct FakeBus(Arc<Mutex<Calls>>);
+#[zbus::interface(name = "org.freedesktop.DBus")]
+impl FakeBus {
+    fn get_name_owner(&self, name: &str) -> String {
+        assert_eq!(name, DESTINATION);
+        let owner = self.0.lock().unwrap().owner.clone();
+        if owner.is_empty() {
+            ":1.7".into()
+        } else {
+            owner
+        }
+    }
+    fn get_connection_unix_user(&self, owner: &str) -> u32 {
+        assert_eq!(owner, ":1.7");
+        1000
     }
 }
 struct FakeUnit;
@@ -132,6 +155,8 @@ fn exchanges_real_dbus_messages_with_a_private_test_peer() {
             .server(zbus::Guid::generate())
             .unwrap()
             .p2p()
+            .serve_at("/org/freedesktop/DBus", FakeBus(state.clone()))
+            .unwrap()
             .serve_at(PATH, FakeManager(state))
             .unwrap()
             .serve_at("/unit/1", FakeUnit)
@@ -147,7 +172,10 @@ fn exchanges_real_dbus_messages_with_a_private_test_peer() {
         .build()
         .unwrap();
     let _server = thread.join().unwrap();
-    let mut bus = UserBus { connection };
+    let mut bus = UserBus {
+        connection,
+        owner: None,
+    };
     assert_eq!(bus.version(), Ok("257.13".into()));
     let file = tempfile::tempfile().unwrap();
     bus.start(
@@ -169,6 +197,21 @@ fn exchanges_real_dbus_messages_with_a_private_test_peer() {
     bus.stop("synthetic.service", StopMode::Graceful).unwrap();
     bus.stop("synthetic.service", StopMode::Force).unwrap();
     bus.release("synthetic.service").unwrap();
+    assert_eq!(bus.authenticated_uid(), Ok(1000));
+    assert_eq!(bus.authenticated_uid(), Ok(1000));
+    assert_eq!(bus.owner.as_deref(), Some(":1.7"));
+    calls.lock().unwrap().environment =
+        vec!["SYNTHETIC=private".into(), "LD_PRELOAD=synthetic".into()];
+    assert_eq!(
+        bus.environment_names(),
+        Ok(vec!["SYNTHETIC".into(), "LD_PRELOAD".into()])
+    );
+    calls.lock().unwrap().environment = vec!["invalid".into()];
+    assert_eq!(bus.environment_names(), Err(ManagerError::Unavailable));
+    calls.lock().unwrap().environment = vec!["A=x".into(); 4097];
+    assert_eq!(bus.environment_names(), Err(ManagerError::Unavailable));
+    calls.lock().unwrap().owner = ":1.8".into();
+    assert_eq!(bus.authenticated_uid(), Err(ManagerError::Unavailable));
     let calls = calls.lock().unwrap();
     assert_eq!(
         (calls.starts, calls.stops, calls.kills, calls.releases),

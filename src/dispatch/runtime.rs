@@ -74,15 +74,7 @@ impl Session {
     }
 
     fn runtime_failure(&mut self, permit: Permit, error: runtime::Error) -> PrepareError {
-        let reason = match error {
-            runtime::Error::Missing => LaunchFailure::RuntimeMissing,
-            runtime::Error::Invalid | runtime::Error::Limit => LaunchFailure::RuntimeInvalid,
-            runtime::Error::Changed => LaunchFailure::RuntimeChanged,
-            runtime::Error::Unsafe => LaunchFailure::RuntimeUnsafe,
-            runtime::Error::Command => LaunchFailure::RuntimeCommand,
-            runtime::Error::WorkDirectory => LaunchFailure::WorkDirectory,
-            runtime::Error::WorkStorage => LaunchFailure::WorkStorage,
-        };
+        let reason = LaunchFailure::from(error);
         match self.fail_before_start(permit, reason) {
             Ok(()) => PrepareError::Runtime(error),
             Err(error) => PrepareError::State(error),
@@ -117,8 +109,8 @@ impl Session {
         }
     }
 
-    /// Recheck after capture setup. The future controller must bind the catalog's
-    /// execution UID to its manager and connect controlled environment/capture.
+    /// Recheck after capture setup. This low-level API does not bind a manager UID
+    /// or provide the controller's host checks and environment.
     pub fn start_prepared(
         &mut self,
         prepared: PreparedPermit,

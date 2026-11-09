@@ -4,11 +4,12 @@ Status: Temporary reference for contracts accepted on 2026-11-08. Manual
 admission, queued cancellation, and the durable dispatch protocol are implemented
 as libraries, with [active stopping](stopping.md) and
 [administrator acknowledgement](review.md). Tests use a fake supervisor.
-Scheduling, restore, and real execution integration remain unimplemented.
+Scheduling, restore, and the service loop remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
-is tested with synthetic manager responses. Real dispatch integration remains gated. [Per-run bounded capture](capture.md) is also implemented;
-Dispatch has conservative log accounting; capture integration, retention, and
-service-wide failure handling remain future work. Absorb lasting behavior into ARCHITECTURE.md, policies and exceptions into
+is tested with synthetic manager responses. The [controller](controller.md)
+connects dispatch, log accounting, capture, and storage-failure stopping.
+Real-host acceptance remains gated. Retention remains future work. Absorb
+lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
 links. See [folder guidance](README.md).
@@ -195,7 +196,8 @@ effects on its workload data.
 The user accepted content-addressed manifests, separate preparation ownership,
 and preserved absolute task paths on 2026-11-09. [Runtime verification](runtime.md)
 is implemented with separate writable run directories. Environment, dependency
-policy, UID/manager binding, and directory removal remain integration work.
+policy and UID/manager binding are implemented in the controller. Directory
+removal and isolated-host acceptance remain open.
 
 ## Definition revision contract
 

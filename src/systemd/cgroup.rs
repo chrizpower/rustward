@@ -1,6 +1,7 @@
 use super::{Cgroups, GroupState, valid_group};
 use std::{fs::File, io::Read, path::PathBuf};
 
+#[derive(Clone)]
 pub struct CgroupFs {
     root: PathBuf,
 }

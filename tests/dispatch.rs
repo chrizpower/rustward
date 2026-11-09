@@ -494,3 +494,36 @@ fn constraints_limits_and_missing_data_fail_without_claiming() {
         "queued"
     );
 }
+
+#[test]
+fn legacy_supervisor_cannot_silently_accept_controlled_execution() {
+    let fixture = Fixture::new();
+    let mut fake = Fake::new(&fixture.path);
+    assert_eq!(fake.execution_uid(), Err(SupervisorError::Unavailable));
+    let profile = rustward::supervision::Profile::for_run(
+        1000,
+        std::path::Path::new("/runtime"),
+        std::path::Path::new("/work"),
+    )
+    .unwrap();
+    let launch = Launch {
+        run_id: RunId::new(&"a".repeat(64)).unwrap(),
+        executable: "/runtime/task".into(),
+        working_directory: "/runtime".into(),
+        arguments: vec![],
+        cleanup_grace: std::time::Duration::from_secs(30),
+    };
+    let file = std::fs::File::open("/dev/null").unwrap();
+    assert_eq!(
+        fake.start_controlled(
+            &launch,
+            &profile,
+            Output {
+                stdout: file.as_fd(),
+                stderr: file.as_fd()
+            }
+        ),
+        Err(SupervisorError::Unavailable)
+    );
+    assert_eq!(fake.calls, 0);
+}

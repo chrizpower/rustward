@@ -105,3 +105,14 @@ pub(super) fn migrate_runtime(transaction: &Transaction<'_>) -> Result<(), Error
         )
         .map_err(storage)
 }
+
+pub(super) fn migrate_controller(transaction: &Transaction<'_>) -> Result<(), Error> {
+    transaction.execute_batch("ALTER TABLE launches ADD COLUMN capture_setup_failure TEXT
+        CHECK(capture_setup_failure IN ('exists','storage','resources'));
+    ALTER TABLE launches ADD COLUMN output_evidence TEXT;
+    CREATE TRIGGER capture_evidence_update AFTER UPDATE OF capture_setup_failure,output_evidence ON launches
+    WHEN NEW.review_required=1 BEGIN
+        UPDATE launches SET evidence_version=evidence_version+1 WHERE run_id=NEW.run_id;
+    END;
+    PRAGMA user_version=7;").map_err(storage)
+}

@@ -8,12 +8,12 @@ open integration work. Follow execution.md and Gravity P02, P03, P06, and P07.
 
 ## Boundary and prerequisites
 
-Implement database transitions and a one-call launch protocol. Test only with a
-fake Supervisor. There is no daemon, dispatch loop, submission command, scheduler,
-HTTP endpoint, or connection to the systemd adapter. A future service must verify
-prepared runtimes, reserve real log capacity, connect capture, connect the [stopping library](stopping.md), and pass isolated host tests before
-using this library for execution. Callers must not substitute current task files
-or a newer runtime for admitted values.
+The library implements database transitions and a one-call launch protocol.
+The [controller](controller.md) connects runtime/host verification, bounded
+capture, stopping, and the systemd adapter. Tests use synthetic supervision.
+There is no daemon, service dispatch loop, submission command, scheduler, or HTTP
+endpoint. Isolated-host acceptance remains required before real use. Callers
+must preserve admitted values and use the same shared Safety across handles.
 
 A dispatch session holds an exclusive nonblocking OS lock on the database inode.
 Other admission connections can continue; a second dispatch session cannot open.
@@ -106,9 +106,9 @@ unrecorded evidence remain conservative; see [stopping](stopping.md).
 
 ## Compatibility and required evidence
 
-Use database schema version 6. Preserve all version 1–5 run fields, results,
+Use database schema version 7. Preserve all version 1–6 run fields, results,
 sequence high-water marks, issuer data, permanent admissions, snapshots, and
-revision bytes. Older binaries reject version 6. Task configuration remains
+revision bytes. Older binaries reject version 7. Task configuration remains
 version 2. New snapshots include timing defaults; stored snapshots, revisions,
 and request fingerprint encoding remain unchanged.
 
@@ -137,7 +137,16 @@ transition. Cross-session permits are rejected. No transport API is provided.
 `fail_before_start` consumes an unstarted permit and records Failure with a fixed
 launch-failure code and confirmed no-start cleanup. Output handling must still
 finish before slot release. [Runtime verification](runtime.md) supplies
-prepare_runtime and start_prepared; real controller/host integration remains gated.
+prepare_runtime and start_prepared. The [controller](controller.md) connects
+worker preparation, host checks, and capture. Isolated-host acceptance remains gated.
 
 [Active stopping](stopping.md) adds output failure, stop reasons, timestamps,
-and timeout polling. No daemon or real adapter integration is provided.
+and timeout polling. The controller supplies coordination; no daemon is provided.
+
+`fail_capture_setup` records one of exists/storage/resources before a process
+starts. Storage sets Safety. `finish_evidence` accepts final per-stream retained
+and observed counts, truncation, synchronization, and recovery status. It rejects
+invalid counters and successful completion claims from failed or recovered
+output. Evidence, log accounting, and completion commit together. Nullable new
+fields are omitted when absent in review encoding 1. Historical review records,
+snapshots, revision bytes, fingerprints, and matching retries remain unchanged.

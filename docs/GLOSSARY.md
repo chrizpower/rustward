@@ -230,6 +230,13 @@ runtimes use the SHA-256 of a normalized manifest; stored older identities are
 not rewritten. The user accepted this rule on 2026-11-09; see
 [the runtime contract](temporary/runtime.md).
 
+**Host manifest**: A fixed selection of dependencies outside the prepared
+runtime, including the environment launcher. A runtime manifest references its
+content hash. The controller checks the selected files before launch. The user
+accepted this dependency relationship on 2026-11-09; see
+[the controller contract](temporary/controller.md). It does not replace the
+retained runtime identity or rewrite historical selections.
+
 **Runtime retention**: Keeping prepared runtimes while accepted runs still
 reference them.
 

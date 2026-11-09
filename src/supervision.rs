@@ -1,3 +1,5 @@
+mod profile;
+pub use profile::Profile;
 use std::{os::fd::BorrowedFd, time::Duration};
 
 pub const DEFAULT_CLEANUP_GRACE: Duration = Duration::from_secs(30);
@@ -22,6 +24,7 @@ impl RunId {
     }
 }
 
+#[derive(Clone)]
 pub struct Launch {
     pub run_id: RunId,
     pub executable: String,
@@ -107,6 +110,17 @@ pub enum Error {
 /// The caller must durably record launch intent before calling start once.
 /// Accepted means a start job was queued, not that the program executed.
 pub trait Supervisor {
+    fn execution_uid(&mut self) -> Result<u32, Error> {
+        Err(Error::Unavailable)
+    }
+    fn start_controlled(
+        &mut self,
+        _launch: &Launch,
+        _profile: &Profile,
+        _output: Output<'_>,
+    ) -> Result<StartOutcome, Error> {
+        Err(Error::Unavailable)
+    }
     fn start(&mut self, launch: &Launch, output: Output<'_>) -> Result<StartOutcome, Error>;
     fn observe(
         &mut self,

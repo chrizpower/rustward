@@ -2,13 +2,12 @@
 
 Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
-manual admission, dispatch, stopping, review, and runtime checks are implemented
-as libraries. The diagram marks implemented parts in green. Tests use fake
-supervision; real systemd and capture integration remain gated.
+manual admission, dispatch, stopping, review, and the [execution controller](temporary/controller.md)
+are implemented as libraries. Tests use fake supervision; real-host acceptance
+and the service loop remain gated. The diagram marks implemented parts in green.
 
-This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
-Detailed mechanisms that remain proposals in the [requirements](temporary/requirements.md) remain proposals here. This diagram does not authorize
-execution, migration, or deployment.
+Follow [Gravity](GRAVITY.md). Unaccepted mechanisms in [requirements](temporary/requirements.md)
+remain proposals. This diagram does not authorize execution, migration, or deployment.
 
 ## System diagram
 
@@ -26,7 +25,7 @@ flowchart TB
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
-        Dispatch["Launch, stopping, review,<br/>and runtime checks<br/>Implemented library; fake tests"]
+        Dispatch["Launch, stopping, review,<br/>and controller<br/>Implemented library; fake tests"]
         Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
         Capture["Bounded per-run output capture<br/>Implemented library"]
     end
@@ -62,7 +61,7 @@ flowchart TB
 The service boundary shows the planned single Rust service. The proxy, systemd,
 task processes, and runtime preparation are outside that service. The local
 SQLite database and log files store retained state and output. Per-run output
-capture supplies descriptors to the adapter; service integration remains future work.
+capture supplies descriptors through the controller; the service loop remains future work.
 
 ## Current implementation
 
@@ -107,12 +106,12 @@ the log allowance. See P07 and the retention contract for the exact rules.
 
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
-remaining specifications and required evidence. They include real recovery, host permission checks, log-capacity integration,
-runtime/host integration, scheduling checkpoints, retention, and restore mechanisms.
-Private proxy access and environment/secret references also need specifications.
+remaining specifications and evidence: isolated-host recovery, permissions and
+log bounds, scheduling checkpoints, retention, and restore. Private proxy access
+and custom environment/secret references also need specifications.
 
 The current tests cover configuration, argument generation, manual admission,
-queued cancellation, database migration, and the supervision adapter contract.
+queued cancellation, migration, supervision, and controller coordination.
 Synthetic adapter and private D-Bus tests do not prove
 execution, recovery, scheduling, or deployment behavior. License selection is a
 release gate; workload compatibility and production migration require separate
@@ -130,7 +129,7 @@ execution integration remain gated by their accepted contracts.
 ### Storage and transactions
 
 `admission::Store::open` opens a dedicated local SQLite database. Empty paths, `:memory:`, and SQLite URI handling are excluded. Schema version
-3 uses rollback journaling and `synchronous=FULL`. An immediate transaction
+7 uses rollback journaling and `synchronous=FULL`. An immediate transaction
 serializes request lookup, queue capacity checks, and insertion of both a queued
 run and its permanent admission record. A response is returned only after commit.
 Run IDs are random 256-bit hexadecimal strings. Queue order is the insertion
@@ -150,8 +149,8 @@ retain their meaning and bytes; no database migration or history rewrite is made
 See [compatibility](temporary/configuration.md#format-change-and-compatibility).
 
 Storage errors close the affected store handle. The service must close all
-admission and dispatch paths on such an error under P06; service integration and
-stopping active work are not implemented. Lock contention returns a separate
+admission and dispatch paths on such an error under P06. The controller connects
+the shared Safety gate and emergency stopping; a service loop remains future work. Lock contention returns a separate
 busy response after a five-second wait. Reopening a failed handle is an explicit
 caller action, not automatic recovery. Use a protected database directory: issuer
 secrets and non-secret submitted inputs are stored there. No rejection history
@@ -198,7 +197,7 @@ process exits with an unfinished equivalent first-write transaction to check
 SQLite recovery. These tests do not simulate host power loss or prove filesystem
 and hardware durability. Storage diagnostics and request-size limits are tested.
 
-Full restore, retention cleanup, runtime/host integration, and service integration
+Full restore, retention cleanup, real-host acceptance, and service integration
 remain unimplemented. Tests do not execute real tasks.
 
 ## Queued cancellation library
@@ -220,13 +219,13 @@ a queue-full response can be retried with its unbound key. A failed transaction
 leaves the run queued and uses the existing storage-error handling.
 
 `Store::run_state(run_id)` returns separate phase and result fields. Invalid
-stored combinations close the handle with a storage error. Schema version 6 adds [pre-launch failure evidence](temporary/runtime.md)
-to [acknowledgement](temporary/review.md) and [stopping](temporary/stopping.md).
+stored combinations close the handle with a storage error. Schema version 7 adds
+controller output/setup evidence to [review](temporary/review.md).
 
-Migration from versions 1–5 preserves run data, results, issuer state,
+Migration from versions 1–6 preserves run data, results, issuer state,
 admission records, revisions, and sequence high-water marks. Version 1 first gains
 the version 2 cancellation model. All steps commit together. Failed migrations
-roll back; older binaries reject version 6. Tests retain SQL fixtures and
+roll back; older binaries reject version 7. Tests retain SQL fixtures and
 check failed table replacement, preserved identities, and sequence order.
 
 ## Durable dispatch library
@@ -293,11 +292,12 @@ expansion. `RemainAfterExit=yes` retains a successful exited service for explici
 cleanup. `AddRef=true` pins its unit object while the D-Bus connection remains.
 Standard input is null; stdout and stderr use caller-supplied file descriptors.
 The `capture` library supplies draining and per-run bounded retention. There is no implicit journal or
-file-output fallback. Environment and secret policy remain integration gates;
-the low-level adapter does not provide an isolated execution environment.
+file-output fallback. Controlled starts use the pinned environment launcher and
+drop privileges; custom environment and secrets remain future work. Legacy
+low-level starts do not provide the controller environment.
 
 An observed systemd invocation ID and cgroup path form
-`supervision::ExecutionIdentity`. The future dispatcher must retain this
+`supervision::ExecutionIdentity`. Dispatch retains this
 correlation before using it for subsequent observation or stopping. This identity
 is separate from the run ID and prepared runtime identity. The adapter checks
 unit description, transient status, service type, and any supplied prior
@@ -344,10 +344,11 @@ cleanup, and concurrent-unit isolation. The normal test run skips it. It has not
 been run in this devbox, which has no manager. Private D-Bus tests do not prove
 systemd behavior or host permissions.
 
-Fake supervision tests cover launch, stopping, and conservative recovery. Runtime/host
-binding, real capture and log-capacity integration, and isolated host tests
-remain gates before connecting dispatch to this adapter. Missing units or lost
-start replies must not cause automatic retry.
+The [controller](temporary/controller.md) connects pinned runtime/host checks,
+manager UID binding, capture, and stopping. An independent worker stops work
+on storage faults without a database write or capture join. Completion commits
+output evidence and accounting together. Isolated-host acceptance remains required.
+Missing units and lost replies cannot cause another start.
 
 The implementation follows the [systemd 257 D-Bus interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html)
 and its [transient launch property construction](https://github.com/systemd/systemd/blob/v257/src/run/run.c).

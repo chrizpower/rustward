@@ -44,7 +44,7 @@ impl WorkRoot {
         self.owner
     }
 
-    fn check(&self) -> Result<(), Error> {
+    pub(crate) fn check(&self) -> Result<(), Error> {
         let file = files::open(rustix::fs::CWD, &self.path).map_err(|_| Error::WorkDirectory)?;
         if !files::same_file(&self.root, &file).map_err(|_| Error::WorkDirectory)? {
             return Err(Error::WorkDirectory);

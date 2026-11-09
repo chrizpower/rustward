@@ -4,15 +4,14 @@ Rustward is a small Rust task executor for one trusted administrator. It will
 run generic commands, support manual requests and UTC cron schedules, and
 provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
-Status: version 2 configuration validation, request input validation,
-argument generation, durable manual admission, queued cancellation, and the
-durable dispatch, active stopping, administrator acknowledgement, and prepared
-runtime verification are implemented as libraries. The binary
-validates TOML files. The Rust library validates submitted values, returns
-separate arguments, and records queued manual runs. Dispatch and stopping tests use a fake
-supervisor. A separate systemd adapter can request process starts; real dispatch
-integration and the service execution loop remain unimplemented. See the
-[configuration schema](docs/temporary/configuration.md) and
+Status: Configuration validation, admission, dispatch, stopping, review, prepared
+runtime checks, and the [execution controller](docs/temporary/controller.md) are
+implemented as libraries. The controller connects capture, log accounting,
+manager UID binding, and pinned host dependencies. Tests use synthetic files,
+fake supervision, and a private D-Bus peer. Real systemd controller execution and
+Ansible acceptance remain unverified. The main binary validates TOML files;
+`rustward-exec` supplies the pinned environment launcher. There is no service loop.
+See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
 
 ```sh
@@ -66,21 +65,22 @@ records launch intent, reserves capacity, and preserves uncertain work after a
 crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
 and failure controls. Task timeouts default to one hour; cleanup grace defaults
 to 30 seconds. [Acknowledgement](docs/temporary/review.md) records one note for
-one completed run and its reviewed evidence. Real runtime, capture, and systemd
-integration remain gated. [Prepared-runtime verification](docs/temporary/runtime.md)
+one completed run and its reviewed evidence. The controller connects these
+library protocols; isolated-host execution remains gated. [Prepared-runtime verification](docs/temporary/runtime.md)
 checks manifests and protected paths, creates separate writable run directories,
-and preserves admitted command paths. Controller and host integration remain open.
+and preserves admitted command paths. The controller also verifies pinned host
+manifests and provides the clean execution environment.
 
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
 manager. Tests use a fake manager and a private D-Bus peer without starting
-programs. Runtime verification and durable dispatch remain integration gates. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
+configured tasks. Isolated-host controller acceptance remains required. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
 
 The `capture` library supplies stdout/stderr descriptors and retains separate
 raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.
 It continues draining after truncation and reports storage failures separately.
-See the [capture contract](docs/temporary/capture.md). Integration with dispatch
-log accounting, retention, and service-wide failure handling remain unimplemented.
+See the [capture contract](docs/temporary/capture.md). The controller connects
+dispatch log accounting and storage-failure stopping. Retention remains unimplemented.
 
 Structured service logs and a private Prometheus-compatible `/metrics` endpoint
 for the monitoring service are accepted future work. See the [telemetry contract](docs/temporary/telemetry.md).

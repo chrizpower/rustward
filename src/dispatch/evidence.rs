@@ -18,15 +18,19 @@ pub struct Record {
     pub output_failed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_failure: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_setup_failure: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_evidence: Option<crate::capture::Evidence>,
 }
 
 pub(crate) fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> {
-    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed,launch_failure
+    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed,launch_failure,capture_setup_failure,output_evidence
         FROM launches WHERE run_id=?1", [run_id], |r| {
         let invocation: Option<Vec<u8>> = r.get(1)?;
         let group: Option<String> = r.get(2)?;
-        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?,r.get::<_, Option<String>>(8)?,r.get::<_, bool>(9)?,r.get::<_, Option<String>>(10)?))
-    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value, stop_reason, output_failed, launch_failure)| {
+        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?,r.get::<_, Option<String>>(8)?,r.get::<_, bool>(9)?,r.get::<_, Option<String>>(10)?,r.get::<_, Option<String>>(11)?,r.get::<_, Option<String>>(12)?))
+    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value, stop_reason, output_failed, launch_failure, capture_setup_failure, output_evidence)| {
         let identity = match (invocation, group) {
             (None, None) => None,
             (Some(bytes), Some(control_group)) => Some(ExecutionIdentity {
@@ -40,7 +44,8 @@ pub(crate) fn read(connection: &Connection, run_id: &str) -> Result<Option<Recor
             (Some("signal"), Some(value)) => Some(ProcessExit::Signal(value)),
             _ => return Err(Error::Storage),
         };
-        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, stop_reason, output_failed, launch_failure, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
+        let output_evidence=output_evidence.map(|source|serde_json::from_str(&source).map_err(|_|Error::Storage)).transpose()?;
+        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, stop_reason, output_failed, launch_failure, capture_setup_failure, output_evidence, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
     }).transpose()
 }
 
@@ -196,13 +201,28 @@ impl Session {
     /// Record final completion only after confirmed cleanup and synchronized
     /// capture. Retained bytes must not exceed this run's reserved allowance.
     pub fn finish(&mut self, run_id: &str, retained_bytes: u64) -> Result<(), Error> {
-        self.finish_output(run_id, retained_bytes, false)
+        self.finish_output(run_id, retained_bytes, false, None)
     }
 
     /// Complete failed output handling after all workers have ended. This does
     /// not assert synchronization of bytes whose storage failed.
     pub fn finish_failed_output(&mut self, run_id: &str, retained_bytes: u64) -> Result<(), Error> {
-        self.finish_output(run_id, retained_bytes, true)
+        self.finish_output(run_id, retained_bytes, true, None)
+    }
+
+    pub fn finish_evidence(
+        &mut self,
+        run_id: &str,
+        evidence: &crate::capture::Evidence,
+    ) -> Result<(), Error> {
+        let record = self.record(run_id)?.ok_or(Error::InvalidTransition)?;
+        if !evidence.valid()
+            || ((!evidence.synchronized || evidence.recovered) && !record.output_failed)
+        {
+            return Err(Error::InvalidTransition);
+        }
+        let bytes = evidence.retained_bytes().ok_or(Error::InvalidTransition)?;
+        self.finish_output(run_id, bytes, record.output_failed, Some(evidence))
     }
 
     fn finish_output(
@@ -210,6 +230,7 @@ impl Session {
         run_id: &str,
         retained_bytes: u64,
         failed_output: bool,
+        evidence: Option<&crate::capture::Evidence>,
     ) -> Result<(), Error> {
         let saved = self.store.perform(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
@@ -219,7 +240,8 @@ impl Session {
             if !ready { return Err(Error::InvalidTransition); }
             let changed = transaction.execute("UPDATE runs SET phase='completed',completed_at=?2 WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL", params![run_id,utc_ms()?]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
-            let changed = transaction.execute("UPDATE launches SET log_bytes=?1 WHERE run_id=?2", params![retained_bytes as i64,run_id]).map_err(storage)?;
+            let encoded=evidence.map(serde_json::to_string).transpose().map_err(|_|Error::Storage)?;
+            let changed = transaction.execute("UPDATE launches SET log_bytes=?1,output_evidence=?3 WHERE run_id=?2", params![retained_bytes as i64,run_id,encoded]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
             transaction.commit().map_err(storage)
         });

@@ -69,6 +69,11 @@ pub(super) fn protect(
 pub(super) fn protected_root(path: &Path, policy: Protection) -> Result<File, Error> {
     let root = open(CWD, path)?;
     protect(&root, policy, true, false)?;
+    protect_ancestors(path, policy)?;
+    Ok(root)
+}
+
+pub(super) fn protect_ancestors(path: &Path, policy: Protection) -> Result<(), Error> {
     for parent in path.ancestors().skip(1) {
         let file = open(CWD, parent)?;
         let meta = file.metadata().map_err(|_| Error::Unsafe)?;
@@ -81,7 +86,7 @@ pub(super) fn protected_root(path: &Path, policy: Protection) -> Result<File, Er
             return Err(Error::Unsafe);
         }
     }
-    Ok(root)
+    Ok(())
 }
 
 pub(super) fn manifest(root: &File, policy: Protection, limits: Limits) -> Result<String, Error> {

@@ -61,7 +61,9 @@ recovery, an earlier cancellation, and dispatch-owner mismatch.
 ## Manifest, identity, and limits
 
 A catalog contains `<runtime-id>/runtime.toml` for each externally prepared
-runtime. The manifest has version 1, a `directories` list, and a `files` table:
+runtime. The manifest has version 1, an optional `host` digest, a `directories`
+list, and a `files` table. The controller requires host; the low-level verifier
+keeps old manifests valid. See [host manifests](controller.md#runtime-and-host-dependencies).
 
 ```toml
 version = 1
@@ -90,7 +92,8 @@ and dots. No symlinks, sockets, devices, or FIFOs are accepted.
 and serializes sorted-key JSON. Hash the exact bytes `rustward-runtime-v1`
 followed by that JSON with SHA-256. The lowercase digest is the runtime ID.
 Comments, formatting, and declaration order do not change it. File content,
-executable flags, paths, and folders participate. There is no ID field in the
+executable flags, paths, folders, and host when present participate. An absent
+host is omitted from normalized JSON, preserving existing runtime IDs. There is no ID field in the
 manifest. Publish the manifest and tree under that ID after preparation finishes.
 
 `runtime::Limits` bounds parsing and traversal. Defaults are 16 MiB manifest
@@ -132,12 +135,13 @@ or active runs. Verification is not an atomic filesystem snapshot or a defense
 against that trusted user. No runtime deletion or preparation tool is added.
 
 Verification is synchronous filesystem I/O and has no fixed latency guarantee.
-The controller must keep emergency stopping independent of this work.
+The controller performs it in a preparation worker, separate from emergency
+stopping.
 
 The preparer must supply a complete fixed dependency selection. Manifest checks
 cannot discover arbitrary interpreters, dynamic libraries, imports, subprocesses,
-or network dependencies. Host dependency policy and controlled environment
-wiring remain execution-integration gates. A directory hash alone does not prove
+or network dependencies. The [controller](controller.md) adds pinned host manifests and a controlled
+environment. Isolated-host evidence remains required. A directory hash alone does not prove
 that an arbitrary program uses only declared files.
 
 ## Task paths and writable directories
@@ -181,11 +185,10 @@ a supervisor call. Output handling must still finish before slot release.
 
 PrepareError distinguishes runtime checks from state/storage errors. Prepared
 permits cannot be cloned or recovered. Existing low-level `start` remains the
-protocol interface for tests; the future service must use the verified path and
-enforce every other execution gate. These APIs do not select a systemd user or
-set environment variables. The controller must bind the catalog execution UID,
-service-owned work root, and authenticated manager to the same actual execution
-user before real use. Environment and secret wiring remain unimplemented.
+protocol interface for tests. These low-level APIs do not select a systemd
+user or set environment variables. The [controller](controller.md) performs
+verification in workers and binds actual user identity, private roots, host
+selection, manager, and environment. Secret wiring remains unimplemented.
 
 ## Evidence and remaining work
 
@@ -210,9 +213,10 @@ Run it as the non-root execution user. It checks native write denial and writabl
 run data without executing a program. It has not been run here. This test does
 not replace systemd cleanup/capture tests or acceptance cases A01–A10.
 
-The Rust API takes catalog/work paths and UID policy explicitly. Service TOML,
-activation, and runtime selection UI are unchanged. Real execution, controller
-UID binding, environment/secret handling, host dependency policy, automatic
-capture orchestration, systemd host verification, retention cleanup, scheduler
-execution, reload, and the Ansible acceptance harness remain unimplemented.
-Production migration and deployment are outside this slice.
+The Rust APIs take catalog/work paths and UID policy explicitly. Service TOML,
+activation, and runtime selection UI are unchanged. The controller now connects
+UID binding, host dependencies, capture, and controlled environment. Real
+execution acceptance, secret handling, systemd host verification, retention
+cleanup, scheduler execution, reload, and the Ansible acceptance harness remain
+unimplemented or unverified. Production migration and deployment are outside
+this slice.

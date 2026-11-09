@@ -40,7 +40,7 @@ pub struct Times {
 
 pub(super) struct Active {
     deadline: Option<Instant>,
-    grace: Duration,
+    pub(super) grace: Duration,
     stopping: Option<Instant>,
     identity: Option<ExecutionIdentity>,
     graceful_sent: bool,
@@ -107,6 +107,24 @@ impl Session {
                 .optional()
                 .map_err(storage)
         })
+    }
+
+    pub(crate) fn decide_expired(&mut self, now: Instant) -> Result<(), Error> {
+        let ids: Vec<_> = self
+            .active
+            .iter()
+            .filter(|(_, active)| active.stopping.is_none() && active.expired(now))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            if self.safety.failed() {
+                break;
+            }
+            if self.decide_stop(&id, StopReason::Timeout)? == StopDecision::Recorded {
+                self.active.get_mut(&id).unwrap().stopping = Some(now);
+            }
+        }
+        Ok(())
     }
 
     pub fn cancel_active(&mut self, run_id: &str) -> Result<StopDecision, Error> {

@@ -38,7 +38,7 @@ fn version_two_migration_preserves_rows_and_rolls_back_on_failure() {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            6
+            7
         );
         assert_eq!(
             store.run_state("old-run").unwrap().unwrap().result,
@@ -196,7 +196,7 @@ fn version_four_review_migration_preserves_history_and_rolls_back_on_failure() {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            6
+            7
         );
         let review = store.review(&id).unwrap().unwrap();
         assert_eq!(review.evidence_version, 1);

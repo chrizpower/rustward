@@ -1,10 +1,10 @@
 # Implementation work
 
-Status: Temporary work list. Configuration validation, request input validation,
-argument generation, manual admission, queued cancellation, and the durable
-dispatch protocol are implemented as libraries. Real execution is not integrated. A separate supervision interface and systemd user-manager
-adapter and bounded per-run output capture are implemented. Real host verification,
-real log-capacity integration, retention, and execution integration remain open.
+Status: Temporary work list. Configuration, admission, dispatch, stopping,
+review, runtime verification, and the [execution controller](controller.md) are
+implemented as libraries. The controller connects the systemd adapter, pinned
+host dependencies, capture, and log accounting. Isolated-host acceptance,
+retention, and the service loop remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -20,24 +20,16 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Complete the integration gates in the [dispatch contract](dispatch.md).
-   Durable intent, exclusive ownership, FIFO claims, capacity accounting, retained
-   launch data, supervisor evidence, and conservative recovery are tested with a
-   fake supervisor. [Active stopping](stopping.md), timeouts, shared failure gates,
-   and timestamps are implemented. [One-run acknowledgement](review.md) retains
-   one note and reviewed evidence. Connect these libraries to the future service.
-2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
-   permissions on an isolated host.
-   Connect verified runtimes and separate writable directories. Specify environment and secret references,
-   task resource controls, and remaining metadata/buffer bounds before integration.
-   Integrate the [implemented per-run capture library](capture.md), including its
-   early failure signal, with durable dispatch and service-wide P06 controls.
-3. Implement the execution core with synthetic inputs. Select the required Rust
-   libraries and prove the failure cases below on an isolated systemd host.
-   Use the [Ansible acceptance test](ansible-acceptance.md) as the early workload
-   milestone before UI and scheduler integration. First prove the local playbook
-   and generic command through the same path, then complete the remote and
-   failure cases. The acceptance harness and fixtures remain unimplemented.
+1. Implement the isolated-host controller harness and synthetic fixtures for
+   A01/A02 in the [Ansible acceptance test](ansible-acceptance.md). Use one path
+   for an ordinary command and a local playbook. The harness remains unimplemented.
+2. Verify the Debian 13/systemd 257 dedicated manager, permissions, controlled
+   environment, pinned dependencies, cleanup, and capture through that path.
+   Then complete remote and failure cases A03–A10. Synthetic library tests are
+   not host acceptance evidence.
+3. Specify remaining task resource controls, custom environment/secret references,
+   and metadata/buffer bounds. Connect the controller to the future service and
+   implement retention reclamation. Keep scheduler and UI integration separate.
 4. Review a sanitized Semaphore export before claiming workload compatibility.
    Select the license before release. Access, migration, and deployment remain
    separate gates, not prerequisites for synthetic configuration tests.
@@ -75,18 +67,20 @@ Production migration and deployment remain outside repository implementation.
 ## Dispatch evidence and remaining work
 
 The [dispatch contract](dispatch.md) owns the implemented API and its prerequisites.
-Schema version 5 preserves version 1–4 identities and history. Tests cover lock
+Schema version 7 preserves version 1–6 identities and history. Tests cover lock
 ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollback,
 process exit at launch boundaries, missing/changed identity, first-result retention,
 cleanup/output gates, and durable review. No test starts a real task.
 
 [Runtime verification](runtime.md), protected paths, and separate writable
-directories are implemented. Next: bind UID policy to the real manager, connect
-capture and the stopping library,
-implement retention reclamation, and pass isolated systemd
-host checks. The service must enforce all gates before real execution. A review
-block can be cleared only by acknowledgement after local completion and review
-of unchanged evidence. A dropped permit is not reissued.
+directories are implemented. The [controller](controller.md) now connects actual
+service/manager UID binding, pinned host manifests, controlled environment,
+capture, stopping, and atomic output accounting. Next: implement the isolated-host
+controller harness and synthetic ordinary-command/local-playbook fixtures, then
+run A01/A02 in the [Ansible acceptance specification](ansible-acceptance.md).
+No acceptance case has run. Retention reclamation remains separate work. Review
+can be cleared only after local completion and acknowledgement of unchanged
+evidence. A dropped permit is not reissued.
 
 ## Telemetry work
 
@@ -124,9 +118,9 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   is implemented with synthetic tests; its opt-in host test remains unrun.
   Validate process-boundary enforcement and cleanup evidence. Integrate the
   implemented acknowledgement record.
-- Connect the implemented runtime manifest/path checks to actual execution-user
-  identity and host dependencies. Specify safe removal of run work directories.
-- Integrate conservative dispatch log accounting with capture, retention cleanup,
+- Verify controller user binding and host dependencies on the isolated host.
+  Specify safe removal of run work directories.
+- Verify controller log accounting and implement retention cleanup,
   record/log deletion, and retention age calculation. Test protected evidence and actual storage faults.
 - Specify a consistent application-state backup and explicit restore procedure.
   Test that missing old-generation keys cannot admit work and restored queued

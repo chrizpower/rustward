@@ -73,12 +73,13 @@ work. The copy preserves reviewed metadata if run history is later removed.
 
 ## Failure, compatibility, and verification
 
-Version 1–5 migrations preserve runs, permanent admissions, fingerprints,
+Version 1–6 migrations preserve runs, permanent admissions, fingerprints,
 identities, snapshots, revisions, sequence high-water marks, and unknown historical
 times. Existing review flags remain set; pending legacy rows receive evidence
-version 1. Migration does not acknowledge work. Older binaries reject version 6. Schema version 6 adds optional `launch_failure`
-evidence. Encoding 1 records without this field still read as None; empty values
-are omitted when encoding new records. Stored acknowledgements are not rewritten.
+version 1. Migration does not acknowledge work. Older binaries reject version 7. Schema version 6 added optional launch_failure;
+version 7 adds capture_setup_failure and output_evidence. Encoding 1 records
+without these fields still read as None; absent values are omitted when encoding
+new records. Stored acknowledgements are not rewritten.
 
 Insert and release must both succeed and commit before acknowledgement succeeds.
 A failed or ignored write rolls back both changes. Storage errors close the
@@ -94,6 +95,6 @@ durability after host power loss, external outcomes, or transport authentication
 
 The future service must authenticate the administrator, present the current
 review and output evidence, connect shared Safety handles, and preserve acknowledgement
-IDs across retries. Real execution, runtime/host binding, automatic
-capture orchestration, systemd host checks, retention cleanup, scheduler execution,
+IDs across retries. The [controller](controller.md) connects runtime/host binding
+and capture. Real execution acceptance, systemd host checks, retention cleanup, scheduler execution,
 live reload, production migration, and deployment remain outside this slice.

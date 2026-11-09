@@ -98,8 +98,8 @@ pre-start cancellation, graceful/force stopping, cleanup/output completion gates
 failed writes, shared admission closure, and recovery without another start.
 Version 3 migration tests preserve active execution identity and unknown times.
 
-Runtime/manager UID binding, host dependency policy, automatic capture orchestration, actual supervisor
-observation and release, retention reclamation,
-and the service loop remain unimplemented. Isolated Debian 13/systemd 257 host
+The [controller](controller.md) now connects runtime/manager UID binding, pinned
+host manifests, capture, observation, and release. Retention reclamation and
+the service loop remain unimplemented. Isolated Debian 13/systemd 257 host
 checks remain required before real execution. No scheduler, live reload,
 production migration, or deployment is included.

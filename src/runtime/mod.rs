@@ -8,6 +8,7 @@ use std::{
 use crate::supervision::Launch;
 
 mod files;
+pub mod host;
 mod manifest;
 mod work;
 use manifest::Manifest;
@@ -112,6 +113,9 @@ impl Catalog {
     pub fn path(&self) -> &Path {
         &self.path
     }
+    pub fn preparation_uid(&self) -> u32 {
+        self.protection.preparation_uid
+    }
     pub fn execution_uid(&self) -> u32 {
         self.protection.execution_uid
     }
@@ -149,6 +153,9 @@ impl Catalog {
 }
 
 impl VerifiedRuntime {
+    pub fn host_id(&self) -> Option<&str> {
+        self.manifest.host.as_deref()
+    }
     pub fn id(&self) -> &str {
         &self.id
     }
