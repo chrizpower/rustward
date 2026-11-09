@@ -42,9 +42,10 @@ Semaphore workload review remains a separate gate.
 - Use explicit synchronization points for failure injection. Wait for recorded
   states or target markers rather than relying only on elapsed sleep time.
 
-Before implementing the fixture, specify runtime path selection, separate
-writable run directories, environment and secret references, and unattended
-credential access. Specify how typed inputs reach Ansible and how optional
+[Runtime manifest and path checks](runtime.md) and separate writable directories
+are implemented as Rust APIs. Before the fixture runs, bind their UID policy to
+the real manager and specify host dependency policy, environment and secret
+references, and unattended credential access. Specify how typed inputs reach Ansible and how optional
 flags are selected. The current argument contract does not provide conditional
 flags or structured variable generation. A workload wrapper can supply these
 features outside the core; any schema or policy change needs separate review.

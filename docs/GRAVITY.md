@@ -95,8 +95,8 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   failures from task startup. Updates need a separate preparation step and
   retained runtimes need storage management.
 - **Check:** Update the selected runtime while work is queued and active.
-  Confirm that both retain their original selection. Define runtime identity,
-  retention, writable paths, and missing-runtime handling before execution.
+  Confirm both retain their selection. Follow [runtime verification](temporary/runtime.md),
+  accepted by the user on 2026-11-09; real execution remains gated.
 - **Revisit:** Automatic preparation or mutable code requires a new decision.
 
 ### P06: Stop on state or log storage failure

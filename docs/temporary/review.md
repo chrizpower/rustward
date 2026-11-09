@@ -94,6 +94,6 @@ durability after host power loss, external outcomes, or transport authentication
 
 The future service must authenticate the administrator, present the current
 review and output evidence, connect shared Safety handles, and preserve acknowledgement
-IDs across retries. Real execution, prepared-runtime verification, automatic
+IDs across retries. Real execution, runtime/host binding, automatic
 capture orchestration, systemd host checks, retention cleanup, scheduler execution,
 live reload, production migration, and deployment remain outside this slice.

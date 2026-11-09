@@ -192,8 +192,10 @@ accepted selection. A missing selected runtime causes an explicit failure; never
 substitute the latest runtime. This does not prevent a task's intended external
 effects on its workload data.
 
-Runtime manifest format, paths, ownership enforcement, and writable-directory
-removal remain implementation details to specify before integration.
+The user accepted content-addressed manifests, separate preparation ownership,
+and preserved absolute task paths on 2026-11-09. [Runtime verification](runtime.md)
+is implemented with separate writable run directories. Environment, dependency
+policy, UID/manager binding, and directory removal remain integration work.
 
 ## Definition revision contract
 

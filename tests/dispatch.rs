@@ -24,6 +24,8 @@ use tempfile::TempDir;
 mod migration;
 #[path = "dispatch/preflight.rs"]
 mod preflight;
+#[path = "dispatch/prepared_runtime.rs"]
+mod prepared_runtime;
 #[path = "dispatch/recovery.rs"]
 mod recovery;
 #[path = "dispatch/review.rs"]

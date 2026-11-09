@@ -28,7 +28,7 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    one note and reviewed evidence. Connect these libraries to the future service.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
    permissions on an isolated host.
-   Specify runtime layout, environment and secret references,
+   Connect verified runtimes and separate writable directories. Specify environment and secret references,
    task resource controls, and remaining metadata/buffer bounds before integration.
    Integrate the [implemented per-run capture library](capture.md), including its
    early failure signal, with durable dispatch and service-wide P06 controls.
@@ -80,8 +80,9 @@ ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollb
 process exit at launch boundaries, missing/changed identity, first-result retention,
 cleanup/output gates, and durable review. No test starts a real task.
 
-[Pre-launch failure handling](runtime.md) is implemented. Runtime manifest and
-path choices remain open. Next: verify prepared runtimes, connect capture and the stopping library,
+[Runtime verification](runtime.md), protected paths, and separate writable
+directories are implemented. Next: bind UID policy to the real manager, connect
+capture and the stopping library,
 implement retention reclamation, and pass isolated systemd
 host checks. The service must enforce all gates before real execution. A review
 block can be cleared only by acknowledgement after local completion and review
@@ -123,8 +124,8 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   is implemented with synthetic tests; its opt-in host test remains unrun.
   Validate process-boundary enforcement and cleanup evidence. Integrate the
   implemented acknowledgement record.
-- Specify runtime manifest, paths, ownership,
-  and safe removal of run work directories after completion.
+- Connect the implemented runtime manifest/path checks to actual execution-user
+  identity and host dependencies. Specify safe removal of run work directories.
 - Integrate conservative dispatch log accounting with capture, retention cleanup,
   record/log deletion, and retention age calculation. Test protected evidence and actual storage faults.
 - Specify a consistent application-state backup and explicit restore procedure.

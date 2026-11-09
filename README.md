@@ -6,8 +6,8 @@ provide a web UI for inputs, logs, and status. Ansible is the first workload.
 
 Status: version 2 configuration validation, request input validation,
 argument generation, durable manual admission, queued cancellation, and the
-durable dispatch, active stopping, and administrator acknowledgement are
-implemented as libraries. The binary
+durable dispatch, active stopping, administrator acknowledgement, and prepared
+runtime verification are implemented as libraries. The binary
 validates TOML files. The Rust library validates submitted values, returns
 separate arguments, and records queued manual runs. Dispatch and stopping tests use a fake
 supervisor. A separate systemd adapter can request process starts; real dispatch
@@ -67,8 +67,9 @@ crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
 and failure controls. Task timeouts default to one hour; cleanup grace defaults
 to 30 seconds. [Acknowledgement](docs/temporary/review.md) records one note for
 one completed run and its reviewed evidence. Real runtime, capture, and systemd
-integration remain gated. [Pre-launch failure handling](docs/temporary/runtime.md)
-is implemented; runtime manifest and path rules are still under review.
+integration remain gated. [Prepared-runtime verification](docs/temporary/runtime.md)
+checks manifests and protected paths, creates separate writable run directories,
+and preserves admitted command paths. Controller and host integration remain open.
 
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user

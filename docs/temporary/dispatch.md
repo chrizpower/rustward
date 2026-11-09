@@ -136,8 +136,8 @@ transition. Cross-session permits are rejected. No transport API is provided.
 
 `fail_before_start` consumes an unstarted permit and records Failure with a fixed
 launch-failure code and confirmed no-start cleanup. Output handling must still
-finish before slot release. See [runtime work](runtime.md); runtime verification
-is not yet implemented.
+finish before slot release. [Runtime verification](runtime.md) supplies
+prepare_runtime and start_prepared; real controller/host integration remains gated.
 
 [Active stopping](stopping.md) adds output failure, stop reasons, timestamps,
 and timeout polling. No daemon or real adapter integration is provided.

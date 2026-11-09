@@ -3,6 +3,7 @@ pub mod capture;
 pub mod config;
 pub mod dispatch;
 pub mod review;
+pub mod runtime;
 pub mod safety;
 
 pub mod supervision;

@@ -225,10 +225,18 @@ execution. Accepted work retains its selected runtime.
 dependency revisions before execution.
 
 **Runtime identity**: Identifies one fixed selection of prepared code and
-dependencies. Changing that selection creates a different identity.
+dependencies. Changing that selection creates a different identity. New verified
+runtimes use the SHA-256 of a normalized manifest; stored older identities are
+not rewritten. The user accepted this rule on 2026-11-09; see
+[the runtime contract](temporary/runtime.md).
 
 **Runtime retention**: Keeping prepared runtimes while accepted runs still
 reference them.
+
+**Writable run directory**: A separate writable directory for one run outside its
+prepared runtime. It does not replace the task's configured working directory.
+The Rust interface calls it runtime::WorkDirectory. The user accepted this
+relationship on 2026-11-09; see [runtime verification](temporary/runtime.md).
 
 **Task definition revision**: Identifies one version of a task definition's
 normalized content, including its ID. A change to that content, including its

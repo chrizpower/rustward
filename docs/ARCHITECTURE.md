@@ -2,9 +2,9 @@
 
 Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
-manual admission, queued cancellation, and the dispatch protocol are implemented. The diagram shows the planned system and marks the implemented
-parts in green. Dispatch tests use a fake supervisor; real systemd and capture
-integration remain gated.
+manual admission, dispatch, stopping, review, and runtime checks are implemented
+as libraries. The diagram marks implemented parts in green. Tests use fake
+supervision; real systemd and capture integration remain gated.
 
 This overview follows the accepted rules in [docs/GRAVITY.md](GRAVITY.md).
 Detailed mechanisms that remain proposals in the [requirements](temporary/requirements.md) remain proposals here. This diagram does not authorize
@@ -26,7 +26,7 @@ flowchart TB
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
-        Dispatch["Durable launch protocol<br/>Implemented library; fake tests"]
+        Dispatch["Launch, stopping, review,<br/>and runtime checks<br/>Implemented library; fake tests"]
         Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
         Capture["Bounded per-run output capture<br/>Implemented library"]
     end
@@ -108,7 +108,7 @@ the log allowance. See P07 and the retention contract for the exact rules.
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
 remaining specifications and required evidence. They include real recovery, host permission checks, log-capacity integration,
-runtime layout, scheduling checkpoints, retention, and restore mechanisms.
+runtime/host integration, scheduling checkpoints, retention, and restore mechanisms.
 Private proxy access and environment/secret references also need specifications.
 
 The current tests cover configuration, argument generation, manual admission,
@@ -123,7 +123,8 @@ review and authorization.
 This library implements manual admission and queued cancellation; dispatch has
 a separate session interface below.
 The caller selects an opaque prepared runtime identity; admission retains it but
-does not verify runtime files. Runtime preparation, restore procedures, and
+does not verify runtime files. [Prepared verification](temporary/runtime.md) is
+a separate dispatch gate. Runtime preparation, restore procedures, and
 execution integration remain gated by their accepted contracts.
 
 ### Storage and transactions
@@ -197,7 +198,7 @@ process exits with an unfinished equivalent first-write transaction to check
 SQLite recovery. These tests do not simulate host power loss or prove filesystem
 and hardware durability. Storage diagnostics and request-size limits are tested.
 
-Full restore, retention cleanup, runtime verification, and service integration
+Full restore, retention cleanup, runtime/host integration, and service integration
 remain unimplemented. Tests do not execute real tasks.
 
 ## Queued cancellation library
@@ -343,8 +344,8 @@ cleanup, and concurrent-unit isolation. The normal test run skips it. It has not
 been run in this devbox, which has no manager. Private D-Bus tests do not prove
 systemd behavior or host permissions.
 
-Fake supervision tests cover launch, stopping, and conservative recovery. Runtime
-verification, real capture and log-capacity integration, and isolated host tests
+Fake supervision tests cover launch, stopping, and conservative recovery. Runtime/host
+binding, real capture and log-capacity integration, and isolated host tests
 remain gates before connecting dispatch to this adapter. Missing units or lost
 start replies must not cause automatic retry.
 

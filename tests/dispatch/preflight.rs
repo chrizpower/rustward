@@ -115,3 +115,61 @@ fn failure_cannot_replace_an_earlier_cancellation_or_cross_dispatch_owners() {
         Err(Error::InvalidTransition)
     );
 }
+
+#[test]
+fn recovered_prelaunch_failure_retains_its_reason_in_acknowledgement_evidence() {
+    let mut fixture = Fixture::new();
+    let (key, id) = fixture.admit();
+    let mut session = fixture.session(Limits::default());
+    let permit = claim(&mut session);
+    session
+        .fail_before_start(permit, LaunchFailure::RuntimeMissing)
+        .unwrap();
+    drop(session);
+    let mut recovered = fixture.session(Limits::default());
+    assert_eq!(
+        recovered.run_state(&id).unwrap().unwrap().result,
+        Some(RunResult::Failure)
+    );
+    assert_eq!(
+        recovered
+            .record(&id)
+            .unwrap()
+            .unwrap()
+            .launch_failure
+            .as_deref(),
+        Some("runtime_missing")
+    );
+    blocked(&mut recovered, Block::ReviewRequired);
+    recovered.finish(&id, 0).unwrap();
+    let reviewed = fixture.store.review(&id).unwrap().unwrap();
+    assert_eq!(
+        reviewed.launch.launch_failure.as_deref(),
+        Some("runtime_missing")
+    );
+    let acknowledgement_id = rustward::review::new_acknowledgement_id().unwrap();
+    let acknowledgement = fixture
+        .store
+        .acknowledge(
+            &acknowledgement_id,
+            &reviewed,
+            "No process started. I reviewed the missing runtime and allow other work.",
+        )
+        .unwrap();
+    assert_eq!(
+        fixture.store.acknowledgement(&acknowledgement_id).unwrap(),
+        Some(acknowledgement)
+    );
+    assert_eq!(fixture.store.review(&id).unwrap(), None);
+    let config = config::load("examples/rustward.toml").unwrap();
+    assert_eq!(
+        fixture.store.admit(
+            &key,
+            &config,
+            "synthetic-report",
+            &BTreeMap::from([("name".into(), "sample".into())]),
+            "new-selection"
+        ),
+        Ok(Admission::AlreadyAdmitted { run_id: id })
+    );
+}

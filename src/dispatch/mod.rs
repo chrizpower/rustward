@@ -19,7 +19,9 @@ use crate::{
 
 mod evidence;
 mod preflight;
+mod runtime;
 pub use preflight::LaunchFailure;
+pub use runtime::{PrepareError, PreparedPermit};
 mod stopping;
 pub use evidence::Record;
 pub(crate) use evidence::read as read_record;
