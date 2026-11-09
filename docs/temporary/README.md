@@ -21,6 +21,7 @@ concise section can preserve the meaning and required detail.
 | [Capture](capture.md) | Absorb the implemented interface, bounds, failure handling, and verification limits into ARCHITECTURE.md; preserve integration work and update links before removal |
 | [Telemetry](telemetry.md) | Absorb accepted logging and metrics interfaces into ARCHITECTURE.md and policy into GRAVITY.md; preserve open decisions and collection evidence before removal |
 | [Implementation work](implementation.md) | Complete or explicitly defer work; preserve lasting detail in the uppercase documents and verification in tests or acceptance records; delete when no unique work remains |
+| [Ansible acceptance test](ansible-acceptance.md) | Implement and run the workload cases; preserve evidence and lasting integration details in ARCHITECTURE.md, transfer policy decisions to GRAVITY.md, and resolve or transfer open work before removal |
 | [Migration preparation](migration.md) | Accept or cancel migration; preserve lasting application requirements in ARCHITECTURE.md or GRAVITY.md and operational procedures/evidence in the deployment repository through authorized work; then delete |
 
 Each file must state its scope, status, removal condition, and destination.

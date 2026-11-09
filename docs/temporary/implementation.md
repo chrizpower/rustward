@@ -34,6 +34,10 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    early failure signal, with durable dispatch and service-wide P06 controls.
 3. Implement the execution core with synthetic inputs. Select the required Rust
    libraries and prove the failure cases below on an isolated systemd host.
+   Use the [Ansible acceptance test](ansible-acceptance.md) as the early workload
+   milestone before UI and scheduler integration. First prove the local playbook
+   and generic command through the same path, then complete the remote and
+   failure cases. The acceptance harness and fixtures remain unimplemented.
 4. Review a sanitized Semaphore export before claiming workload compatibility.
    Select the license before release. Access, migration, and deployment remain
    separate gates, not prerequisites for synthetic configuration tests.
