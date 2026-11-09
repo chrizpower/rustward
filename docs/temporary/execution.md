@@ -2,7 +2,8 @@
 
 Status: Temporary reference for contracts accepted on 2026-11-08. Manual
 admission, queued cancellation, and the durable dispatch protocol are implemented
-as libraries, with [active stopping](stopping.md). Tests use a fake supervisor.
+as libraries, with [active stopping](stopping.md) and
+[administrator acknowledgement](review.md). Tests use a fake supervisor.
 Scheduling, restore, and real execution integration remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is tested with synthetic manager responses. Real dispatch integration remains gated. [Per-run bounded capture](capture.md) is also implemented;
@@ -155,6 +156,14 @@ reserve the run's full per-run allowance within the aggregate log limit. If
 protected logs and existing reservations leave insufficient capacity, keep the
 run queued and report the block. The reservation is accounting, not a guarantee
 against filesystem failure; P06 remains applicable.
+
+## Administrator acknowledgement
+
+The user accepted one note for one run on 2026-11-09, with local completion before
+acknowledgement. Rustward retains the run ID, exact reviewed evidence, and time.
+The note covers checks, remaining uncertainty, and reason to resume. A changed
+review requires a fresh read. Acknowledgement preserves results and other gates.
+See [review.md](review.md) for the implemented interface and failure checks.
 
 ## Application-state restore contract
 

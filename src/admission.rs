@@ -39,6 +39,9 @@ pub enum Error {
     InvalidTransition,
     InvalidLimits,
     OwnerBusy,
+    InvalidReview,
+    ReviewChanged,
+    NotCompleted,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,7 +51,7 @@ pub enum Admission {
     HistoryRemoved { run_id: String },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RunPhase {
     Queued,
     Launching,
@@ -57,7 +60,7 @@ pub enum RunPhase {
     Completed,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RunResult {
     Cancellation,
     Success,
@@ -66,7 +69,7 @@ pub enum RunResult {
     Timeout,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RunState {
     pub phase: RunPhase,
     pub result: Option<RunResult>,
@@ -80,7 +83,10 @@ pub enum Cancellation {
     NotQueued,
 }
 
-fn read_run_state(connection: &Connection, run_id: &str) -> Result<Option<RunState>, Error> {
+pub(crate) fn read_run_state(
+    connection: &Connection,
+    run_id: &str,
+) -> Result<Option<RunState>, Error> {
     let state: Option<(String, Option<String>, bool, bool, bool)> = connection.query_row(
         "SELECT phase, result, dispatched, EXISTS(SELECT 1 FROM launches WHERE launches.run_id=runs.run_id),
          EXISTS(SELECT 1 FROM launches WHERE launches.run_id=runs.run_id AND cleanup_confirmed=1)
@@ -259,7 +265,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=4).contains(&version) {
+        } else if !(1..=5).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -298,6 +304,9 @@ impl Store {
         }
         if version < 4 {
             schema::migrate_stopping(&transaction)?;
+        }
+        if version < 5 {
+            schema::migrate_review(&transaction)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {

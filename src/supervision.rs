@@ -35,13 +35,13 @@ pub struct Output<'a> {
     pub stderr: BorrowedFd<'a>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExecutionIdentity {
     pub invocation: [u8; 16],
     pub control_group: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ProcessExit {
     Code(i32),
     Signal(i32),

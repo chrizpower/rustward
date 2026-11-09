@@ -219,14 +219,14 @@ a queue-full response can be retried with its unbound key. A failed transaction
 leaves the run queued and uses the existing storage-error handling.
 
 `Store::run_state(run_id)` returns separate phase and result fields. Invalid
-stored combinations close the handle with a storage error. Schema version 4 adds
-active cancellation, timeout, output failure, and timestamps; see
-[stopping](temporary/stopping.md).
+stored combinations close the handle with a storage error. Schema version 5 adds
+[one-run acknowledgement](temporary/review.md) to the
+[stopping model](temporary/stopping.md).
 
-Migration from versions 1–3 preserves run data, results, issuer state,
+Migration from versions 1–4 preserves run data, results, issuer state,
 admission records, revisions, and sequence high-water marks. Version 1 first gains
 the version 2 cancellation model. All steps commit together. Failed migrations
-roll back; older binaries reject version 4. Tests retain SQL fixtures and
+roll back; older binaries reject version 5. Tests retain SQL fixtures and
 check failed table replacement, preserved identities, and sequence order.
 
 ## Durable dispatch library
@@ -246,7 +246,7 @@ evidence. `finish` requires cleanup and caller-confirmed synchronized output.
 A new session never reconstructs permits. Unfinished launches become CleaningUp
 with Interruption unless a result was already decided. Uncertainty blocks new
 starts; missing units do not prove cleanup. Review remains required after
-completion and reopen. Acknowledgement is not implemented. Slots and log
+completion and reopen until explicit [acknowledgement](temporary/review.md). Slots and log
 accounting remain reserved through uncertainty; completed logs still count.
 No retention reclamation is provided. See the [dispatch contract](temporary/dispatch.md)
 for APIs, failure cases, compatibility, and remaining integration gates.

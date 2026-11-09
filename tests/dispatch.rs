@@ -24,6 +24,10 @@ use tempfile::TempDir;
 mod migration;
 #[path = "dispatch/recovery.rs"]
 mod recovery;
+#[path = "dispatch/review.rs"]
+mod review;
+#[path = "dispatch/review_failure.rs"]
+mod review_failure;
 #[path = "dispatch/stopping.rs"]
 mod stopping;
 

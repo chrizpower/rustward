@@ -84,7 +84,8 @@ reconstruct a permit or call start for recovered work, including a crash after
 intent commit but before the original start call.
 
 A review block survives later observations, cleanup, completion, and reopen.
-Acknowledgement needs its own evidence record and remains unimplemented. Pausing
+[Acknowledgement](review.md) records one note for one completed run and its
+reviewed evidence, then clears that run’s block. Pausing
 or resuming dispatch cannot clear review. Absence of a systemd unit alone does
 not release a slot. Recovery polling stops uncertain local work. The service must obtain cleanup
 evidence under the accepted contracts.
@@ -105,9 +106,9 @@ unrecorded evidence remain conservative; see [stopping](stopping.md).
 
 ## Compatibility and required evidence
 
-Use database schema version 4. Preserve all version 1–3 run fields, results,
+Use database schema version 5. Preserve all version 1–4 run fields, results,
 sequence high-water marks, issuer data, permanent admissions, snapshots, and
-revision bytes. Older binaries reject version 4. Task configuration remains
+revision bytes. Older binaries reject version 5. Task configuration remains
 version 2. New snapshots include timing defaults; stored snapshots, revisions,
 and request fingerprint encoding remain unchanged.
 
@@ -129,7 +130,8 @@ The caller owns descriptor closure and capture synchronization. A supervisor err
 is recorded as an uncertain outcome. `observe` records supplied evidence; it
 does not poll the manager. `record` exposes retained launch/exit/cleanup/review
 evidence, and `run_state` exposes phase/result. `finish` accepts the synchronized
-retained-byte count and never clears review. Repeated finish is an invalid
+retained-byte count and never clears review. `Store::acknowledge` requires local
+completion and unchanged evidence; it does not alter run results or other gates. Repeated finish is an invalid
 transition. Cross-session permits are rejected. No transport API is provided.
 
 [Active stopping](stopping.md) adds output failure, stop reasons, timestamps,

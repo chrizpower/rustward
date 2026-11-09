@@ -6,7 +6,7 @@ use crate::{
     supervision::{Cleanup, ExecutionIdentity, ExecutionState, Observation, ProcessExit},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Record {
     pub start_state: String,
     pub identity: Option<ExecutionIdentity>,
@@ -18,7 +18,7 @@ pub struct Record {
     pub output_failed: bool,
 }
 
-fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> {
+pub(crate) fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> {
     connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed
         FROM launches WHERE run_id=?1", [run_id], |r| {
         let invocation: Option<Vec<u8>> = r.get(1)?;

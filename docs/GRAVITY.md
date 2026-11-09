@@ -62,11 +62,9 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 
 ### P02: Preserve accepted work and stop on uncertainty
 
-- **Type and status:** Principle; uncertainty handling and planned maintenance
-  accepted by the user. The admission and lifecycle contracts are in
-  [execution.md](temporary/execution.md#admission-contract-decisions); launch and lifecycle
-  integration remains gated. Manual admission and durable dispatch are implemented
-  as libraries with fake-supervisor tests.
+- **Type and status:** Accepted. Admission, dispatch, stopping, and
+  [acknowledgement](temporary/review.md) are tested libraries. Real execution
+  integration remains gated; see [execution.md](temporary/execution.md).
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof
@@ -82,7 +80,7 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   local cleanup would reduce delay but would not resolve external uncertainty.
 - **Check:** Inject failure around task launch and completion. Confirm queued
   work remains blocked, interrupted work is not retried, and planned maintenance
-  waits for active work. Define the acknowledgement record before implementation.
+  waits for active work. Test stale evidence and atomic acknowledgement.
 - **Revisit:** Independent task survival across upgrades requires a separate
   lifecycle and output-capture decision.
 
@@ -317,3 +315,6 @@ and admitted work. See the configuration contract.
 Require review and cleanup evidence. See [dispatch](temporary/dispatch.md).
 
 2026-11-08: Timing and output-failure rules: [stopping](temporary/stopping.md).
+
+2026-11-09: Accept one note for one completed run, with unchanged reviewed evidence.
+See [review](temporary/review.md).

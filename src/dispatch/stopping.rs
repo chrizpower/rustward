@@ -32,7 +32,7 @@ pub enum StopDecision {
     AlreadyEnded,
     NotActive,
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Times {
     pub dispatched_at_ms: Option<i64>,
     pub completed_at_ms: Option<i64>,

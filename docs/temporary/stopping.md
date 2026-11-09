@@ -77,11 +77,13 @@ service-wide failure handling. Service wiring remains required.
 confirmation that output workers have ended and partial evidence was handled.
 It cannot claim synchronized lost bytes or Success. Both retain the review block,
 check retained bytes against the reservation, and release the slot only on commit.
+[Administrator acknowledgement](review.md) can then clear that run’s review
+block with one note and the unchanged reviewed evidence.
 A storage-closed handle cannot complete a run.
 
 ## Timestamps and compatibility
 
-Schema version 4 adds active Cancellation and Timeout, stop reason, output-failure
+Schema version 4 introduced active Cancellation and Timeout, stop reason, output-failure
 state, and nullable UTC millisecond dispatch/completion timestamps. `times` reads
 them. Completion time is the commit of cleanup and output handling, including
 queued cancellation; it is not program exit time. Clock adjustments can make
@@ -97,7 +99,7 @@ failed writes, shared admission closure, and recovery without another start.
 Version 3 migration tests preserve active execution identity and unknown times.
 
 Prepared runtime verification, automatic capture orchestration, actual supervisor
-observation and release, administrator acknowledgement, retention reclamation,
+observation and release, retention reclamation,
 and the service loop remain unimplemented. Isolated Debian 13/systemd 257 host
 checks remain required before real execution. No scheduler, live reload,
 production migration, or deployment is included.

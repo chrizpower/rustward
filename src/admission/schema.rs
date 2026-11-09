@@ -65,3 +65,28 @@ pub(super) fn migrate_stopping(transaction: &Transaction<'_>) -> Result<(), Erro
     ALTER TABLE launches ADD COLUMN output_failed INTEGER NOT NULL DEFAULT 0 CHECK(output_failed IN (0,1));
     PRAGMA user_version=4;").map_err(storage)
 }
+
+pub(super) fn migrate_review(transaction: &Transaction<'_>) -> Result<(), Error> {
+    transaction.execute_batch("ALTER TABLE launches ADD COLUMN evidence_version INTEGER NOT NULL DEFAULT 0
+        CHECK(typeof(evidence_version)='integer' AND evidence_version>=0);
+    UPDATE launches SET evidence_version=review_required;
+    CREATE TABLE acknowledgements (
+        acknowledgement_id TEXT PRIMARY KEY NOT NULL,
+        encoding INTEGER NOT NULL CHECK(encoding=1),
+        record TEXT NOT NULL
+    );
+    CREATE TRIGGER launch_evidence_insert AFTER INSERT ON launches
+    WHEN NEW.review_required=1 BEGIN
+        UPDATE launches SET evidence_version=evidence_version+1 WHERE run_id=NEW.run_id;
+    END;
+    CREATE TRIGGER launch_evidence_update AFTER UPDATE OF start_state,invocation,control_group,
+        exit_kind,exit_value,cleanup_confirmed,review_required,log_bytes,stop_reason,output_failed ON launches
+    WHEN NEW.review_required=1 BEGIN
+        UPDATE launches SET evidence_version=evidence_version+1 WHERE run_id=NEW.run_id;
+    END;
+    CREATE TRIGGER run_evidence_update AFTER UPDATE OF phase,result,dispatched_at,completed_at ON runs
+    WHEN EXISTS(SELECT 1 FROM launches WHERE run_id=NEW.run_id AND review_required=1) BEGIN
+        UPDATE launches SET evidence_version=evidence_version+1 WHERE run_id=NEW.run_id;
+    END;
+    PRAGMA user_version=5;").map_err(storage)
+}

@@ -24,8 +24,8 @@ requirements or acceptance evidence. See [folder guidance](README.md).
    Durable intent, exclusive ownership, FIFO claims, capacity accounting, retained
    launch data, supervisor evidence, and conservative recovery are tested with a
    fake supervisor. [Active stopping](stopping.md), timeouts, shared failure gates,
-   and timestamps are implemented. Specify acknowledgement records before adding
-   review release. Connect capture and stopping to the future service.
+   and timestamps are implemented. [One-run acknowledgement](review.md) retains
+   one note and reviewed evidence. Connect these libraries to the future service.
 2. Verify the selected Debian 13/systemd 257 dedicated user manager and its
    permissions on an isolated host.
    Specify runtime layout, environment and secret references,
@@ -71,15 +71,16 @@ Production migration and deployment remain outside repository implementation.
 ## Dispatch evidence and remaining work
 
 The [dispatch contract](dispatch.md) owns the implemented API and its prerequisites.
-Schema version 4 preserves version 1–3 identities and history. Tests cover lock
+Schema version 5 preserves version 1–4 identities and history. Tests cover lock
 ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollback,
 process exit at launch boundaries, missing/changed identity, first-result retention,
 cleanup/output gates, and durable review. No test starts a real task.
 
 Next: verify prepared runtimes, connect capture and the stopping library,
-implement acknowledgement and retention reclamation, and pass isolated systemd
+implement retention reclamation, and pass isolated systemd
 host checks. The service must enforce all gates before real execution. A review
-block currently has no acknowledgement API. A dropped permit is not reissued.
+block can be cleared only by acknowledgement after local completion and review
+of unchanged evidence. A dropped permit is not reissued.
 
 ## Telemetry work
 
@@ -115,8 +116,8 @@ must translate accepted behavior into testable mechanisms, not reopen it:
 - Verify the selected systemd baseline, manager, and permissions on an isolated
   Debian 13 test host. The [supervision adapter contract](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
   is implemented with synthetic tests; its opt-in host test remains unrun.
-  Validate process-boundary enforcement and cleanup evidence. Define the review
-  record with affected runs, evidence, uncertainty, decision, and reason.
+  Validate process-boundary enforcement and cleanup evidence. Integrate the
+  implemented acknowledgement record.
 - Specify runtime manifest, paths, ownership,
   and safe removal of run work directories after completion.
 - Integrate conservative dispatch log accounting with capture, retention cleanup,

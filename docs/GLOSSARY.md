@@ -205,10 +205,12 @@ external evidence, then recording what is known, what remains uncertain, and
 what action is needed.
 
 **Acknowledgement**: The administrator's recorded decision that dispatch may
-resume for reviewed external uncertainty. It identifies affected runs, evidence,
-remaining uncertainty, and the reason for resuming. It can accept remaining
-risk; it does not assert remote completion or change an interrupted result to
-success. Other dispatch blocks still apply.
+resume for one run’s reviewed external uncertainty. Rustward records the run,
+reviewed evidence, and time. One administrator note states the checks, remaining
+uncertainty, and reason to resume. It can accept remaining risk; it does not assert remote completion or change an interrupted result to
+success. Other dispatch blocks still apply. One-note records and local completion
+before acknowledgement were accepted by the user on 2026-11-09; see
+[the review contract](temporary/review.md).
 
 Stopping a local SSH client does not prove a remote backup stopped. A
 persistent, known file change is an external effect, but persistence alone is

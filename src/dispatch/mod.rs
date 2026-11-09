@@ -20,6 +20,7 @@ use crate::{
 mod evidence;
 mod stopping;
 pub use evidence::Record;
+pub(crate) use evidence::read as read_record;
 pub use stopping::{StopDecision, StopReason, Times};
 
 #[derive(Clone, Copy, Debug)]
