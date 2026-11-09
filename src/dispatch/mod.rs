@@ -18,6 +18,8 @@ use crate::{
 };
 
 mod evidence;
+mod preflight;
+pub use preflight::LaunchFailure;
 mod stopping;
 pub use evidence::Record;
 pub(crate) use evidence::read as read_record;

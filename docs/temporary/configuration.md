@@ -155,7 +155,7 @@ For example, old task ID `country-report` becomes `tasks/country-report.toml`;
 argument generation rules do not change. YAML remains unsupported.
 
 The configuration change did not alter SQLite schema version 2. The later
-[dispatch migration](dispatch.md) now uses schema version 5 without rewriting identity. No stored
+[dispatch migration](dispatch.md) now uses schema version 6 without rewriting identity. No stored
 snapshots, arguments, runtime IDs, request keys, fingerprints, or revisions are
 rewritten. A retry with an admitted key and original payload returns the original
 run even after task removal; a new task path is a changed payload. Existing

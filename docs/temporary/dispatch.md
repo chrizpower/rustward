@@ -106,9 +106,9 @@ unrecorded evidence remain conservative; see [stopping](stopping.md).
 
 ## Compatibility and required evidence
 
-Use database schema version 5. Preserve all version 1–4 run fields, results,
+Use database schema version 6. Preserve all version 1–5 run fields, results,
 sequence high-water marks, issuer data, permanent admissions, snapshots, and
-revision bytes. Older binaries reject version 5. Task configuration remains
+revision bytes. Older binaries reject version 6. Task configuration remains
 version 2. New snapshots include timing defaults; stored snapshots, revisions,
 and request fingerprint encoding remain unchanged.
 
@@ -133,6 +133,11 @@ evidence, and `run_state` exposes phase/result. `finish` accepts the synchronize
 retained-byte count and never clears review. `Store::acknowledge` requires local
 completion and unchanged evidence; it does not alter run results or other gates. Repeated finish is an invalid
 transition. Cross-session permits are rejected. No transport API is provided.
+
+`fail_before_start` consumes an unstarted permit and records Failure with a fixed
+launch-failure code and confirmed no-start cleanup. Output handling must still
+finish before slot release. See [runtime work](runtime.md); runtime verification
+is not yet implemented.
 
 [Active stopping](stopping.md) adds output failure, stop reasons, timestamps,
 and timeout polling. No daemon or real adapter integration is provided.

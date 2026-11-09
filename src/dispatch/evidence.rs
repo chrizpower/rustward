@@ -16,15 +16,17 @@ pub struct Record {
     pub log_bytes: u64,
     pub stop_reason: Option<String>,
     pub output_failed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_failure: Option<String>,
 }
 
 pub(crate) fn read(connection: &Connection, run_id: &str) -> Result<Option<Record>, Error> {
-    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed
+    connection.query_row("SELECT start_state,invocation,control_group,cleanup_confirmed,review_required,log_bytes,exit_kind,exit_value,stop_reason,output_failed,launch_failure
         FROM launches WHERE run_id=?1", [run_id], |r| {
         let invocation: Option<Vec<u8>> = r.get(1)?;
         let group: Option<String> = r.get(2)?;
-        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?,r.get::<_, Option<String>>(8)?,r.get::<_, bool>(9)?))
-    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value, stop_reason, output_failed)| {
+        Ok((r.get::<_, String>(0)?,invocation,group,r.get(3)?,r.get(4)?,r.get::<_, i64>(5)?,r.get::<_, Option<String>>(6)?,r.get::<_, Option<i32>>(7)?,r.get::<_, Option<String>>(8)?,r.get::<_, bool>(9)?,r.get::<_, Option<String>>(10)?))
+    }).optional().map_err(storage)?.map(|(start_state, invocation, group, cleanup_confirmed, review_required, log_bytes, exit_kind, exit_value, stop_reason, output_failed, launch_failure)| {
         let identity = match (invocation, group) {
             (None, None) => None,
             (Some(bytes), Some(control_group)) => Some(ExecutionIdentity {
@@ -38,7 +40,7 @@ pub(crate) fn read(connection: &Connection, run_id: &str) -> Result<Option<Recor
             (Some("signal"), Some(value)) => Some(ProcessExit::Signal(value)),
             _ => return Err(Error::Storage),
         };
-        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, stop_reason, output_failed, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
+        Ok(Record { start_state, identity, exit, cleanup_confirmed, review_required, stop_reason, output_failed, launch_failure, log_bytes: u64::try_from(log_bytes).map_err(|_| Error::Storage)? })
     }).transpose()
 }
 

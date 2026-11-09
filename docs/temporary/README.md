@@ -16,6 +16,7 @@ concise section can preserve the meaning and required detail.
 | [Execution contracts](execution.md) | Put lasting behavior and lifecycle details in ARCHITECTURE.md, policies and exceptions in GRAVITY.md, and terms in GLOSSARY.md; delete after all contracts and open decisions are transferred |
 | [Configuration](configuration.md) | Absorb the implemented schema, version 2 file layout, API contract, examples, and compatibility rules into ARCHITECTURE.md; put domain meanings in GLOSSARY.md; delete after the reference is complete at its destination |
 | [Dispatch](dispatch.md) | Transfer launch/recovery interfaces to ARCHITECTURE.md and policy to GRAVITY.md; preserve remaining integration gates before removal |
+| [Runtime](runtime.md) | Transfer verified runtime and work-directory contracts to ARCHITECTURE.md; resolve manifest/path proposals and preserve integration gates before removal |
 | [Review](review.md) | Transfer acknowledgement interfaces to ARCHITECTURE.md and policy to GRAVITY.md; preserve record retention and service integration work |
 | [Stopping](stopping.md) | Transfer stopping, timing, and failure interfaces to ARCHITECTURE.md; preserve service and host integration gates |
 | [Capture](capture.md) | Absorb the implemented interface, bounds, failure handling, and verification limits into ARCHITECTURE.md; preserve integration work and update links before removal |

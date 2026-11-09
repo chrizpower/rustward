@@ -22,12 +22,16 @@ use tempfile::TempDir;
 
 #[path = "dispatch/migration.rs"]
 mod migration;
+#[path = "dispatch/preflight.rs"]
+mod preflight;
 #[path = "dispatch/recovery.rs"]
 mod recovery;
 #[path = "dispatch/review.rs"]
 mod review;
 #[path = "dispatch/review_failure.rs"]
 mod review_failure;
+#[path = "dispatch/runtime_migration.rs"]
+mod runtime_migration;
 #[path = "dispatch/stopping.rs"]
 mod stopping;
 

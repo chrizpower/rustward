@@ -54,7 +54,7 @@ neither starts work nor frees a slot. Local completion already released its slot
 
 ## Evidence changes and retries
 
-Schema version 5 adds a nonnegative integer evidence version. Updates to launch,
+Schema version 5 introduced a nonnegative integer evidence version. Updates to launch,
 cleanup, review, output, accounting, or lifecycle evidence while review is pending
 advance it. Repeated writes can advance the version even if displayed values
 are equal. Recovery advances pending unfinished evidence. Overflow fails instead
@@ -73,10 +73,12 @@ work. The copy preserves reviewed metadata if run history is later removed.
 
 ## Failure, compatibility, and verification
 
-Version 1–4 migrations preserve runs, permanent admissions, fingerprints,
+Version 1–5 migrations preserve runs, permanent admissions, fingerprints,
 identities, snapshots, revisions, sequence high-water marks, and unknown historical
 times. Existing review flags remain set; pending legacy rows receive evidence
-version 1. Migration does not acknowledge work. Older binaries reject version 5.
+version 1. Migration does not acknowledge work. Older binaries reject version 6. Schema version 6 adds optional `launch_failure`
+evidence. Encoding 1 records without this field still read as None; empty values
+are omitted when encoding new records. Stored acknowledgements are not rewritten.
 
 Insert and release must both succeed and commit before acknowledgement succeeds.
 A failed or ignored write rolls back both changes. Storage errors close the

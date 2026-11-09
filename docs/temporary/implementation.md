@@ -80,7 +80,8 @@ ownership, competing dispatchers, cancellation races, FIFO/capacity, write rollb
 process exit at launch boundaries, missing/changed identity, first-result retention,
 cleanup/output gates, and durable review. No test starts a real task.
 
-Next: verify prepared runtimes, connect capture and the stopping library,
+[Pre-launch failure handling](runtime.md) is implemented. Runtime manifest and
+path choices remain open. Next: verify prepared runtimes, connect capture and the stopping library,
 implement retention reclamation, and pass isolated systemd
 host checks. The service must enforce all gates before real execution. A review
 block can be cleared only by acknowledgement after local completion and review

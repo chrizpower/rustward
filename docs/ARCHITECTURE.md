@@ -219,14 +219,13 @@ a queue-full response can be retried with its unbound key. A failed transaction
 leaves the run queued and uses the existing storage-error handling.
 
 `Store::run_state(run_id)` returns separate phase and result fields. Invalid
-stored combinations close the handle with a storage error. Schema version 5 adds
-[one-run acknowledgement](temporary/review.md) to the
-[stopping model](temporary/stopping.md).
+stored combinations close the handle with a storage error. Schema version 6 adds [pre-launch failure evidence](temporary/runtime.md)
+to [acknowledgement](temporary/review.md) and [stopping](temporary/stopping.md).
 
-Migration from versions 1–4 preserves run data, results, issuer state,
+Migration from versions 1–5 preserves run data, results, issuer state,
 admission records, revisions, and sequence high-water marks. Version 1 first gains
 the version 2 cancellation model. All steps commit together. Failed migrations
-roll back; older binaries reject version 5. Tests retain SQL fixtures and
+roll back; older binaries reject version 6. Tests retain SQL fixtures and
 check failed table replacement, preserved identities, and sequence order.
 
 ## Durable dispatch library

@@ -67,7 +67,8 @@ crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
 and failure controls. Task timeouts default to one hour; cleanup grace defaults
 to 30 seconds. [Acknowledgement](docs/temporary/review.md) records one note for
 one completed run and its reviewed evidence. Real runtime, capture, and systemd
-integration remain gated.
+integration remain gated. [Pre-launch failure handling](docs/temporary/runtime.md)
+is implemented; runtime manifest and path rules are still under review.
 
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
