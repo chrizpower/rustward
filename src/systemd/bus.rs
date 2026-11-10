@@ -78,6 +78,9 @@ where
 }
 
 impl Manager for UserBus {
+    fn reference(&mut self, name: &str) -> Result<(), ManagerError> {
+        self.manager()?.call("RefUnit", &(name,)).map_err(classify)
+    }
     fn environment_names(&mut self) -> Result<Vec<String>, ManagerError> {
         let values: Vec<String> = get(&mut self.properties(PATH, MANAGER)?, "Environment")?;
         if values.len() > 4096 || values.iter().map(String::len).sum::<usize>() > 1024 * 1024 {

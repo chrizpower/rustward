@@ -110,6 +110,15 @@ pub enum Error {
 /// The caller must durably record launch intent before calling start once.
 /// Accepted means a start job was queued, not that the program executed.
 pub trait Supervisor {
+    /// Hold an existing execution for observation and cleanup after recovery.
+    /// This must not start work or treat a missing unit as cleanup evidence.
+    fn reference(
+        &mut self,
+        _run_id: &RunId,
+        _expected: Option<&ExecutionIdentity>,
+    ) -> Result<(), Error> {
+        Err(Error::Unavailable)
+    }
     fn execution_uid(&mut self) -> Result<u32, Error> {
         Err(Error::Unavailable)
     }

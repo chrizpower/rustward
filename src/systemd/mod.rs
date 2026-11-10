@@ -34,6 +34,9 @@ pub struct Snapshot {
 
 /// Systemd transport boundary. Implementations must read fresh properties.
 pub trait Manager {
+    fn reference(&mut self, _name: &str) -> Result<(), ManagerError> {
+        Err(ManagerError::Unavailable)
+    }
     fn environment_names(&mut self) -> Result<Vec<String>, ManagerError> {
         Err(ManagerError::Unavailable)
     }
@@ -260,6 +263,30 @@ impl<M: Manager, C: Cgroups> Systemd<M, C> {
 }
 
 impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
+    fn reference(
+        &mut self,
+        run_id: &RunId,
+        expected: Option<&ExecutionIdentity>,
+    ) -> Result<(), Error> {
+        let name = unit_name(run_id);
+        let before = self
+            .manager
+            .snapshot(&name)
+            .map_err(|_| Error::Unavailable)?;
+        let identity = self
+            .identity(run_id, &before, expected)?
+            .ok_or(Error::IdentityMismatch)?;
+        self.manager
+            .reference(&name)
+            .map_err(|_| Error::Unavailable)?;
+        let after = self
+            .manager
+            .snapshot(&name)
+            .map_err(|_| Error::Unavailable)?;
+        self.identity(run_id, &after, Some(&identity))?
+            .ok_or(Error::IdentityMismatch)?;
+        Ok(())
+    }
     fn execution_uid(&mut self) -> Result<u32, Error> {
         self.manager
             .authenticated_uid()

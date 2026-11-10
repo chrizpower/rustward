@@ -4,7 +4,7 @@ Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
 manual admission, dispatch, stopping, review, and the [execution controller](temporary/controller.md)
 are implemented as libraries. Tests use fake supervision; real-host acceptance
-and the service loop remain gated. The diagram marks implemented parts in green.
+and the service loop remain gated. Green marks implemented parts.
 
 Follow [Gravity](GRAVITY.md). Unaccepted mechanisms in [requirements](temporary/requirements.md)
 remain proposals. This diagram does not authorize execution, migration, or deployment.
@@ -82,8 +82,8 @@ Activation, reload, scheduling, and the service execution loop remain unimplemen
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
-Structured service logs and private `/metrics` for the monitoring service remain unimplemented.
-See [telemetry](temporary/telemetry.md).
+The opt-in [A01/A02 runner](temporary/acceptance-runner.md) exists; real-systemd
+cases remain unrun. [Service telemetry](temporary/telemetry.md) remains unimplemented.
 
 ## Design boundaries
 
@@ -106,9 +106,8 @@ the log allowance. See P07 and the retention contract for the exact rules.
 
 The [implementation
 handoff](temporary/implementation.md#remaining-specifications-and-evidence) owns the
-remaining specifications and evidence: isolated-host recovery, permissions and
-log bounds, scheduling checkpoints, retention, and restore. Private proxy access
-and custom environment/secret references also need specifications.
+remaining evidence: isolated-host recovery, permissions and log bounds, scheduling
+checkpoints, retention, and restore. Proxy access and secrets need specifications.
 
 The current tests cover configuration, argument generation, manual admission,
 queued cancellation, migration, supervision, and controller coordination.
@@ -289,7 +288,8 @@ The adapter sets `Type=exec`, `Restart=no`, `KillMode=control-group`,
 `SendSIGKILL=yes`, and the selected stop grace period. `ExecStartEx` includes
 `no-env-expand`, preserving complete argument values without shell or environment
 expansion. `RemainAfterExit=yes` retains a successful exited service for explicit
-cleanup. `AddRef=true` pins its unit object while the D-Bus connection remains.
+cleanup. AddRef pins the unit while its client lives; recovery uses RefUnit
+after identity checks. Release needs durable cleanup.
 Standard input is null; stdout and stderr use caller-supplied file descriptors.
 The `capture` library supplies draining and per-run bounded retention. There is no implicit journal or
 file-output fallback. Controlled starts use the pinned environment launcher and

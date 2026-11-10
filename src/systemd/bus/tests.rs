@@ -15,6 +15,7 @@ struct Calls {
     stops: usize,
     kills: usize,
     releases: usize,
+    references: usize,
     owner: String,
     environment: Vec<String>,
 }
@@ -65,6 +66,10 @@ impl FakeManager {
         assert_eq!(who, "all");
         assert_eq!(signal, 9);
         self.0.lock().unwrap().kills += 1;
+    }
+    fn ref_unit(&self, name: &str) {
+        assert_eq!(name, "synthetic.service");
+        self.0.lock().unwrap().references += 1;
     }
     fn unref_unit(&self, name: &str) {
         assert_eq!(name, "synthetic.service");
@@ -196,6 +201,7 @@ fn exchanges_real_dbus_messages_with_a_private_test_peer() {
     assert_eq!(bus.snapshot("missing"), Err(ManagerError::Unavailable));
     bus.stop("synthetic.service", StopMode::Graceful).unwrap();
     bus.stop("synthetic.service", StopMode::Force).unwrap();
+    bus.reference("synthetic.service").unwrap();
     bus.release("synthetic.service").unwrap();
     assert_eq!(bus.authenticated_uid(), Ok(1000));
     assert_eq!(bus.authenticated_uid(), Ok(1000));
@@ -213,6 +219,7 @@ fn exchanges_real_dbus_messages_with_a_private_test_peer() {
     calls.lock().unwrap().owner = ":1.8".into();
     assert_eq!(bus.authenticated_uid(), Err(ManagerError::Unavailable));
     let calls = calls.lock().unwrap();
+    assert_eq!(calls.references, 1);
     assert_eq!(
         (calls.starts, calls.stops, calls.kills, calls.releases),
         (1, 1, 1, 1)

@@ -9,6 +9,10 @@ struct FakeManager {
     calls: Vec<String>,
 }
 impl Manager for FakeManager {
+    fn reference(&mut self, _: &str) -> Result<(), ManagerError> {
+        self.calls.push("reference".into());
+        self.response
+    }
     fn version(&mut self) -> Result<String, ManagerError> {
         self.version.clone()
     }
@@ -367,4 +371,41 @@ fn stop_and_release_require_matching_identity_and_cleanup_evidence() {
             response.map_err(|_| Error::Unavailable)
         );
     }
+}
+
+#[test]
+fn references_recovered_units_without_a_start_and_rejects_changed_identity() {
+    let mut native = adapter(snapshot(), GroupState::Populated);
+    assert_eq!(native.reference(&id(), Some(&identity())), Ok(()));
+    let mut changed = snapshot();
+    changed.invocation = vec![2; 16];
+    let mut native = Systemd::new(
+        manager(vec![Ok(snapshot()), Ok(changed)], Ok(())),
+        Groups(GroupState::Populated),
+    )
+    .unwrap();
+    assert_eq!(
+        native.reference(&id(), Some(&identity())),
+        Err(Error::IdentityMismatch)
+    );
+    for response in [Err(ManagerError::Missing), Err(ManagerError::Unavailable)] {
+        let mut native = Systemd::new(
+            manager(vec![response], Ok(())),
+            Groups(GroupState::Populated),
+        )
+        .unwrap();
+        assert_eq!(
+            native.reference(&id(), Some(&identity())),
+            Err(Error::Unavailable)
+        );
+    }
+    let mut native = Systemd::new(
+        manager(vec![Ok(snapshot())], Err(ManagerError::Rejected)),
+        Groups(GroupState::Populated),
+    )
+    .unwrap();
+    assert_eq!(
+        native.reference(&id(), Some(&identity())),
+        Err(Error::Unavailable)
+    );
 }

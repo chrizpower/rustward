@@ -9,7 +9,7 @@ runtime checks, and the [execution controller](docs/temporary/controller.md) are
 implemented as libraries. The controller connects capture, log accounting,
 manager UID binding, and pinned host dependencies. Tests use synthetic files,
 fake supervision, and a private D-Bus peer. Real systemd controller execution and
-Ansible acceptance remain unverified. The main binary validates TOML files;
+Ansible acceptance remain unverified. An opt-in [A01/A02 runner](docs/temporary/acceptance-runner.md) is implemented. The main binary validates TOML files;
 `rustward-exec` supplies the pinned environment launcher. There is no service loop.
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
@@ -89,7 +89,7 @@ Task output capture does not implement service telemetry.
 ## Development
 
 Use the Rustward devbox on the development host. Its checkout is `the checkout`.
-The image supplies stable Rust, rustfmt, Clippy, just, and build tools.
+The image supplies stable Rust, rustfmt, Clippy, just, Python 3.11+, and build tools.
 Coverage checks also need `llvm-tools-preview` (selected in
 `rust-toolchain.toml`), and
 [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov).
@@ -104,6 +104,17 @@ just hooks-install
 ```sh
 just check
 ```
+
+The local acceptance suite is separate from `just check`:
+
+```sh
+just acceptance-container
+```
+
+It requires an isolated rootful Linux Docker host with cgroup v2 and uses a
+privileged systemd container. It is not a secure sandbox from that host.
+See the [runner setup, portable VM command, and evidence rules](docs/temporary/acceptance-runner.md).
+The devbox has no Docker, so the image and real-systemd cases remain unrun.
 
 No fleet access or private credentials are needed. The devbox uses
 `the build directory` for compiled output. Source, home,

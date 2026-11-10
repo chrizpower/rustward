@@ -132,3 +132,24 @@ fn validates_host_schema_paths_links_and_limits() {
     }
     assert!(host::Catalog::open("relative", f.policy, Limits::default()).is_err());
 }
+
+#[test]
+fn verifies_directory_aliases_that_reach_pinned_files_through_a_child_link() {
+    let fixture = RuntimeFixture::new();
+    let data = fixture.path().join("data");
+    fs::create_dir(data.join("folder")).unwrap();
+    mode(&data.join("folder"), 0o755);
+    symlink("../value", data.join("folder/link")).unwrap();
+    symlink("folder", data.join("alias-dir")).unwrap();
+    let source = format!(
+        "version=1\nlauncher='/usr/bin/env'\n[files.'/usr/bin/env']\nsha256='{}'\nexecutable=true\n[files.'{}']\nsha256='{}'\n[links]\n'{}'='folder'\n'{}'='../value'\n",
+        hex::encode(Sha256::digest(fs::read("/usr/bin/env").unwrap())),
+        data.join("value").display(),
+        hex::encode(Sha256::digest(b"fixed data")),
+        data.join("alias-dir").display(),
+        data.join("folder/link").display()
+    );
+    let (catalog, id) = setup(&fixture, &source);
+    catalog.verify(&id).unwrap();
+    assert!(host::manifest_id(&format!("{source}'/unused-alias'='/empty'\n")).is_err());
+}

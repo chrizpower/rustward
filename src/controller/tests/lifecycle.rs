@@ -153,6 +153,10 @@ fn recovery_synchronizes_partial_logs_without_starting_again() {
     let mut c = f.controller(Limits::default());
     completed(&mut c, &id);
     assert_eq!(f.fake.0.lock().unwrap().launches.len(), 1);
+    assert_eq!(
+        f.fake.0.lock().unwrap().references,
+        vec![(id.clone(), Some(identity()))]
+    );
     let r = c.record(&id).unwrap().unwrap();
     assert!(r.review_required);
     assert!(r.output_failed);

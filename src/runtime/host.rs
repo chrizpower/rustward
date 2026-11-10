@@ -89,16 +89,45 @@ impl Manifest {
             {
                 return Err(Error::Invalid);
             }
-            let resolved = result.resolve(Path::new(path), limits)?;
-            if !result.files.keys().any(|file| {
-                result
-                    .resolve(Path::new(file), limits)
-                    .is_ok_and(|file| file.starts_with(&resolved))
-            }) {
-                return Err(Error::Invalid);
-            }
+            result.resolve(Path::new(path), limits)?;
         }
+        result.check_links(limits)?;
         Ok(result)
+    }
+    fn check_links(&self, limits: Limits) -> Result<(), Error> {
+        let files = self
+            .files
+            .keys()
+            .map(|file| self.resolve(Path::new(file), limits))
+            .collect::<Result<Vec<_>, _>>()?;
+        let links = self
+            .links
+            .keys()
+            .map(|path| {
+                self.resolve(Path::new(path), limits)
+                    .map(|target| (PathBuf::from(path), target))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut used = BTreeSet::<PathBuf>::new();
+        loop {
+            let next = links
+                .iter()
+                .filter(|(path, target)| {
+                    !used.contains(path)
+                        && (files.iter().any(|file| file.starts_with(target))
+                            || used.iter().any(|link| link.starts_with(target)))
+                })
+                .map(|(path, _)| path.clone())
+                .collect::<Vec<_>>();
+            if next.is_empty() {
+                break;
+            }
+            used.extend(next);
+        }
+        if used.len() != links.len() {
+            return Err(Error::Invalid);
+        }
+        Ok(())
     }
     fn id(&self) -> String {
         let value = serde_json::to_value(self).expect("host manifest contains JSON values");

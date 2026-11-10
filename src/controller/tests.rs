@@ -26,6 +26,7 @@ mod native;
 #[derive(Default)]
 struct State {
     launches: Vec<Launch>,
+    references: Vec<(String, Option<ExecutionIdentity>)>,
     profiles: Vec<Profile>,
     writers: BTreeMap<String, (File, File)>,
     observations: BTreeMap<String, Observation>,
@@ -62,6 +63,18 @@ fn known(ended: bool) -> Observation {
     }
 }
 impl Supervisor for Fake {
+    fn reference(
+        &mut self,
+        id: &RunId,
+        expected: Option<&ExecutionIdentity>,
+    ) -> Result<(), supervision::Error> {
+        self.0
+            .lock()
+            .unwrap()
+            .references
+            .push((id.as_str().into(), expected.cloned()));
+        Ok(())
+    }
     fn execution_uid(&mut self) -> Result<u32, supervision::Error> {
         Ok(self.0.lock().unwrap().uid.unwrap_or(1000))
     }

@@ -500,6 +500,10 @@ fn legacy_supervisor_cannot_silently_accept_controlled_execution() {
     let fixture = Fixture::new();
     let mut fake = Fake::new(&fixture.path);
     assert_eq!(fake.execution_uid(), Err(SupervisorError::Unavailable));
+    assert_eq!(
+        fake.reference(&RunId::new(&"a".repeat(64)).unwrap(), None),
+        Err(SupervisorError::Unavailable)
+    );
     let profile = rustward::supervision::Profile::for_run(
         1000,
         std::path::Path::new("/runtime"),

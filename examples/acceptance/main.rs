@@ -1,0 +1,42 @@
+//! Opt-in synthetic host acceptance. This is not a service CLI.
+mod context;
+mod execution;
+mod proof;
+mod recovery;
+#[cfg(test)]
+mod tests;
+
+use std::{env, path::Path, process::ExitCode};
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+fn require(condition: bool, message: &str) -> Result<()> {
+    if condition {
+        Ok(())
+    } else {
+        Err(message.into())
+    }
+}
+fn main() -> ExitCode {
+    match command(&env::args().skip(1).collect::<Vec<_>>()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Acceptance failed: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+fn command(args: &[String]) -> Result<()> {
+    match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["id", kind, path] => {
+            let source=std::fs::read_to_string(path)?;
+            let id=match *kind {
+                "runtime"=>rustward::runtime::manifest_id(&source),
+                "host"=>rustward::runtime::host::manifest_id(&source),
+                _=>return Err("expected runtime or host manifest".into()),
+            }.map_err(|error|format!("manifest: {error:?}"))?;
+            println!("{id}"); Ok(())
+        }
+        ["run", root]=>execution::run(Path::new(root)),
+        ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
+        _=>Err("usage: acceptance id <runtime|host> <file>, run <root>, or recovery-child <root> <run-id>".into()),
+    }
+}

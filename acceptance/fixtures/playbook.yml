@@ -1,0 +1,32 @@
+---
+- name: Check the synthetic local workload
+  hosts: local
+  gather_facts: false
+  tasks:
+    - name: Check input values and types
+      ansible.builtin.assert:
+        that:
+          - text is string
+          - text == expected_text
+          - count is integer
+          - count == 7
+          - enabled is boolean
+          - enabled
+      vars:
+        expected_text: >-
+          He said "hello"; it's a test
+    - name: Write known target content
+      ansible.builtin.copy:
+        dest: "{{ proof_path }}"
+        content: "{{ {'text': text, 'count': count, 'enabled': enabled} | to_json }}"
+        mode: '0600'
+    - name: Read the target content
+      ansible.builtin.slurp:
+        src: "{{ proof_path }}"
+      register: target_content
+    - name: Check the target content
+      ansible.builtin.assert:
+        that:
+          - (target_content.content | b64decode | from_json).text == text
+          - (target_content.content | b64decode | from_json).count == count
+          - (target_content.content | b64decode | from_json).enabled == enabled

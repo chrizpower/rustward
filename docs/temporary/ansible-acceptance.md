@@ -1,6 +1,6 @@
 # Ansible acceptance test
 
-Status: Planned acceptance test; not implemented or run. The user requested this
+Status: A01/A02 harness and fixtures are implemented; real-systemd cases are not run. The user requested this
 planning artifact on 2026-11-09. It tests the accepted generic execution rules
 with the main workload. It does not accept new execution policy or authorize
 production access, schedule migration, or deployment.
@@ -42,14 +42,12 @@ Semaphore workload review remains a separate gate.
 - Use explicit synchronization points for failure injection. Wait for recorded
   states or target markers rather than relying only on elapsed sleep time.
 
-[Runtime manifest and path checks](runtime.md) and separate writable directories
-are implemented as Rust APIs. Before the fixture runs, bind their UID policy to
-the real manager and specify host dependency policy, environment and secret
-references, and unattended credential access. Specify how typed inputs reach Ansible and how optional
-flags are selected. The current argument contract does not provide conditional
-flags or structured variable generation. A workload wrapper can supply these
-features outside the core; any schema or policy change needs separate review.
-Record unresolved choices here without treating them as accepted behavior.
+[Runtime manifest and path checks](runtime.md), UID/manager binding, pinned host
+dependencies, and controlled environment are implemented. The [local runner](acceptance-runner.md)
+uses a workload wrapper to pass the accepted typed inputs as JSON Ansible extra
+variables. A01/A02 need no conditional flags or credentials. Secret references,
+unattended credentials, and remote-target setup remain prerequisites for A03
+and later cases; no secret-handling acceptance claim is made here.
 
 ## Test procedure and pass criteria
 
@@ -78,17 +76,19 @@ integration tests against the same execution path.
 
 ## Evidence and remaining work
 
-All cases are currently **not run**. No executable acceptance harness or fixture
-exists yet. Implement them with the execution integration work; do not add a
-placeholder test that reports success without starting Ansible through Rustward.
+All real-systemd cases are currently **not run**. An executable A01/A02 harness,
+fixtures, and opt-in Docker/host commands now exist; see the
+[runner contract](acceptance-runner.md). The Docker attempt in this devbox is
+blocked because Docker is absent. Direct wrapper smoke tests and mechanical
+checks do not pass these cases. A03–A10 remain unimplemented.
 
 For each execution, record the exact command, host baseline, dependency versions,
 case results, and relevant state, output, and target observations. Preserve
 failure evidence before cleanup. Record blocked and skipped cases with reasons;
 they do not count as passes. Keep credentials out of the evidence.
 
-Remaining work is to resolve the fixture prerequisites, implement the harness,
-run each case, and review the results. Confirm how representative the synthetic
+Remaining work is to run A01/A02 on the isolated runner, implement A03–A10,
+and review the results. Confirm how representative the synthetic
 fixture is during the separate workload compatibility review.
 
 ## Completion and removal

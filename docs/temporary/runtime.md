@@ -19,8 +19,8 @@ production deployment, and migration of workloads remain separate work.
 
 The Ansible acceptance specification is the early integration milestone.
 Runtime verification must precede connecting real execution to its local
-playbook and ordinary-command cases. The harness and fixtures are not yet
-implemented; no acceptance case has passed.
+playbook and ordinary-command cases. The [local runner](acceptance-runner.md)
+and A01/A02 fixtures are implemented; no real-systemd acceptance case has passed.
 
 ## Implemented pre-launch failure handling
 
@@ -217,6 +217,6 @@ The Rust APIs take catalog/work paths and UID policy explicitly. Service TOML,
 activation, and runtime selection UI are unchanged. The controller now connects
 UID binding, host dependencies, capture, and controlled environment. Real
 execution acceptance, secret handling, systemd host verification, retention
-cleanup, scheduler execution, reload, and the Ansible acceptance harness remain
-unimplemented or unverified. Production migration and deployment are outside
+cleanup, scheduler execution, and reload remain unimplemented or unverified.
+The A01/A02 harness exists but has not passed real-systemd acceptance. Production migration and deployment are outside
 this slice.

@@ -90,7 +90,8 @@ Host file paths are normal absolute UTF-8 paths. Manifest files and catalog
 ancestors cannot use symlinks. Host dependencies can use explicitly pinned
 symlinks because Linux loader and interpreter paths commonly use them. Each
 link records its exact raw target. Resolution uses only declared links, rejects
-cycles and more than 32 links, and must lead to declared content. Undeclared
+cycles and more than 32 links, and must lead to declared content. A directory
+alias can reach that content through another declared child link. Undeclared
 links, special files, unsafe modes, and capabilities are rejected. Declared files,
 links, and their ancestors must be protected from the execution user. Host
 files/links can belong to root or the preparation UID. Catalog files belong to
@@ -179,6 +180,11 @@ capacity. EOF alone cannot finish a run. Capture completion is checked without
 waiting on live workers or file synchronization.
 
 Recovery never creates a permit or starts an unfinished dispatched run again.
+Before stopping, it calls Supervisor::reference once per recovered run. The native
+adapter checks the retained invocation/cgroup identity, acquires RefUnit, and
+checks identity again. This holds the existing unit's evidence after the old
+client died. Failed acquisition retains uncertainty; it never proves cleanup.
+The reference is released only through the existing cleanup/release protocol.
 It preserves stored identities and results, stops retained uncertain work, and
 requires review. After cleanup proof and manager release, an I/O worker checks
 existing private log files and synchronizes their retained prefixes. Historical
@@ -203,12 +209,12 @@ explicit links, and completion rollback. Storage-failure stopping is tested
 while a second preparation and a database write lock are held. Launcher smoke
 tests use synthetic values and ordinary test utilities without a real manager.
 
-The three opt-in isolated-host tests remain unrun. They do not yet test this
-complete controller path. The A01/A02 Ansible acceptance harness and fixtures are
-still unimplemented; no acceptance case has run. Next, connect this controller to
-an isolated-host harness and prove ordinary-command and local-playbook cases
-before extending the service. Real manager/process cleanup, permissions, and
-output behavior remain acceptance gates.
+The three opt-in isolated-host tests remain unrun here. The implemented
+[local acceptance runner](acceptance-runner.md) adds the complete controller path
+for A01/A02 and a separate local recovery check. Docker is absent in the devbox;
+no real-systemd case has passed. Direct workload-wrapper smoke tests are not
+controller acceptance. Real cleanup, permissions, and output behavior remain
+gates before extending the service. A03–A10 remain unimplemented.
 
 The service execution loop, HTTP/UI/API, scheduler execution and occurrence
 checkpoints, live reload, runtime selection UI, retention reclamation,

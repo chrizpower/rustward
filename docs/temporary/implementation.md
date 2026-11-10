@@ -20,9 +20,9 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Implement the isolated-host controller harness and synthetic fixtures for
-   A01/A02 in the [Ansible acceptance test](ansible-acceptance.md). Use one path
-   for an ordinary command and a local playbook. The harness remains unimplemented.
+1. Run the implemented [local acceptance runner](acceptance-runner.md) for A01/A02
+   on an isolated Docker host or Debian VM. The harness and synthetic fixtures
+   exist; Docker is absent here, so real-systemd acceptance remains unrun.
 2. Verify the Debian 13/systemd 257 dedicated manager, permissions, controlled
    environment, pinned dependencies, cleanup, and capture through that path.
    Then complete remote and failure cases A03–A10. Synthetic library tests are
@@ -75,8 +75,8 @@ cleanup/output gates, and durable review. No test starts a real task.
 [Runtime verification](runtime.md), protected paths, and separate writable
 directories are implemented. The [controller](controller.md) now connects actual
 service/manager UID binding, pinned host manifests, controlled environment,
-capture, stopping, and atomic output accounting. Next: implement the isolated-host
-controller harness and synthetic ordinary-command/local-playbook fixtures, then
+capture, stopping, and atomic output accounting. The [local harness](acceptance-runner.md)
+now covers ordinary-command, local-playbook, and local recovery checks. Next:
 run A01/A02 in the [Ansible acceptance specification](ansible-acceptance.md).
 No acceptance case has run. Retention reclamation remains separate work. Review
 can be cleared only after local completion and acknowledgement of unchanged

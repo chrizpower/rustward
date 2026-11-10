@@ -92,13 +92,15 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
     }
     fn from_parts(
         mut session: Session,
-        supervisor: S,
+        mut supervisor: S,
         preparation: Arc<dyn Preparation>,
         safety: Safety,
     ) -> Result<Self, Error> {
         let registry = Registry::new(safety);
         let mut runs = BTreeMap::new();
         for (id, record, grace, called) in session.control_records().map_err(Error::State)? {
+            let reference_failed =
+                called && supervisor.reference(&id, record.identity.as_ref()).is_err();
             registry.insert(
                 id.clone(),
                 record.identity,
@@ -106,7 +108,10 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
                 called,
                 grace,
             );
-            registry.update(id.as_str(), |entry| entry.requested = Some(Instant::now()));
+            registry.update(id.as_str(), |entry| {
+                entry.requested = Some(Instant::now());
+                entry.uncertain = reference_failed && !record.cleanup_confirmed;
+            });
             let mut run = Run::new(id.clone());
             run.recovered = true;
             runs.insert(id.as_str().into(), run);
