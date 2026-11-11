@@ -8,9 +8,9 @@ Status: Configuration validation, admission, dispatch, stopping, review, prepare
 runtime checks, and the [execution controller](docs/temporary/controller.md) are
 implemented as libraries. The controller connects capture, log accounting,
 manager UID binding, and pinned host dependencies. Tests use synthetic files,
-fake supervision, and a private D-Bus peer. The user reported A01/A02 passing on
-Docker Desktop. The [local runner](docs/temporary/acceptance-runner.md) and
-[SSH case A03](docs/temporary/ssh-acceptance.md) are implemented; A03 is not run. The main binary validates TOML files;
+fake supervision, and a private D-Bus peer. Copied Docker evidence confirms
+A01/A02 passing. The [local runner](docs/temporary/acceptance-runner.md) and
+[SSH case A03](docs/temporary/ssh-acceptance.md) are implemented; the A03 fixture fix needs a rerun. The main binary validates TOML files;
 `rustward-exec` supplies the pinned environment launcher. There is no service loop.
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
@@ -115,7 +115,7 @@ just acceptance-container
 It requires an isolated rootful Linux Docker host with cgroup v2 and uses a
 privileged systemd container. It is not a secure sandbox from that host.
 See the [runner setup, portable VM command, and evidence rules](docs/temporary/acceptance-runner.md).
-The devbox has no Docker, so the image and real-systemd cases remain unrun.
+The devbox has no Docker; run these checks on the isolated Docker host.
 
 No fleet access or private credentials are needed. The devbox uses
 `the build directory` for compiled output. Source, home,

@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -83,11 +85,21 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(values["ansible_ssh_private_key_file"], str(ssh_policy.CREDENTIALS / "client_key"))
             policy = values["ansible_ssh_common_args"]
             for option in ("StrictHostKeyChecking=yes", "BatchMode=yes", "IdentityAgent=none",
-                           "ControlMaster=no", "IdentitiesOnly=yes", "GlobalKnownHostsFile=/dev/null"):
+                           "ControlMaster=no", "ControlPath=none", "IdentitiesOnly=yes", "GlobalKnownHostsFile=/dev/null"):
                 self.assertIn(option, policy)
             self.assertEqual((Path(folder) / "inventory.ini").read_text(), "[fixture]\nssh-target\n")
         with self.assertRaises(ValueError):
             remote.arguments(Path("/runtime"), Path("/unused"), {}, {"address": "8.8.8.8", "port": 2222})
+
+    @unittest.skipUnless(shutil.which("ssh"), "OpenSSH client is not installed")
+    def test_openssh_disables_control_sockets_even_with_a_later_long_path(self):
+        command = [shutil.which("ssh"), *ssh_policy.options(), "-o", "ControlPath=/" + "x" * 200,
+                   "-G", "172.19.0.2"]
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=10)
+        effective = dict(line.split(None, 1) for line in result.stdout.splitlines() if " " in line)
+        self.assertIn(effective["controlmaster"], ("no", "false"))
+        self.assertIn(effective["controlpersist"], ("no", "false", "0"))
+        self.assertEqual(effective.get("controlpath", "none"), "none")
 
     def test_remote_lifecycle_uses_internal_network_and_public_control_channel(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -156,6 +168,23 @@ class PolicyTests(unittest.TestCase):
                 Remote(Docker(), "test", root).scan()
             with self.assertRaises(OSError):
                 validate(root, root)
+
+    def test_bundle_requires_the_installed_command_builder_pass_report(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            for name in ("A03", "host-key-check", "ssh-host-runner", "credential-scan", "target-check"):
+                (evidence / f"{name}.json").write_text('{"status":"passed"}')
+            (evidence / "result.json").write_text('{"status":"passed","cases":["A03"]}')
+            with self.assertRaises(OSError):
+                validate(root, evidence)
+            report = evidence / "ssh-command-check.json"
+            report.write_text('{"status":"passed"}')
+            validate(root, evidence)
+            report.write_text('{"status":"failed"}')
+            with self.assertRaisesRegex(RuntimeError, "ssh-command-check"):
+                validate(root, evidence)
 
     def test_missing_scan_report_still_refuses_export_with_a_clear_reason(self):
         with tempfile.TemporaryDirectory() as folder:

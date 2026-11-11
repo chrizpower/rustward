@@ -22,8 +22,9 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 1. Run implemented [A03 SSH acceptance](ssh-acceptance.md) with
    `just acceptance-ssh` on the isolated Docker host. Docker is absent from the
-   devbox. The user reported A01/A02 passing after the manager readiness fix;
-   the complete successful bundle has not been independently inspected here.
+   devbox. The latest copied bundle confirms A01/A02 and local recovery passing.
+   A03 failed because Ansible generated a long control-socket path. Its fixture
+   now explicitly disables that path and checks the installed command builder.
 2. Review the A03 evidence, then implement failure and interruption cases
    A04–A10. Synthetic library tests are not host acceptance evidence.
 3. Specify remaining task resource controls, custom environment/secret references,

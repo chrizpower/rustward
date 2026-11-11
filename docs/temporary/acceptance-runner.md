@@ -1,9 +1,9 @@
 # Local acceptance runner
 
-Status: The user reported A01/A02 passing on Docker Desktop after the manager
-readiness fix. The complete successful bundle has not been inspected in the
-devbox. A copied earlier failure remains available. Docker is absent from the
-devbox. [A03 SSH acceptance](ssh-acceptance.md) is implemented but unrun.
+Status: The copied Docker bundle `20261111T154745Z-3cc42b56` confirms A01/A02,
+local recovery, and all three legacy host tests passing. Docker is absent from
+the devbox. [A03 SSH acceptance](ssh-acceptance.md) ran but failed in its fixture;
+the control-socket path fix needs a Docker rerun.
 
 Before removal, transfer stable test interfaces and evidence to ARCHITECTURE.md,
 policy to GRAVITY.md, and terms to GLOSSARY.md. Preserve the remaining host,

@@ -1,7 +1,7 @@
 # Ansible acceptance test
 
-Status: The user reported A01/A02 passing. A03 is implemented but unrun;
-A04–A10 remain unimplemented. The user requested this
+Status: The copied Docker bundle confirms A01/A02 passing. A03 failed in its
+SSH fixture; its fix needs a rerun. A04–A10 remain unimplemented. The user requested this
 planning artifact on 2026-11-09. It tests the accepted generic execution rules
 with the main workload. It does not accept new execution policy or authorize
 production access, schedule migration, or deployment.
@@ -77,15 +77,18 @@ integration tests against the same execution path.
 
 ## Evidence and remaining work
 
-The user reported a complete local pass on Docker Desktop with source revision
-`523c67bc54608481d156b8a8b21526d780cc16318f81113025427686c56ad268`.
-The reported result includes A01/A02; the full successful bundle has not been
-independently inspected in the devbox. The earlier copied failed attempt is
-retained. See the [runner contract](acceptance-runner.md).
+The copied bundle `20261111T154745Z-3cc42b56` confirms A01/A02, local recovery,
+and the three legacy host tests passing. Its source revision is
+`0e43d7166b8fbd2cc92550b1e7d764e814a387c6016850a23b63486ec7214ff2`.
+The earlier reported local pass and copied failures remain historical evidence.
+See the [runner contract](acceptance-runner.md).
 
-A03 has executable fixtures and `just acceptance-ssh`, but is **not run**.
-Docker is absent from the devbox. Mechanical checks do not pass this case.
-A04–A10 remain unimplemented.
+A03 passed its host-key checks and reached the playbook. It failed because
+Ansible generated a control-socket path longer than Linux permits. The fixture
+now sets `ControlPath=none` and checks the installed SSH/SFTP command builders
+before admission. A03 needs a Docker rerun; the credential scan and evidence
+copies passed. A04–A10 remain unimplemented. Docker is absent from the devbox;
+mechanical checks do not pass A03.
 
 For each execution, record the exact command, host baseline, dependency versions,
 case results, and relevant state, output, and target observations. Preserve

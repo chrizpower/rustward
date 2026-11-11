@@ -1,12 +1,11 @@
 # A03 SSH acceptance
 
-Status: Implemented. A copied Mac attempt passed the local suite, then failed
-during Docker network setup before A03 started. A later attempt passed network
-setup, but A01 completed with Interruption despite exit code 0. A03 remains
-unrun. The exact earlier uncertainty is not yet established. The user accepted fixture-only credential files
-on 2026-11-11. Docker is absent from the devbox. Synthetic tests do not pass A03.
-The user reported the preceding A01/A02 suite passing on Docker Desktop; the
-complete successful bundle has not been independently inspected here.
+Status: A03 ran in the copied Docker bundle `20261111T154745Z-3cc42b56` and
+failed because Ansible generated a long SSH control-socket path. A01/A02, local
+recovery, and the three legacy host tests passed. Host-key checks, credential
+scanning, and evidence copies passed. The fixture fix needs a Docker rerun.
+The user accepted fixture-only credentials on 2026-11-11. Docker is absent from
+the devbox. Synthetic tests do not pass A03.
 
 ## Run and scope
 
@@ -57,12 +56,18 @@ key is read through Docker's setup channel and written to a protected known-host
 file. Network key discovery is not used. SSH requires strict host-key checking,
 a fixed host alias, batch mode, the supplied identity only, and no agent,
 password, keyboard authentication, multiplexing, or forwarding. It ignores
-inherited client configuration with `-F /dev/null`. See
+inherited client configuration with `-F /dev/null`. `ControlPath=none` explicitly
+disables control sockets as well as `ControlMaster=no` and `ControlPersist=no`. See
 [OpenSSH configuration](https://man.openbsd.org/ssh_config) and the
 [Ansible SSH connection options](https://docs.ansible.com/projects/ansible-core/2.18/collections/ansible/builtin/ssh_connection.html).
 
 Before admission, a read-only SSH probe with a wrong pinned host key must fail
 with host-key verification evidence. A probe with the correct key must succeed.
+Before admission, the pinned runtime also checks the installed Ansible SSH and
+SFTP command builders with a deliberately long potential control-socket path.
+Neither command may generate that path. OpenSSH `-G` must confirm the effective
+strict host-key policy and disabled connection sharing. This check makes no
+network connection and writes `ssh-command-check.json`.
 Only readiness probes can repeat; an admitted task is never retried. The wrong
 key check does not pass A04's unreachable-workload case.
 
@@ -105,7 +110,7 @@ name for this attempt; there is no global cleanup.
 ## Devbox verification
 
 `just check` passes, including formatting, Clippy, file-size and repository
-isolation checks, Rust tests, 31 Python fixture tests, and the coverage threshold.
+isolation checks, Rust tests, 33 Python fixture tests, and the coverage threshold.
 The three real-host tests are ignored in normal checks. The explicit A03 Docker
 attempt reports blocked with A01/A02/A03 not run because Docker is absent.
 Checks and the blocked result are retained under
@@ -158,9 +163,26 @@ for cleanup. This fixes a reproducible race consistent with the A01 report; it
 does not establish the exact observation in that earlier run. Existing admitted
 runs, results, review blocks, and identities are not rewritten.
 
+The copied attempt `20261111T154745Z-3cc42b56` confirms the local suite passing.
+Its A03 stdout records `ControlPath too long` during the copy task. Ansible exits
+with code 4; Rustward correctly records Failure with complete output and cleanup,
+without a review block. Ansible's SSH plugin detects the presence of
+`ControlPersist=no` as a persistence setting and adds its default ControlPath
+unless a path is supplied. That default uses the run directory as HOME and exceeds
+the Unix socket path limit. An explicit `ControlPath=none` prevents generation
+without enabling connection sharing. Existing state and identities are unchanged.
+
+A direct smoke check with the actual Ansible 2.19.0 SSH plugin reproduces the old
+policy failure and passes with the fixed SSH and SFTP commands. OpenSSH `-G`
+confirms disabled control sockets. Normal tests also check the effective policy
+with a later, deliberately long ControlPath option. The installed-plugin check
+is now required before A03 admission and in its exported pass evidence. These
+command checks do not connect to a target or pass A03. Evidence is under
+`$HOME/artifacts/rustward/ssh-control-path-20261111/`.
+
 ## Remaining work
 
-Run A03 and review its full evidence bundle. A04–A10, production secret
+Rerun A03 and review its full evidence bundle. A04–A10, production secret
 configuration, remote stopping and recovery evidence, runtime selection changes,
 output flooding, and storage-failure acceptance remain open. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this

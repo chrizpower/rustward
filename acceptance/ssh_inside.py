@@ -49,6 +49,16 @@ def probe(account, runtime, evidence):
         raise RuntimeError("wrong host key was not rejected")
 
 
+def check_commands(account, runtime, evidence):
+    result = checked(user_command(account, [runtime / "bin/python3", "-I", "-B",
+                     runtime / "ssh_commands.py", evidence / "ssh-commands"]),
+                     capture_output=True, timeout=30)
+    report = json.loads(result.stdout)
+    if report.get("status") != "passed":
+        raise RuntimeError("Ansible SSH command check did not pass")
+    (evidence / "ssh-command-check.json").write_text(json.dumps(report, indent=2) + "\n")
+
+
 def run(revision):
     account = pwd.getpwnam("rustward")
     fixture = prepare(ROOT, TOOLS, "rustward", revision, remote=True)
@@ -58,7 +68,9 @@ def run(revision):
         checked(["/usr/bin/systemctl", "start", f"user@{account.pw_uid}.service"])
         checked(user_command(account, ["/usr/bin/systemctl", "--user", "start", "dbus.socket"]))
         wait_manager(account, TOOLS, evidence)
-        probe(account, ROOT / "runtimes" / fixture["runtime_id"], evidence)
+        runtime = ROOT / "runtimes" / fixture["runtime_id"]
+        probe(account, runtime, evidence)
+        check_commands(account, runtime, evidence)
         checked(user_command(account, [TOOLS / "acceptance", "run-ssh", ROOT]), timeout=240)
         status["status"] = "passed"
     finally:

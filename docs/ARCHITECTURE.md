@@ -82,8 +82,8 @@ Activation, reload, scheduling, and the service execution loop remain unimplemen
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
-The user reported A01/A02 passing. [A03](temporary/ssh-acceptance.md) is implemented,
-unrun. [Telemetry](temporary/telemetry.md) remains unimplemented.
+Copied Docker evidence passes A01/A02. [A03](temporary/ssh-acceptance.md) failed;
+its fix needs a rerun. [Telemetry](temporary/telemetry.md) remains unimplemented.
 
 ## Design boundaries
 

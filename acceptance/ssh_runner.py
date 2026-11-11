@@ -88,7 +88,7 @@ class Remote:
 
 
 def validate(fixture, evidence):
-    for name in ("A03", "host-key-check", "ssh-host-runner", "result"):
+    for name in ("A03", "host-key-check", "ssh-command-check", "ssh-host-runner", "result"):
         value = json.loads((fixture / "evidence" / f"{name}.json").read_text())
         if value.get("status") != "passed":
             raise RuntimeError(f"missing SSH pass evidence: {name}")
