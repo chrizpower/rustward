@@ -45,7 +45,8 @@ def configuration(root, runtime, remote=False, directory="configuration"):
                   ("remote-timeout", "remote.py", "timeout"),
                   ("remote-recovery", "remote.py", "recovery"),
                   ("remote-async", "remote.py", "async"),
-                  ("remote-runtime-a", "remote.py", "runtime-a"), ("remote-runtime-b", "remote.py", "runtime-b")]
+                  ("remote-runtime-a", "remote.py", "runtime-a"), ("remote-runtime-b", "remote.py", "runtime-b"),
+                  ("remote-flood", "remote.py", "flood")]
     for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:

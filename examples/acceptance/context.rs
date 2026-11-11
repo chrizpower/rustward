@@ -28,6 +28,8 @@ pub struct Fixture {
     pub catalog_root: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_b_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_limit: Option<u64>,
 }
 pub struct Context {
     pub root: PathBuf,
@@ -108,7 +110,13 @@ impl Context {
         Controller::open(
             self.database(),
             roots,
-            Limits::default(),
+            Limits {
+                log_bytes_per_run: self
+                    .fixture
+                    .capture_limit
+                    .unwrap_or(Limits::default().log_bytes_per_run),
+                ..Limits::default()
+            },
             supervisor,
             safety,
         )

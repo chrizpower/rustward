@@ -17,6 +17,9 @@ def run(case, revision):
         fixture = prepare(root, SOURCE, TOOLS, revision)
     else:
         fixture = prepare_shared(root, SOURCE, "rustward", revision)
+    if case == "A09":
+        fixture["capture_limit"] = 65536
+        (root / "fixture.json").write_text(json.dumps(fixture, indent=2) + "\n")
     evidence = root / "evidence"
     status = {"status":"failed", "case":case, "writers_stopped":False}
     try:

@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends openssh-serv
     useradd --uid 1000 --create-home --shell /bin/sh --password '' rustward-target
 COPY acceptance/ssh_target.py /opt/ssh_target.py
 COPY acceptance/fixtures/hold.py /opt/rustward_hold.py
+COPY acceptance/fixtures/flood.py /opt/rustward_flood.py
 CMD ["/usr/bin/python3", "-I", "-B", "/opt/ssh_target.py", "serve"]
 
 FROM ${DEBIAN_IMAGE}

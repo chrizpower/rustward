@@ -68,7 +68,7 @@ fn complete(state: &RunState, record: &Record, result: RunResult, code: i32) -> 
         record.identity.is_some() && record.exit == Some(ProcessExit::Code(code)),
         "completion lacks the expected identity or exit evidence",
     )?;
-    output(record)
+    output(record, false)
 }
 pub fn complete_stopped(state: &RunState, record: &Record, result: RunResult) -> Result<()> {
     let reason = match result {
@@ -90,9 +90,9 @@ pub fn complete_stopped(state: &RunState, record: &Record, result: RunResult) ->
             && record.stop_reason.as_deref() == Some(reason),
         "stopped run lacks identity, exit, or stop reason",
     )?;
-    output(record)
+    output(record, false)
 }
-fn output(record: &Record) -> Result<()> {
+fn output(record: &Record, allow_truncation: bool) -> Result<()> {
     let output = record
         .output_evidence
         .as_ref()
@@ -106,7 +106,11 @@ fn output(record: &Record) -> Result<()> {
         "output accounting differs",
     )?;
     require(
-        output.stdout.truncated == Some(false) && output.stderr.truncated == Some(false),
+        if allow_truncation {
+            output.stdout.truncated.is_some() && output.stderr.truncated.is_some()
+        } else {
+            output.stdout.truncated == Some(false) && output.stderr.truncated == Some(false)
+        },
         "unexpected output truncation",
     )
 }
@@ -213,5 +217,33 @@ pub fn recovered(state: &RunState, record: &Record, before: &Value) -> Result<()
             && output.stdout.truncated.is_none()
             && output.stderr.truncated.is_none(),
         "recovery invented historical counts",
+    )
+}
+
+pub fn truncated_success(state: &RunState, record: &Record, limit: u64) -> Result<()> {
+    require(
+        state.phase == RunPhase::Completed
+            && state.result == Some(RunResult::Success)
+            && record.exit == Some(ProcessExit::Code(0))
+            && record.identity.is_some()
+            && record.cleanup_confirmed
+            && !record.review_required
+            && !record.output_failed,
+        "flood did not complete with clean Success",
+    )?;
+    output(record, true)?;
+    let output = record
+        .output_evidence
+        .as_ref()
+        .ok_or("missing flood evidence")?;
+    let observed = output
+        .stdout
+        .observed_bytes
+        .and_then(|a| output.stderr.observed_bytes.and_then(|b| a.checked_add(b)));
+    require(
+        record.log_bytes == limit
+            && observed.is_some_and(|bytes| bytes > limit)
+            && (output.stdout.truncated == Some(true) || output.stderr.truncated == Some(true)),
+        "flood limits or truncation differ",
     )
 }

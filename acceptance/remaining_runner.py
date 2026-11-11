@@ -6,7 +6,8 @@ from stopping_runner import Stopping, expected_inputs
 
 CASES = {"A06": {"root":"/opt/rustward-a06", "mode":"recovery", "kind":"recovery"},
          "A07": {"root":"/opt/rustward-a07", "mode":"async", "kind":"async"},
-         "A08": {"root":"/opt/rustward-a08", "mode":"runtime-a", "kind":"runtime-a"}}
+         "A08": {"root":"/opt/rustward-a08", "mode":"runtime-a", "kind":"runtime-a"},
+         "A09": {"root":"/opt/rustward-a09", "mode":"flood", "kind":"flood"}}
 
 
 class Remaining(Stopping):
@@ -43,9 +44,11 @@ class Remaining(Stopping):
             self.observe_case(case, settings, report)
 
     def observe_case(self, case, settings, report):
-        _, output = self.target_call("runtime-result") if case == "A08" else self.target_call("hold-state", settings["kind"])
+        if case == "A09": _, output = self.target_call("flood-result")
+        elif case == "A08": _, output = self.target_call("runtime-result")
+        else: _, output = self.target_call("hold-state", settings["kind"])
         value = json.loads(output)
-        valid = (value.get("runtime") == "B" if case == "A08" else value.get("state") in ("alive", "ended")) and value.get("run_id") == report.get("run_id")
+        valid = (value.get("runtime") == "B" if case == "A08" else (value.get("stdout_bytes",0)>65536 and value.get("stderr_bytes",0)>65536) if case == "A09" else value.get("state") in ("alive", "ended")) and value.get("run_id") == report.get("run_id")
         if case == "A07":
             valid &= value.get("state") == "alive"
         valid &= json.dumps(value.get("inputs"), sort_keys=True) == json.dumps(expected_inputs(), sort_keys=True)

@@ -75,3 +75,13 @@ class RemainingTests(unittest.TestCase):
             self.assertEqual((runtime/'runtime.toml').read_text(),'original manifest')
             self.assertEqual((destination/'runtimes'/('a'*64)/'selection.txt').read_text(),'A\n')
             self.assertTrue((destination/'configuration-b/tasks/runtime-selection.toml').exists())
+
+    def test_flood_proof_requires_both_streams_and_matching_run_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            runner=remaining_runner.Remaining(SimpleNamespace(name='test',evidence=Path(folder)))
+            value={'run_id':'a'*64,'inputs':expected_inputs(),'stdout_bytes':1048576,'stderr_bytes':1048576}
+            with patch.object(runner,'target_call',return_value=(0,json.dumps(value))):
+                runner.observe_case('A09',remaining_runner.CASES['A09'],{'run_id':'a'*64})
+            value['stderr_bytes']=0
+            with patch.object(runner,'target_call',return_value=(0,json.dumps(value))):
+                with self.assertRaises(RuntimeError):runner.observe_case('A09',remaining_runner.CASES['A09'],{'run_id':'a'*64})

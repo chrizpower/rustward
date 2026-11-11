@@ -117,7 +117,7 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 13);
+    assert_eq!(config.task_count(), 14);
     for (task, mode) in [
         ("remote-failure", "failure"),
         ("remote-unreachable", "unreachable"),
@@ -283,5 +283,32 @@ fn recovered_proof_retains_identity_and_unknown_historical_counts() {
             }
         };
         assert!(proof::recovered(&state, &invalid, &before).is_err());
+    }
+}
+
+#[test]
+fn flood_success_requires_drain_counts_and_bounded_truncation() {
+    let state = RunState {
+        phase: RunPhase::Completed,
+        result: Some(RunResult::Success),
+    };
+    let mut r = record();
+    let mut report = Report::default();
+    report.stdout.observed_bytes = 131072;
+    report.stdout.retained_bytes = 65536;
+    report.stdout.truncated = true;
+    r.log_bytes = 65536;
+    r.output_evidence = Some(Evidence::from_report(report, true, false));
+    proof::truncated_success(&state, &r, 65536).unwrap();
+    assert!(proof::complete_success(&state, &r).is_err());
+    for change in 0..4 {
+        let mut bad = r.clone();
+        match change {
+            0 => bad.output_failed = true,
+            1 => bad.review_required = true,
+            2 => bad.output_evidence.as_mut().unwrap().stdout.truncated = Some(false),
+            _ => bad.log_bytes += 1,
+        };
+        assert!(proof::truncated_success(&state, &bad, 65536).is_err());
     }
 }

@@ -1,6 +1,6 @@
 # Remaining acceptance cases
 
-Status: A06–A08 are implemented but unrun on Docker. A09/A10 remain work in progress.
+Status: A06–A09 are implemented but unrun on Docker. A10 remains work in progress.
 The user reported A01–A05 passing with source revision
 `1690669832608c67aa55d5d36734c33c73601ed9eb76d2a2609cad236e9d4e4e` and image
 `sha256:9eab44b973b203a3ffac40a3da340ff65de95b9da1a10d9d312cb792a56e940f`.
@@ -56,6 +56,18 @@ of its catalog. Dispatch must fail before any program starts, with no B
 substitution. The removed tree is retained under `removed-runtimes/` as evidence.
 The original admission and completed A history must remain unchanged. These are
 private fixture preparations, not a runtime selection UI or production migration.
+
+## A09: Output limit
+
+A private fixture capture limit of 65,536 bytes applies through the controller's
+existing limit interface; it does not implement service-setting activation.
+A remote command emits 1 MiB on each stream and writes a matching completion
+proof. Ansible debug tasks emit both captured strings through the local playbook.
+The run must finish with clean Success, synchronized observed counts above the
+limit, retained bytes exactly at the limit, and recorded truncation. The reader
+continues draining; truncation cannot close admission, stop work, or keep a slot.
+The stderr marker need not be retained if stdout consumes the shared allowance.
+Docker independently checks the remote completion proof and admitted run ID.
 
 ## Evidence and lifecycle
 

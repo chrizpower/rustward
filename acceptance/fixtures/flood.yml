@@ -1,0 +1,23 @@
+---
+- name: Drain output after the configured log limit
+  hosts: fixture
+  gather_facts: false
+  tasks:
+    - name: Produce output and a completion marker
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -I
+          - -B
+          - "{{ flood_program | default('/opt/rustward_flood.py') }}"
+          - "{{ hold_run_id }}"
+          - "{{ {'text': text, 'count': count, 'enabled': enabled} | to_json }}"
+          - "{{ flood_proof_path | default('/home/rustward-target/flood.json') }}"
+      register: flood_output
+      changed_when: false
+    - name: Emit remote stdout through the local playbook
+      ansible.builtin.debug:
+        var: flood_output.stdout
+    - name: Emit remote stderr through the local playbook
+      ansible.builtin.debug:
+        var: flood_output.stderr

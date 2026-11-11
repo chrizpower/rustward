@@ -2,6 +2,7 @@
 mod context;
 mod execution;
 mod failure;
+mod flood;
 mod proof;
 mod recovery;
 mod remote_recovery;
@@ -42,6 +43,7 @@ fn command(args: &[String]) -> Result<()> {
         ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
         ["run", root]=>execution::run(Path::new(root), false),
         ["remote-child",root,id,case,kind]=>remote_recovery::child(Path::new(root),id,case,kind),
+        ["run-scenario",root,"A09"]=>flood::run(Path::new(root)),
         ["run-scenario",root,"A08"]=>runtime_selection::run(Path::new(root)),
         ["runtime-queue-missing",root]=>runtime_selection::queue_missing(Path::new(root)),
         ["runtime-missing",root]=>runtime_selection::missing(Path::new(root)),
