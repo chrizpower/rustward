@@ -1,9 +1,10 @@
 # Local acceptance runner
 
 Status: Implemented opt-in A01/A02 harness and Docker runner. The user requested
-this slice on 2026-11-09. Docker is absent from the devbox; no real-systemd case
-has run here. Mechanical fixture tests and direct workload-wrapper smoke tests
-have passed. They are not acceptance passes.
+this slice on 2026-11-09. Docker is absent from the devbox. A copied Mac run passed child cleanup and
+unit isolation, but failed its capture test during the user-bus connection.
+A01/A02 did not run. Mechanical checks and direct wrapper smoke tests have
+passed; they are not acceptance passes.
 
 Before removal, transfer stable test interfaces and evidence to ARCHITECTURE.md,
 policy to GRAVITY.md, and terms to GLOSSARY.md. Preserve the remaining host,
@@ -43,6 +44,14 @@ The recovery path reacquires one systemd unit reference before stopping an
 existing execution. RefUnit never starts a missing unit. The adapter checks
 identity before and after acquisition, then retains the unit until cleanup and
 release. See the [systemd reference interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html).
+
+Before the suite, the host runner waits up to 30 seconds for a read-only
+`acceptance probe-manager` response. It uses the native UserBus authentication
+path, requires the execution UID and systemd 257, and records every attempt in
+`fixture/evidence/manager-readiness.json`. A listening bus socket alone does not
+prove that the manager has registered its D-Bus name. Only readiness probes are
+repeated; host tests and task starts are not retried. The controller's normal
+fail-closed behavior is unchanged.
 
 The runner also executes the three existing opt-in tests: systemd child cleanup
 and unit isolation, systemd output capture, and prepared-runtime permissions.
@@ -151,7 +160,9 @@ Docker runner records a complete content-hash snapshot automatically.
 
 For prepared fixtures, `acceptance run <root>` must run as the fixture execution
 user with its dedicated XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS. The example
-refuses another UID. Its `recovery-child` command is an internal test mechanism.
+refuses another UID. `acceptance probe-manager` only authenticates and reads the
+manager; it does not open run storage or start a task. The `recovery-child`
+command is an internal test mechanism.
 These commands do not extend the product CLI or create a service loop.
 
 ## Evidence, failure, and cleanup
@@ -185,9 +196,19 @@ normal failure limits; a timeout is a failure, not cleanup evidence.
 
 ## Verification recorded in the devbox
 
-The initial Docker attempt is blocked because Docker is not installed. The
-container image was not built, the three host tests remain skipped, and no
-real-systemd A01/A02 or local-recovery result is claimed.
+The devbox cannot run Docker, and normal checks skip the three host tests.
+The copied Mac attempt `20261110T005145Z-08053ac4` built and booted its container.
+It passed confirms_child_cleanup_and_concurrent_unit_isolation. Its capture test
+failed at UserBus::connect with Unavailable before capture setup or a task start.
+The later test connected successfully to the same manager. This suggests a
+startup readiness race; the fixed error classification does not establish the
+exact D-Bus error. The runtime permission test, A01/A02, and local recovery did
+not run. This partial result is not a complete acceptance pass.
+
+The runner now waits for authenticated manager readiness before the first host
+test. Synthetic tests cover delayed readiness, failed or hung probes, and wrong
+UID/version replies. The change still needs another Mac run. Diagnostic copies
+are under `$HOME/artifacts/rustward/manager-readiness-20261111/evidence/`.
 
 Normal checks build the Rust example and test evidence validation, duplicate
 starts, process identity handling, wrapper argument types, manifest construction,

@@ -35,8 +35,9 @@ fn command(args: &[String]) -> Result<()> {
             }.map_err(|error|format!("manifest: {error:?}"))?;
             println!("{id}"); Ok(())
         }
+        ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
         ["run", root]=>execution::run(Path::new(root)),
         ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
-        _=>Err("usage: acceptance id <runtime|host> <file>, run <root>, or recovery-child <root> <run-id>".into()),
+        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, or recovery-child <root> <run-id>".into()),
     }
 }

@@ -22,7 +22,9 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 1. Run the implemented [local acceptance runner](acceptance-runner.md) for A01/A02
    on an isolated Docker host or Debian VM. The harness and synthetic fixtures
-   exist; Docker is absent here, so real-systemd acceptance remains unrun.
+   exist. A copied Mac run passed cleanup/isolation but failed the initial
+   user-bus connection. Rerun with the authenticated readiness check; A01/A02
+   remain unrun. Docker is absent from the devbox.
 2. Verify the Debian 13/systemd 257 dedicated manager, permissions, controlled
    environment, pinned dependencies, cleanup, and capture through that path.
    Then complete remote and failure cases A03–A10. Synthetic library tests are

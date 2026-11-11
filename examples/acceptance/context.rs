@@ -86,14 +86,7 @@ impl Context {
                 .map_err(|e| format!("work root: {e:?}"))?,
             logs: WorkRoot::open(self.root.join("logs")).map_err(|e| format!("log root: {e:?}"))?,
         };
-        let mut bus = UserBus::connect().map_err(|e| format!("user bus: {e:?}"))?;
-        let version = bus
-            .version()
-            .map_err(|e| format!("systemd version: {e:?}"))?;
-        require(
-            version.split('.').next() == Some("257"),
-            "acceptance requires systemd 257",
-        )?;
+        let (bus, _) = manager()?;
         let supervisor = Systemd::new(bus, CgroupFs::default())
             .map_err(|e| format!("systemd adapter: {e:?}"))?;
         Controller::open(
@@ -104,5 +97,49 @@ impl Context {
             safety,
         )
         .map_err(|e| format!("controller: {e:?}").into())
+    }
+}
+
+fn validate_manager(uid: u32, expected: u32, version: &str) -> Result<()> {
+    require(
+        expected != 0 && uid == expected,
+        "manager UID does not match the execution user",
+    )?;
+    require(
+        version.split('.').next() == Some("257"),
+        "acceptance requires systemd 257",
+    )
+}
+fn manager() -> Result<(UserBus, serde_json::Value)> {
+    let mut bus =
+        UserBus::connect().map_err(|error| format!("authenticated user bus: {error:?}"))?;
+    let uid = bus
+        .authenticated_uid()
+        .map_err(|error| format!("manager UID: {error:?}"))?;
+    let version = bus
+        .version()
+        .map_err(|error| format!("manager version: {error:?}"))?;
+    validate_manager(uid, rustix::process::geteuid().as_raw(), &version)?;
+    let result = serde_json::json!({"status":"ready","uid":uid,"version":version});
+    Ok((bus, result))
+}
+pub fn probe_manager() -> Result<serde_json::Value> {
+    Ok(manager()?.1)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn readiness_requires_the_execution_uid_and_supported_manager() {
+        validate_manager(1000, 1000, "257.13-1~deb13u1").unwrap();
+        for (uid, expected, version) in [
+            (0, 0, "257"),
+            (1001, 1000, "257"),
+            (1000, 1000, "256"),
+            (1000, 1000, "258"),
+            (1000, 1000, ""),
+        ] {
+            assert!(validate_manager(uid, expected, version).is_err());
+        }
     }
 }

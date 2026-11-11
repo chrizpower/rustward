@@ -43,7 +43,9 @@ fn wait_for(
 #[test]
 #[ignore = "requires an isolated Debian 13 host with a dedicated systemd user manager and cgroup v2"]
 fn confirms_child_cleanup_and_concurrent_unit_isolation() {
-    let mut supervisor = Systemd::new(UserBus::connect().unwrap(), CgroupFs::default()).unwrap();
+    let manager = UserBus::connect().expect("connect to the authenticated user manager");
+    let mut supervisor =
+        Systemd::new(manager, CgroupFs::default()).expect("verify the systemd baseline");
     let directory = tempfile::tempdir().unwrap();
     let output = tempfile::tempfile().unwrap();
     let error = File::options().write(true).open("/dev/null").unwrap();
@@ -150,7 +152,9 @@ fn confirms_child_cleanup_and_concurrent_unit_isolation() {
 #[ignore = "requires an isolated Debian 13 host with a dedicated systemd user manager and cgroup v2"]
 fn captures_both_streams_through_the_user_manager() {
     use rustward::capture::{Capture, Options};
-    let mut supervisor = Systemd::new(UserBus::connect().unwrap(), CgroupFs::default()).unwrap();
+    let manager = UserBus::connect().expect("connect to the authenticated user manager");
+    let mut supervisor =
+        Systemd::new(manager, CgroupFs::default()).expect("verify the systemd baseline");
     let root = tempfile::tempdir().unwrap();
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).unwrap();

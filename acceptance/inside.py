@@ -8,6 +8,7 @@ import sqlite3
 import signal
 import subprocess
 import sys
+import time
 
 from prepare import prepare
 
@@ -52,6 +53,39 @@ def user_command(account, command, extra=None):
             *[f"{key}={value}" for key, value in environment.items()], *map(str, command)]
 
 
+def wait_manager(account, tools, evidence, timeout=30, interval=0.1):
+    deadline = time.monotonic() + timeout
+    report = {"status": "waiting", "attempts": []}
+    path = evidence / "manager-readiness.json"
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            result = invoke(user_command(account, [tools / "acceptance", "probe-manager"]),
+                            timeout=min(10, remaining), capture=True)
+            attempt = {"returncode": result.returncode, "stdout": result.stdout,
+                       "stderr": result.stderr}
+        except subprocess.TimeoutExpired:
+            attempt = {"status": "timeout"}
+            result = None
+        report["attempts"].append(attempt)
+        path.write_text(json.dumps(report, indent=2) + "\n")
+        if result is not None and result.returncode == 0:
+            value = json.loads(result.stdout)
+            if value.get("status") != "ready" or value.get("uid") != account.pw_uid or str(value.get("version", "")).split(".")[0] != "257":
+                report["status"] = "failed"
+                path.write_text(json.dumps(report, indent=2) + "\n")
+                raise RuntimeError("invalid manager readiness evidence")
+            report.update(status="ready", manager=value)
+            path.write_text(json.dumps(report, indent=2) + "\n")
+            return
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+    report["status"] = "failed"
+    path.write_text(json.dumps(report, indent=2) + "\n")
+    raise RuntimeError("user manager readiness deadline; see manager-readiness.json")
+
+
 def stop_fixture_units(root, account):
     database = root / "state/state.db"
     if not database.exists():
@@ -87,6 +121,8 @@ def run(root, tools, user, revision):
     try:
         checked(["/usr/bin/systemctl", "start", f"user@{account.pw_uid}.service"])
         checked(user_command(account, ["/usr/bin/systemctl", "--user", "start", "dbus.socket"]))
+        status["phase"] = "manager-readiness"
+        wait_manager(account, tools, evidence)
         status["phase"] = "legacy-host-tests"
         for name, count in (("systemd_host", 2), ("runtime_host", 1)):
             extra = {"RUSTWARD_PREPARATION_UID": "0",
