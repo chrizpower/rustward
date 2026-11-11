@@ -111,10 +111,12 @@ class PolicyTests(unittest.TestCase):
                         return 0, '{"status":"passed"}'
                     return 0, ""
             runner = Remote(Docker(), "test", evidence)
+            runner.create_network()
             runner.run(evidence, "debian", "revision")
             runner.scan()
             runner.cleanup()
             self.assertIn(["network", "create", "--internal", "test-network"], [args for args, _ in calls])
+            self.assertFalse(any(args[:2] == ["network", "connect"] for args, _ in calls))
             target = next(args for args, _ in calls if args[0] == "run")
             self.assertNotIn("--privileged", target)
             self.assertNotIn("--publish", target)
@@ -150,6 +152,18 @@ class PolicyTests(unittest.TestCase):
                 Remote(Docker(), "test", root).scan()
             with self.assertRaises(OSError):
                 validate(root, root)
+
+    def test_missing_scan_report_still_refuses_export_with_a_clear_reason(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            class Docker:
+                def call(self, *args, **kwargs):
+                    return 1, ""
+            with self.assertRaisesRegex(RuntimeError, "raw fixture export refused"):
+                Remote(Docker(), "test", root).scan()
+            report = json.loads((root / "credential-scan.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertIn("no valid report", report["reason"])
 
 
 if __name__ == "__main__":

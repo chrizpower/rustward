@@ -98,8 +98,10 @@ class CleanupTests(unittest.TestCase):
                 return 0, ""
 
         class FakeRemote:
-            def __init__(self, *args):
-                pass
+            def __init__(self, docker, name, evidence):
+                self.network = name + "-network"
+            def create_network(self):
+                calls.append(["network", "create", "--internal", self.network])
             def run(self, *args):
                 pass
             def scan(self):
@@ -141,6 +143,16 @@ class CleanupTests(unittest.TestCase):
         self.assertIn("stop", operations)
         self.assertIn("ssh-cleanup", operations)
         self.assertIn("retained_container", result)
+
+    def test_ssh_mode_selects_internal_network_before_controller_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, _, calls = self.attempt(directory, remote=True, scan_failed=True)
+        creation = next(args for args in calls if args[:2] == ["network", "create"])
+        controller = next(args for args in calls if args[0] == "run")
+        self.assertIn("--internal", creation)
+        self.assertIn(f"--network={creation[-1]}", controller)
+        self.assertNotIn("--network=none", controller)
+        self.assertLess(calls.index(creation), calls.index(controller))
 
     def test_diagnostic_timeout_still_collects_data_and_stops_the_container(self):
         with tempfile.TemporaryDirectory() as directory:

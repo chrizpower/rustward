@@ -53,9 +53,9 @@ def snapshot(repository, destination):
     return {"revision": hashlib.sha256(encoded).hexdigest(), "files": files}
 
 
-def run_arguments(name, image):
+def run_arguments(name, image, network="none"):
     return ["run", "--detach", "--name", name, "--pull=never", "--privileged",
-            "--cgroupns=private", "--network=none", "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
+            "--cgroupns=private", f"--network={network}", "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
             "--tmpfs", "/run/lock:rw,nosuid,nodev,mode=1777", "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777",
             "--stop-signal=SIGRTMIN+3", "--stop-timeout=20", image]
 
@@ -130,7 +130,11 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
         result.update(image=image, source_revision=source["revision"], container=name, phase="boot")
         # The name is unique to this attempt, including when a run reply is lost.
         created = True
-        docker.call(run_arguments(name, image))
+        if remote:
+            from ssh_runner import Remote
+            ssh = Remote(docker, name, evidence)
+            ssh.create_network()
+        docker.call(run_arguments(name, image, network=ssh.network if ssh else "none"))
         ready = False
         import time
         deadline = time.monotonic() + 60
@@ -147,8 +151,6 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
                               f"import sys;sys.path.insert(0,{INSIDE!r});from inside import main;sys.exit(main())",
                               "--root", FIXTURE, "--tools", TOOLS, "--source-revision", source["revision"]], timeout=900, checked=False)
         if code == 0 and remote:
-            from ssh_runner import Remote
-            ssh = Remote(docker, name, evidence)
             result["phase"] = "ssh-acceptance"
             ssh.run(evidence / "context", debian_image, source["revision"])
         result["status"] = "passed" if code == 0 else "failed"

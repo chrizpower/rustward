@@ -11,6 +11,10 @@ class Remote:
         self.target, self.network = name + "-target", name + "-network"
         self.target_created = self.network_created = False
 
+    def create_network(self):
+        self.network_created = True
+        self.docker.call(["network", "create", "--internal", self.network])
+
     def inside(self, operation, *arguments, **keywords):
         return self.docker.call(["exec", "-i", self.name, "/usr/bin/python3", "-I", "-B", "-c",
             "import sys;sys.path.insert(0,'/opt/rustward-acceptance-source');"
@@ -28,12 +32,11 @@ class Remote:
         image = image_file.read_text().strip()
         if not image.startswith("sha256:") or len(image) != 71:
             raise RuntimeError("SSH target build has no fixed image ID")
-        self.network_created = True
-        self.docker.call(["network", "create", "--internal", self.network])
+        if not self.network_created:
+            raise RuntimeError("create the internal network before starting the controller")
         self.target_created = True
         self.docker.call(["run", "--detach", "--pull=never", "--name", self.target,
             "--network", self.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755", image])
-        self.docker.call(["network", "connect", self.network, self.name])
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             code, output = self.target_call("metadata", checked=False)
@@ -58,7 +61,10 @@ class Remote:
 
     def scan(self):
         code, output = self.inside("scan", checked=False)
-        report = json.loads(output)
+        try:
+            report = json.loads(output)
+        except ValueError:
+            report = {"status": "failed", "reason": "credential scan returned no valid report"}
         (self.evidence / "credential-scan.json").write_text(json.dumps(report, indent=2) + "\n")
         if code or report.get("status") != "passed":
             raise RuntimeError("credential export check failed; raw fixture export refused")

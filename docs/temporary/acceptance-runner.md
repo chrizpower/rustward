@@ -81,8 +81,9 @@ host. Use a disposable host, never a production daemon. See [Docker privileges](
 and [systemd container requirements](https://systemd.io/CONTAINER_INTERFACE/).
 
 The runner does not mount host source, a Docker socket, host cgroups, or a host
-D-Bus socket. The local suite runs with no network. The separate A03 command then connects
-the controller to an internal network with its disposable SSH target. A separate build step prepares
+D-Bus socket. The local-only command uses no network. A03 mode starts the controller on an
+internal network with no target peer during the local suite, then starts its
+disposable SSH target on that network. A separate build step prepares
 all dependencies before execution. Private writable run/log/state folders belong
 to the execution user. The controller and tests run with all Linux capabilities
 removed through setpriv; the root setup process is not the executor. The image

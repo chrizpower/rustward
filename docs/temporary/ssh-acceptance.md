@@ -1,6 +1,8 @@
 # A03 SSH acceptance
 
-Status: Implemented, not run. The user accepted fixture-only credential files
+Status: Implemented. A copied Mac attempt passed the local suite, then failed
+during Docker network setup before A03 started. The network fix is not yet
+verified on Docker. The user accepted fixture-only credential files
 on 2026-11-11. Docker is absent from the devbox. Synthetic tests do not pass A03.
 The user reported the preceding A01/A02 suite passing on Docker Desktop; the
 complete successful bundle has not been independently inspected here.
@@ -19,9 +21,10 @@ For an explicit evidence folder:
 python3 -I -B acceptance/container.py --remote --artifacts "$HOME/artifacts/rustward/a03-run"
 ```
 
-Use a new folder. The command first runs the unchanged A01/A02 and local recovery
-suite without a network. It then builds a disposable SSH target and connects both
-containers to a unique internal Docker network. No host ports, source mounts,
+Use a new folder. SSH mode creates a unique internal Docker network and starts
+the controller on it. It first runs A01/A02 and local recovery with no target
+peer. It then builds and starts a disposable SSH target on that same network.
+The local-only command keeps `--network=none`. No host ports, source mounts,
 Docker socket, production inventory, or production credentials are supplied.
 The controller container remains privileged for systemd; use an isolated Docker
 host as required by the [local runner](acceptance-runner.md).
@@ -100,11 +103,26 @@ name for this attempt; there is no global cleanup.
 ## Devbox verification
 
 `just check` passes, including formatting, Clippy, file-size and repository
-isolation checks, Rust tests, 28 Python fixture tests, and the coverage threshold.
+isolation checks, Rust tests, 30 Python fixture tests, and the coverage threshold.
 The three real-host tests are ignored in normal checks. The explicit A03 Docker
 attempt reports blocked with A01/A02/A03 not run because Docker is absent.
 Checks and the blocked result are retained under
 `$HOME/artifacts/rustward/a03-ssh-20261111/`.
+
+The copied attempt `20261111T044548Z-f2ae255d` reports local controller success
+in `docker-06.stdout`. `docker-10.stderr` shows that Docker refused to connect a
+container started with `--network=none` to the SSH network. A03 was not admitted,
+and no client key was generated. The later export scan could not read its
+marker, so it refused raw fixture copies and retained the stopped controller.
+The root case fields therefore remain `not run`; they were not populated from
+copied case reports. This is a runner failure, not an SSH workload result.
+
+SSH mode now selects its internal network before controller startup. Regression
+tests require network creation before startup and reject a later network-connect
+step. A failed scan with no JSON report now records a clear failed export
+decision instead of a JSON parse error. It still refuses raw copies. The original
+copied evidence is unchanged. Diagnostic notes and checks for the fix are under
+`$HOME/artifacts/rustward/a03-network-20261111/`.
 
 ## Remaining work
 
