@@ -11,6 +11,7 @@ from fixtures import remote_state, ssh_policy
 from types import SimpleNamespace
 import scenario_inside
 import variant_prepare
+import storage_evidence
 from stopping_runner import expected_inputs
 
 
@@ -23,15 +24,25 @@ class RemainingTests(unittest.TestCase):
             for name in ('host-key-check', 'ssh-command-check'):
                 (root / f'{name}.json').write_text('{"status":"passed"}')
             (root / 'A10.json').write_text(json.dumps({'status':'passed', 'run_id':'a'*64,
-                'storage_gate_closed':True, 'stopped_while_sqlite_locked':True}))
+                'storage_gate_closed':True, 'stopped_while_sqlite_locked':True, 'record':{'log_bytes':6, 'output_evidence':{'stdout':{'retained_bytes':3},'stderr':{'retained_bytes':3}}}}))
             host = {'status':'passed', 'writers_stopped':True, 'log_filesystem':{'free_bytes':0}}
             (root / 'A10-host.json').write_text(json.dumps(host))
+            logs = root.parent / 'logs' / ('a' * 64)
+            logs.mkdir(parents=True)
+            (logs / 'stdout.log').write_bytes(b'out')
+            (logs / 'stderr.log').write_bytes(b'err')
+            storage_evidence.export(root.parent)
             before = {'sqlite_write_lock_held':True, 'gate_failed':True,
                 'local_cleanup_confirmed':True, 'durable_result':None}
             (root / 'A10-before-unlock.json').write_text(json.dumps(before))
             (evidence / 'remaining-A10-target.json').write_text(json.dumps({'status':'passed', 'remote':{'run_id':'a'*64}}))
             with patch.object(remaining_runner, 'CASES', {'A10':{}}):
                 remaining_runner.validate(evidence)
+                stderr = root.parent / 'exported-logs' / ('a' * 64) / 'stderr.log'
+                stderr.unlink()
+                with self.assertRaises(OSError): remaining_runner.validate(evidence)
+                self.assertEqual(remaining_runner.status(evidence, 'A10'), 'incomplete')
+                stderr.write_bytes(b'err')
                 for key in ('sqlite_write_lock_held', 'gate_failed', 'local_cleanup_confirmed', 'durable_result'):
                     changed = dict(before, **{key:'invalid'})
                     (root / 'A10-before-unlock.json').write_text(json.dumps(changed))

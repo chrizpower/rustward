@@ -1,11 +1,9 @@
 # Local acceptance runner
 
-Status: The copied Docker bundle `20261111T154745Z-3cc42b56` confirms A01/A02,
-local recovery, and all three legacy host tests passing. Docker is absent from
-the devbox. [A03 SSH acceptance](ssh-acceptance.md) ran but failed in its fixture;
-the user later reported A03 passing after its control-socket path fix.
-The user then reported A04 passing. [A05](stopping-acceptance.md) is implemented
-but unrun.
+Status: The copied bundle confirms A01/A02, local recovery, and all three legacy
+host tests.
+See the [evidence review](acceptance-review.md) for the current bundle and
+remaining A10 output export gap. Docker is absent from the devbox.
 
 Before removal, transfer stable test interfaces and evidence to ARCHITECTURE.md,
 policy to GRAVITY.md, and terms to GLOSSARY.md. Preserve the remaining host,
@@ -58,7 +56,7 @@ The runner also executes the three existing opt-in tests: systemd child cleanup
 and unit isolation, systemd output capture, and prepared-runtime permissions.
 Zero tests executed is a failure. The suite requires their exact pass counts.
 
-The implemented [A06–A10 cases](remaining-acceptance.md) need Docker verification.
+The copied review confirms A01–A09; the [A10 export gap](acceptance-review.md) remains open.
 Production credentials and workload compatibility, UI, scheduling, reload,
 retention, telemetry, migration, and deployment remain open. A03 adds
 fixture-only credential files through a separate opt-in command. The local

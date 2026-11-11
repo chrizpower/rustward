@@ -1,11 +1,9 @@
 # Remaining acceptance cases
 
-Status: A06–A10 are implemented but unrun on Docker.
-The user reported A01–A05 passing with source revision
-`1690669832608c67aa55d5d36734c33c73601ed9eb76d2a2609cad236e9d4e4e` and image
-`sha256:9eab44b973b203a3ffac40a3da340ff65de95b9da1a10d9d312cb792a56e940f`.
-The complete successful bundle has not been copied here. Docker is absent from
-the devbox; synthetic checks do not pass these host cases.
+Status: The copied bundle confirms A01–A09. A10's native decision passes,
+but its raw logs were not exported. The complete suite remains open; see the
+[evidence review](acceptance-review.md) for provenance and required follow-up.
+Docker is absent from the devbox; this review used retained evidence.
 
 Run `just acceptance-ssh` on the existing isolated Docker host. Each remaining
 case has its own store, writable roots, case decision, readiness checks, and host
@@ -89,7 +87,16 @@ remain unstarted. The gate stays closed and local capacity is released.
 The host report must confirm that the private log filesystem has zero free
 bytes. Docker independently reads the matching remote marker; it cannot use
 local cleanup as proof of remote completion. The mount remains through evidence
-copy and disappears with the container. No host or database disk is filled.
+copy and disappears with the container. After all writers stop, root setup
+copies the mounted log tree to `exported-logs/` on the normal filesystem and
+records file lengths and SHA-256 hashes in `evidence/A10-export.json`. The
+credential scan covers this copy before raw export. Bundle validation requires
+both streams, including an empty stream, and compares their lengths with the
+case record and hashes with the export manifest. Missing or changed output
+prevents a complete pass. No host or database disk is filled.
+
+The earlier reviewed bundle lacks these mounted logs. The export fix is
+implemented, but a new Docker run is required to close that evidence gap.
 
 ## Evidence and lifecycle
 
@@ -117,7 +124,7 @@ Direct local Ansible smoke checks confirmed that async work survived termination
 of its local process group and that the flood playbook emitted over 2 MiB.
 These checks did not use Rustward, systemd, or Docker and do not pass A07 or A09.
 
-Run the cases on Docker and inspect their complete evidence. The service loop,
+Run the corrected A10 export on Docker and review the new output. The service loop,
 scheduling, live reload, retention, UI, telemetry, production secrets, migration,
 and deployment remain outside this work.
 

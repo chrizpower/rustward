@@ -209,12 +209,10 @@ explicit links, and completion rollback. Storage-failure stopping is tested
 while a second preparation and a database write lock are held. Launcher smoke
 tests use synthetic values and ordinary test utilities without a real manager.
 
-The copied Docker bundle confirms A01/A02, local recovery, and the three legacy
-host tests passing. The user reports A03/A04 passing; the latest full bundle
-has not been copied here. [A05 stopping acceptance](stopping-acceptance.md) is
-implemented but unrun. Docker is absent from the devbox. Direct workload-wrapper
-smoke checks are not controller acceptance. A06–A10 and the remaining integration
-gates still need evidence.
+The [copied Docker evidence review](acceptance-review.md) confirms A01–A09,
+local recovery, and the three legacy host tests. A10's native report and database
+pass, but its raw logs are absent. Correct the mounted-log export and review a
+new Docker result before closing the full suite. Docker is absent from the devbox.
 
 The service execution loop, HTTP/UI/API, scheduler execution and occurrence
 checkpoints, live reload, runtime selection UI, retention reclamation,

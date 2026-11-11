@@ -74,6 +74,12 @@ def status(evidence, case):
         return "failed"
     if report.exists():
         value = json.loads(report.read_text()).get("status", "incomplete")
+        if value == "passed" and case == "A10":
+            try:
+                from storage_evidence import validate as validate_storage
+                validate_storage(root.parent)
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+                return "incomplete"
         return value if host.exists() else "incomplete"
     return "incomplete" if (root / f"{case}-admission.json").exists() else "not run"
 
@@ -87,6 +93,8 @@ def validate(evidence):
                 raise RuntimeError(f"missing remaining-case evidence: {name}")
         native = json.loads((root / f"{case}.json").read_text())
         if case == "A10":
+            from storage_evidence import validate as validate_storage
+            validate_storage(root.parent)
             host = json.loads((root / "A10-host.json").read_text())
             before = json.loads((root / "A10-before-unlock.json").read_text())
             if (host.get("log_filesystem", {}).get("free_bytes") != 0

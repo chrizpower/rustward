@@ -8,10 +8,11 @@ Status: Configuration validation, admission, dispatch, stopping, review, prepare
 runtime checks, and the [execution controller](docs/temporary/controller.md) are
 implemented as libraries. The controller connects capture, log accounting,
 manager UID binding, and pinned host dependencies. Tests use synthetic files,
-fake supervision, and a private D-Bus peer. Copied Docker evidence confirms
-A01/A02 passing. The [local runner](docs/temporary/acceptance-runner.md) and
-[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The user reports A03–A05
-passing. [Remaining acceptance cases](docs/temporary/remaining-acceptance.md) need Docker verification. The main binary validates TOML files;
+fake supervision and a private D-Bus peer. The copied Docker bundle confirms
+A01–A09. A10 reports a pass but lacks exported raw logs; see the
+[evidence review](docs/temporary/acceptance-review.md). The
+[local runner](docs/temporary/acceptance-runner.md) and
+[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The main binary validates TOML files;
 `rustward-exec` supplies the pinned environment launcher. There is no service loop.
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
@@ -68,7 +69,7 @@ crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
 and failure controls. Task timeouts default to one hour; cleanup grace defaults
 to 30 seconds. [Acknowledgement](docs/temporary/review.md) records one note for
 one completed run and its reviewed evidence. The controller connects these
-library protocols; isolated-host execution remains gated. [Prepared-runtime verification](docs/temporary/runtime.md)
+library protocols; the complete acceptance review remains open. [Prepared-runtime verification](docs/temporary/runtime.md)
 checks manifests and protected paths, creates separate writable run directories,
 and preserves admitted command paths. The controller also verifies pinned host
 manifests and provides the clean execution environment.
@@ -76,7 +77,7 @@ manifests and provides the clean execution environment.
 The `supervision::Supervisor` interface supports replaceable adapters. The
 `systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
 manager. Tests use a fake manager and a private D-Bus peer without starting
-configured tasks. Isolated-host controller acceptance remains required. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
+configured tasks. The complete acceptance review remains open. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
 
 The `capture` library supplies stdout/stderr descriptors and retains separate
 raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.

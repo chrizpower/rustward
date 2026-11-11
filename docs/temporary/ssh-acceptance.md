@@ -1,12 +1,9 @@
 # A03 SSH acceptance
 
-Status: The user reports A01/A02/A03 passing after the control-socket path fix,
-with source revision `6a9e019fcc068bbf217723c8f7e8c6ff51e5653015354e169298fd34b1c800af`
-and image `sha256:f7b6d639b86a93f75c1a91e13bf48e43bd1a1b9af5f164b2311a26f5899f4c2f`.
-The complete successful bundle has not been copied here. The earlier copied
-bundle verifies A01/A02 and records the A03 fixture failure. Docker is absent
-from the devbox. The user also reported A04 passing. [A05](stopping-acceptance.md) is now included
-but unrun.
+Status: The copied bundle confirms A03, including SSH host-key and command-builder
+checks and independent target proof.
+See the [evidence review](acceptance-review.md) for the current bundle and
+remaining A10 output export gap. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -184,10 +181,9 @@ command checks do not connect to a target or pass A03. Evidence is under
 
 ## Remaining work
 
-The user reported A05 passing. Run the implemented [A06–A10 cases](remaining-acceptance.md)
-and review their complete evidence. Remote recovery, runtime selection, output
-flooding, and storage-failure host verification remain open, as does production
-secret configuration. The service loop,
+The copied review confirms A01–A09. Resolve the [A10 export gap](acceptance-review.md)
+and review the corrected Docker evidence. Production secret configuration remains
+open. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this
 implementation. A03 does not prove production workload compatibility.
 

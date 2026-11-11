@@ -20,13 +20,12 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Run the complete A01–A10 suite with `just acceptance-ssh`. The
-   [remaining cases](remaining-acceptance.md) are implemented. Docker is absent
-   from the devbox. The user reported A01–A05 passing; the full successful bundle
-   has not been copied here.
-2. Review the complete copied evidence for A06–A10 before extending the execution
-   core. Synthetic library tests and direct playbook smoke checks are not host
-   acceptance evidence.
+1. The A10 mounted-log export fix and regression checks are implemented.
+   The [copied evidence review](acceptance-review.md) confirms A01–A09; A10's
+   earlier native pass lacks raw output. Preserve the existing bundle.
+2. Run the corrected Docker fixture and review the new A10 files before closing
+   the suite. Docker is absent from the devbox. Do not reconstruct missing
+   evidence or treat synthetic checks as host acceptance.
 3. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and
    implement retention reclamation. Keep scheduler and UI integration separate.
@@ -76,9 +75,9 @@ cleanup/output gates, and durable review. No test starts a real task.
 directories are implemented. The [controller](controller.md) now connects actual
 service/manager UID binding, pinned host manifests, controlled environment,
 capture, stopping, and atomic output accounting. The [local harness](acceptance-runner.md)
-covers ordinary-command, local-playbook, and local recovery checks. The user
-reported A01/A02 passing. A03 is implemented but unrun; see the
-[Ansible acceptance specification](ansible-acceptance.md). Retention reclamation remains separate work. Review
+covers ordinary-command, local-playbook, and local recovery checks. The
+[copied evidence review](acceptance-review.md) confirms A01–A09 and records
+the A10 output export gap. Retention reclamation remains separate work. Review
 can be cleared only after local completion and acknowledgement of unchanged
 evidence. A dropped permit is not reissued.
 

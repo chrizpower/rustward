@@ -1,12 +1,9 @@
 # A04 failure acceptance
 
-Status: Implemented. The user reported A01–A04 passing on Docker, with source
-revision `acecb1693da76cb8a98b1f4eef472ba67fa786ba0946e7cc1ba6de39108c8720`
-and image `sha256:262ba411fae690a60aaf80cb56d50a468e8df50b4de23528ce9536442af16411`.
-The complete successful bundle has not been copied here. The user requested A04 on 2026-11-11,
-after reporting A01/A02/A03 passing. The complete successful A03 bundle has not
-been copied here. Docker is absent from the devbox. Direct playbook smoke checks
-and synthetic tests do not pass A04.
+Status: The copied bundle confirms A04 task failure and unreachable-target
+results, including retained Failure and captured output.
+See the [evidence review](acceptance-review.md) for the current bundle and
+remaining A10 output export gap. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -101,8 +98,8 @@ are under `$HOME/artifacts/rustward/a04-failures-20261111/`.
 coverage. Three real-host tests are ignored in normal checks. The explicit Docker
 attempt is blocked because Docker is not installed in the devbox.
 
-The user reported A05 passing. Run the implemented [A06–A10 cases](remaining-acceptance.md)
-and review the copied evidence. The service loop, scheduling, live reload, retention, UI,
+The copied review confirms A01–A09. Resolve the [A10 export gap](acceptance-review.md)
+and review the corrected Docker evidence. The service loop, scheduling, live reload, retention, UI,
 production secret configuration, workload migration, and deployment remain open.
 
 Before removal, transfer lasting fixture interfaces to ARCHITECTURE.md, preserve

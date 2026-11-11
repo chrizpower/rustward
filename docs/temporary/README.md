@@ -28,6 +28,7 @@ concise section can preserve the meaning and required detail.
 | [Failure acceptance](failure-acceptance.md) | Transfer failure-case interfaces and evidence to ARCHITECTURE.md; preserve unrun cases and open integration work |
 | [Stopping acceptance](stopping-acceptance.md) | Transfer stopping fixture interfaces and evidence to ARCHITECTURE.md; preserve review blocks, unrun cases, and open integration work |
 | [Remaining acceptance](remaining-acceptance.md) | Transfer A06–A10 interfaces and evidence to ARCHITECTURE.md; preserve unrun cases, review state, and open integration work |
+| [Copied acceptance review](acceptance-review.md) | Preserve reviewed provenance, results, and the A10 export gap; transfer evidence and resolve or transfer follow-up before removal |
 | [Ansible acceptance test](ansible-acceptance.md) | Implement and run the workload cases; preserve evidence and lasting integration details in ARCHITECTURE.md, transfer policy decisions to GRAVITY.md, and resolve or transfer open work before removal |
 | [Migration preparation](migration.md) | Accept or cancel migration; preserve lasting application requirements in ARCHITECTURE.md or GRAVITY.md and operational procedures/evidence in the deployment repository through authorized work; then delete |
 

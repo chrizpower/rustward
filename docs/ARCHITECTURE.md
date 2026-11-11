@@ -3,8 +3,8 @@
 Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
 manual admission, dispatch, stopping, review, and the [execution controller](temporary/controller.md)
-are implemented as libraries. Tests use fake supervision; real-host acceptance
-and the service loop remain gated. Green marks implemented parts.
+are implemented as libraries. Copied Docker evidence confirms A01–A09; A10
+lacks exported logs. The service loop is absent. Green marks implemented parts.
 
 Follow [Gravity](GRAVITY.md). Unaccepted mechanisms in [requirements](temporary/requirements.md)
 remain proposals. This diagram does not authorize execution, migration, or deployment.
@@ -82,8 +82,8 @@ Activation, reload, scheduling, and the service execution loop remain unimplemen
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
-A01/A02 have copied passes; A03–A05 have reported passes.
-Unrun: [A06–A10](temporary/remaining-acceptance.md). [Telemetry](temporary/telemetry.md) is pending.
+Copied passes: A01–A09. A10 lacks raw logs; see the
+[evidence review](temporary/acceptance-review.md). [Telemetry](temporary/telemetry.md) is pending.
 
 ## Design boundaries
 

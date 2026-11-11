@@ -1,9 +1,9 @@
 # A05 stopping acceptance
 
-Status: Implemented. The user reported A01–A05 passing on Docker. The user requested A05 on 2026-11-11
-after reporting A01–A04 passing. The latest complete successful bundle has not
-been copied here. Docker is absent from the devbox. Synthetic tests and direct
-local Ansible checks do not pass A05.
+Status: The copied bundle confirms A05 queued cancellation, active cancellation,
+and the real 60-second timeout.
+See the [evidence review](acceptance-review.md) for the current bundle and
+remaining A10 output export gap. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -148,8 +148,8 @@ Docker attempt reports A01–A05 not run because Docker is absent from the devbo
 
 ## Remaining work and removal
 
-The user reported A05 passing. Run the complete suite and review copied
-evidence for the implemented [A06–A10 cases](remaining-acceptance.md). The service loop, scheduler execution, live reload,
+The copied review confirms A05. Resolve the [A10 export gap](acceptance-review.md)
+and review the corrected Docker evidence before closing the suite. The service loop, scheduler execution, live reload,
 retention, UI, telemetry, production secret configuration, migration, and
 deployment remain outside this implementation.
 

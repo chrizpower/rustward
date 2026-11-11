@@ -162,6 +162,10 @@ def main():
         confirm_scenarios()
         from remaining_runner import CASES
         from stopping_runner import ROOTS
+        storage_root = Path(CASES["A10"]["root"])
+        if storage_root.exists():
+            from storage_evidence import export
+            export(storage_root)
         report = export_status([Path("/opt/rustward-acceptance"), ROOT, *map(Path, ROOTS.values()), *[Path(value["root"]) for value in CASES.values()]])
         print(json.dumps(report))
         return 0 if report["status"] == "passed" else 1
