@@ -9,7 +9,9 @@ from common import begin, dependencies, check_privileges, save
 from ssh_policy import CREDENTIALS, USER, TARGET, options
 
 
-def arguments(runtime, work, values, connection):
+def arguments(runtime, work, values, connection, mode="success"):
+    if mode not in ("success", "failure", "unreachable"):
+        raise ValueError("unknown remote fixture mode")
     address = ipaddress.IPv4Address(connection["address"])
     if not address.is_private or address.is_multicast or address.is_unspecified:
         raise ValueError("fixture target must use a private IPv4 address")
@@ -27,19 +29,23 @@ def arguments(runtime, work, values, connection):
     inventory = work / "inventory.ini"
     with inventory.open("x") as output:
         output.write("[fixture]\nssh-target\n")
-    return ["ansible-playbook", "-i", str(inventory), str(runtime / "playbook.yml"),
+    playbook = "failure.yml" if mode == "failure" else "playbook.yml"
+    return ["ansible-playbook", "-i", str(inventory), str(runtime / playbook),
             "--extra-vars", json.dumps(values)]
 
 
 def main():
     runtime = dependencies()
-    work, values = begin(sys.argv[1:])
+    mode = sys.argv[1] if len(sys.argv) == 5 else "success"
+    inputs = sys.argv[2:] if len(sys.argv) == 5 else sys.argv[1:]
+    work, values = begin(inputs)
     save(work / "privileges.json", check_privileges())
     connection = json.loads((CREDENTIALS / "connection.json").read_text())
-    print("A03_STDOUT", flush=True)
-    print("A03_STDERR", file=sys.stderr, flush=True)
+    marker = {"success": "A03", "failure": "A04_TASK_FAILURE", "unreachable": "A04_UNREACHABLE"}[mode]
+    print(f"{marker}_STDOUT", flush=True)
+    print(f"{marker}_STDERR", file=sys.stderr, flush=True)
     from ansible.cli.playbook import main as playbook
-    playbook(arguments(runtime, work, values, connection))
+    playbook(arguments(runtime, work, values, connection, mode))
 
 
 if __name__ == "__main__":

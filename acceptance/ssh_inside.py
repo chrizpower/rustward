@@ -81,6 +81,46 @@ def run(revision):
             checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
 
 
+def run_failure(kind):
+    if kind not in ("task", "unreachable"):
+        raise ValueError("unknown failure case")
+    case = "A04-task-failure" if kind == "task" else "A04-unreachable"
+    account = pwd.getpwnam("rustward")
+    evidence = ROOT / "evidence"
+    readiness = evidence / f"{case}-manager"
+    readiness.mkdir()
+    status = {"status": "failed", "case": case}
+    try:
+        checked(["/usr/bin/systemctl", "start", f"user@{account.pw_uid}.service"])
+        checked(user_command(account, ["/usr/bin/systemctl", "--user", "start", "dbus.socket"]))
+        wait_manager(account, TOOLS, readiness)
+        checked(user_command(account, [TOOLS / "acceptance", "run-failure", ROOT, kind]), timeout=180)
+        status["status"] = "passed"
+    finally:
+        try:
+            try:
+                stop_fixture_units(ROOT, account)
+            finally:
+                checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
+        except BaseException:
+            status["status"] = "failed"
+            raise
+        finally:
+            with (evidence / f"{case}-host.json").open("x") as output:
+                json.dump(status, output)
+
+
+def complete_failures():
+    evidence = ROOT / "evidence"
+    for case in ("A04-task-failure", "A04-unreachable"):
+        for suffix in ("", "-host"):
+            report = json.loads((evidence / f"{case}{suffix}.json").read_text())
+            if report.get("status") != "passed":
+                raise RuntimeError(f"failure case has no pass evidence: {case}{suffix}")
+    with (evidence / "A04.json").open("x") as output:
+        json.dump({"status": "passed", "case": "A04", "subcases": ["A04-task-failure", "A04-unreachable"]}, output)
+
+
 def main():
     operation = sys.argv[1]
     if os.geteuid() != 0:
@@ -91,6 +131,10 @@ def main():
         pin(json.load(sys.stdin))
     elif operation == "run":
         run(sys.argv[2])
+    elif operation == "failure":
+        run_failure(sys.argv[2])
+    elif operation == "complete-failures":
+        complete_failures()
     elif operation == "scan":
         report = export_status([Path("/opt/rustward-acceptance"), ROOT])
         print(json.dumps(report))

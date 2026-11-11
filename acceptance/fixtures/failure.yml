@@ -1,0 +1,19 @@
+---
+- name: Check a deliberate remote failure
+  hosts: fixture
+  gather_facts: false
+  tasks:
+    - name: Write proof and fail with a known exit code
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - >-
+            import json,sys;
+            f=open(sys.argv[1], 'x');
+            json.dump(json.loads(sys.argv[2]), f); f.flush(); f.close();
+            print('A04_EXPECTED_REMOTE_FAILURE', flush=True);
+            sys.exit(23)
+          - "{{ failure_proof_path | default('/home/rustward-target/failure.json') }}"
+          - "{{ {'text': text, 'count': count, 'enabled': enabled} | to_json }}"
+      changed_when: false

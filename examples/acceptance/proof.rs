@@ -49,17 +49,24 @@ pub fn process_ended(value: &Value) -> Result<()> {
     }
 }
 pub fn complete_success(state: &RunState, record: &Record) -> Result<()> {
+    complete(state, record, RunResult::Success, 0)
+}
+pub fn complete_failure(state: &RunState, record: &Record, code: i32) -> Result<()> {
+    require(code > 0, "expected failure exit must be positive")?;
+    complete(state, record, RunResult::Failure, code)
+}
+fn complete(state: &RunState, record: &Record, result: RunResult, code: i32) -> Result<()> {
     require(
-        state.phase == RunPhase::Completed && state.result == Some(RunResult::Success),
-        "run did not complete with Success",
+        state.phase == RunPhase::Completed && state.result == Some(result),
+        "run did not complete with the expected result",
     )?;
     require(
         record.cleanup_confirmed && !record.review_required && !record.output_failed,
-        "success has incomplete or uncertain evidence",
+        "completion has incomplete or uncertain evidence",
     )?;
     require(
-        record.identity.is_some() && record.exit == Some(ProcessExit::Code(0)),
-        "success lacks execution identity or exit evidence",
+        record.identity.is_some() && record.exit == Some(ProcessExit::Code(code)),
+        "completion lacks the expected identity or exit evidence",
     )?;
     let output = record
         .output_evidence
@@ -67,7 +74,7 @@ pub fn complete_success(state: &RunState, record: &Record) -> Result<()> {
         .ok_or("missing output evidence")?;
     require(
         output.synchronized && !output.recovered,
-        "success lacks complete synchronized output",
+        "completion lacks synchronized output",
     )?;
     require(
         output.retained_bytes() == Some(record.log_bytes),
@@ -86,13 +93,8 @@ pub fn case(
     record: &Record,
 ) -> Result<()> {
     complete_success(state, record)?;
+    let parent = workload(context, id, case, record)?;
     let work = context.work(id);
-    let parent = starts(&work)?;
-    process_ended(&parent)?;
-    require(
-        json_file(&work.join("inputs.json"))? == inputs(),
-        "wrapper input types or values differ",
-    )?;
     if case != "A03" {
         require(
             json_file(&work.join("target.json"))? == inputs(),
@@ -102,6 +104,17 @@ pub fn case(
     if case == "A02" {
         process_ended(&json_file(&work.join("child.json"))?)?;
     }
+    context.evidence(&format!("{case}.json"),&json!({"case":case,"status":"passed","run_id":id,"runtime_id":context.fixture.runtime_id,"host_id":context.fixture.host_id,"state":state,"record":record,"inputs":inputs(),"start":parent}))
+}
+
+pub fn workload(context: &Context, id: &str, case: &str, record: &Record) -> Result<Value> {
+    let work = context.work(id);
+    let parent = starts(&work)?;
+    process_ended(&parent)?;
+    require(
+        json_file(&work.join("inputs.json"))? == inputs(),
+        "wrapper input types or values differ",
+    )?;
     let stdout = fs::read(context.root.join("logs").join(id).join("stdout.log"))?;
     let stderr = fs::read(context.root.join("logs").join(id).join("stderr.log"))?;
     require(
@@ -132,5 +145,5 @@ pub fn case(
         String::from_utf8_lossy(&stderr).contains(&format!("{case}_STDERR")),
         "missing stderr marker",
     )?;
-    context.evidence(&format!("{case}.json"),&json!({"case":case,"status":"passed","run_id":id,"runtime_id":context.fixture.runtime_id,"host_id":context.fixture.host_id,"state":state,"record":record,"inputs":inputs(),"start":parent}))
+    Ok(parent)
 }

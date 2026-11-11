@@ -1,11 +1,11 @@
 # A03 SSH acceptance
 
-Status: A03 ran in the copied Docker bundle `20261111T154745Z-3cc42b56` and
-failed because Ansible generated a long SSH control-socket path. A01/A02, local
-recovery, and the three legacy host tests passed. Host-key checks, credential
-scanning, and evidence copies passed. The fixture fix needs a Docker rerun.
-The user accepted fixture-only credentials on 2026-11-11. Docker is absent from
-the devbox. Synthetic tests do not pass A03.
+Status: The user reports A01/A02/A03 passing after the control-socket path fix,
+with source revision `6a9e019fcc068bbf217723c8f7e8c6ff51e5653015354e169298fd34b1c800af`
+and image `sha256:f7b6d639b86a93f75c1a91e13bf48e43bd1a1b9af5f164b2311a26f5899f4c2f`.
+The complete successful bundle has not been copied here. The earlier copied
+bundle verifies A01/A02 and records the A03 fixture failure. Docker is absent
+from the devbox. [A04](failure-acceptance.md) is now included but unrun.
 
 ## Run and scope
 
@@ -24,7 +24,8 @@ python3 -I -B acceptance/container.py --remote --artifacts "$HOME/artifacts/rust
 Use a new folder. SSH mode creates a unique internal Docker network and starts
 the controller on it. It first runs A01/A02 and local recovery with no target
 peer. It then builds and starts a disposable SSH target on that same network.
-The local-only command keeps `--network=none`. No host ports, source mounts,
+It then runs the two A04 failure cases. The local-only command keeps
+`--network=none`. No host ports, source mounts,
 Docker socket, production inventory, or production credentials are supplied.
 The controller container remains privileged for systemd; use an isolated Docker
 host as required by the [local runner](acceptance-runner.md).
@@ -110,7 +111,7 @@ name for this attempt; there is no global cleanup.
 ## Devbox verification
 
 `just check` passes, including formatting, Clippy, file-size and repository
-isolation checks, Rust tests, 33 Python fixture tests, and the coverage threshold.
+isolation checks, Rust tests, Python fixture tests, and the coverage threshold.
 The three real-host tests are ignored in normal checks. The explicit A03 Docker
 attempt reports blocked with A01/A02/A03 not run because Docker is absent.
 Checks and the blocked result are retained under
@@ -182,7 +183,7 @@ command checks do not connect to a target or pass A03. Evidence is under
 
 ## Remaining work
 
-Rerun A03 and review its full evidence bundle. A04–A10, production secret
+Run A04 and review its full evidence bundle. A05–A10, production secret
 configuration, remote stopping and recovery evidence, runtime selection changes,
 output flooding, and storage-failure acceptance remain open. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this

@@ -111,13 +111,15 @@ class PolicyTests(unittest.TestCase):
                     calls.append((args, kwargs))
                     if args[0] == "build":
                         Path(args[args.index("--iidfile") + 1]).write_text("sha256:" + "a" * 64)
+                    if args[0] == "inspect" and "--format" in args:
+                        return 0, '{"Running":false,"Pid":0}'
                     if args[0] == "inspect":
                         return 0, json.dumps([{"NetworkSettings": {"Networks": {"test-network": {"IPAddress": "172.19.0.2"}}}}])
                     if args[-1] == "metadata":
                         return 0, '{"host_key":"ssh-ed25519 public","port":2222}'
                     if args[-1] == "client-key":
                         return 0, '{"public_key":"ssh-ed25519 public"}'
-                    if args[-1] == "result":
+                    if args[-1] in ("result", "failure-result"):
                         return 0, json.dumps({"text": 'He said "hello"; it\'s a test', "count": 7, "enabled": True})
                     if args[-1] == "scan":
                         return 0, '{"status":"passed"}'
@@ -136,6 +138,14 @@ class PolicyTests(unittest.TestCase):
             self.assertNotIn("--volume", target)
             self.assertEqual(json.loads((evidence / "target-check.json").read_text())["status"], "passed")
             self.assertTrue(any("input_data" in options for _, options in calls))
+            actions = [args for args, _ in calls]
+            failed_task = next(args for args in actions if args[-2:] == ["failure", "task"])
+            unreachable = next(args for args in actions if args[-2:] == ["failure", "unreachable"])
+            stop = next(args for args in actions if args[0] == "stop")
+            stopped = next(args for args in actions if args[0] == "inspect" and "--format" in args)
+            self.assertLess(actions.index(failed_task), actions.index(stop))
+            self.assertLess(actions.index(stop), actions.index(stopped))
+            self.assertLess(actions.index(stopped), actions.index(unreachable))
             self.assertEqual(sum(args[-1] == "client-key" for args, _ in calls), 1)
             with self.assertRaisesRegex(RuntimeError, "already prepared"):
                 runner.prepare_credentials()
@@ -174,7 +184,7 @@ class PolicyTests(unittest.TestCase):
             root = Path(folder)
             evidence = root / "evidence"
             evidence.mkdir()
-            for name in ("A03", "host-key-check", "ssh-host-runner", "credential-scan", "target-check"):
+            for name in ("A03", "A04", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-host-runner", "credential-scan", "target-check", "failure-target-check", "target-stopped"):
                 (evidence / f"{name}.json").write_text('{"status":"passed"}')
             (evidence / "result.json").write_text('{"status":"passed","cases":["A03"]}')
             with self.assertRaises(OSError):

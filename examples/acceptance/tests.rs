@@ -117,7 +117,16 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 4);
+    assert_eq!(config.task_count(), 6);
+    for (task, mode) in [
+        ("remote-failure", "failure"),
+        ("remote-unreachable", "unreachable"),
+    ] {
+        assert_eq!(
+            config.arguments(task, &execution::values()).unwrap(),
+            ["-I", "-B", "remote.py", mode, proof::TEXT, "7", "true"]
+        );
+    }
     assert_eq!(
         config
             .arguments("remote-playbook", &execution::values())
@@ -142,4 +151,42 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
             "true"
         ]
     );
+}
+
+#[test]
+fn expected_failure_requires_its_exit_cleanup_and_complete_capture() {
+    let state = RunState {
+        phase: RunPhase::Completed,
+        result: Some(RunResult::Failure),
+    };
+    for code in [2, 4] {
+        let mut evidence = record();
+        evidence.exit = Some(ProcessExit::Code(code));
+        proof::complete_failure(&state, &evidence, code).unwrap();
+        for change in 0..7 {
+            let mut invalid = evidence.clone();
+            match change {
+                0 => invalid.exit = Some(ProcessExit::Code(0)),
+                1 => invalid.cleanup_confirmed = false,
+                2 => invalid.review_required = true,
+                3 => invalid.output_failed = true,
+                4 => invalid.output_evidence.as_mut().unwrap().synchronized = false,
+                5 => invalid.output_evidence.as_mut().unwrap().stdout.truncated = Some(true),
+                _ => invalid.exit = Some(ProcessExit::Signal(15)),
+            }
+            assert!(proof::complete_failure(&state, &invalid, code).is_err());
+        }
+        assert!(
+            proof::complete_failure(
+                &RunState {
+                    phase: RunPhase::Completed,
+                    result: Some(RunResult::Success)
+                },
+                &evidence,
+                code
+            )
+            .is_err()
+        );
+    }
+    assert!(proof::complete_failure(&state, &record(), 0).is_err());
 }

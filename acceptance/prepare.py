@@ -38,7 +38,9 @@ def configuration(root, runtime, remote=False):
     tasks = [("local-playbook", "playbook.py", None), ("ordinary", "ordinary.py", "complete"),
              ("recovery", "ordinary.py", "hold")]
     if remote:
-        tasks.append(("remote-playbook", "remote.py", None))
+        tasks += [("remote-playbook", "remote.py", None),
+                  ("remote-failure", "remote.py", "failure"),
+                  ("remote-unreachable", "remote.py", "unreachable")]
     for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:

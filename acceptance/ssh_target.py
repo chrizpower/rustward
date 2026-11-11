@@ -46,6 +46,8 @@ def command(arguments):
         if len(fields) != 2 or fields[0] != "ssh-ed25519":
             raise ValueError("invalid synthetic public key")
         (ROOT / "authorized_keys").write_text(" ".join(fields) + "\n")
+    elif arguments == ["failure-result"]:
+        print(RESULT.with_name("failure.json").read_text(), end="")
     elif arguments == ["result"]:
         print(RESULT.read_text(), end="")
     else:

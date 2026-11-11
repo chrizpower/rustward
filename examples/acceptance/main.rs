@@ -1,6 +1,7 @@
 //! Opt-in synthetic host acceptance. This is not a service CLI.
 mod context;
 mod execution;
+mod failure;
 mod proof;
 mod recovery;
 #[cfg(test)]
@@ -37,8 +38,9 @@ fn command(args: &[String]) -> Result<()> {
         }
         ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
         ["run", root]=>execution::run(Path::new(root), false),
+        ["run-failure", root, kind]=>failure::run(Path::new(root), kind),
         ["run-ssh", root]=>execution::run(Path::new(root), true),
         ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
-        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, or recovery-child <root> <run-id>".into()),
+        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, run-failure <root> <task|unreachable>, or recovery-child <root> <run-id>".into()),
     }
 }

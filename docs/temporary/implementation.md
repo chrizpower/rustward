@@ -20,13 +20,13 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Run implemented [A03 SSH acceptance](ssh-acceptance.md) with
-   `just acceptance-ssh` on the isolated Docker host. Docker is absent from the
-   devbox. The latest copied bundle confirms A01/A02 and local recovery passing.
-   A03 failed because Ansible generated a long control-socket path. Its fixture
-   now explicitly disables that path and checks the installed command builder.
-2. Review the A03 evidence, then implement failure and interruption cases
-   A04–A10. Synthetic library tests are not host acceptance evidence.
+1. Run implemented [A04 failure acceptance](failure-acceptance.md) with
+   `just acceptance-ssh`. It includes separate remote-task failure and unreachable
+   target runs after A03. Docker is absent from the devbox. The user reported A03
+   passing; the complete successful bundle has not been copied here.
+2. Review A04 evidence, then implement cancellation and timeout case A05, followed
+   by A06–A10. Synthetic library tests and direct playbook smoke checks are not
+   host acceptance evidence.
 3. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and
    implement retention reclamation. Keep scheduler and UI integration separate.

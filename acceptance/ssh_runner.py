@@ -67,6 +67,22 @@ class Remote:
         if json.dumps(json.loads(output), sort_keys=True) != json.dumps(expected, sort_keys=True):
             raise RuntimeError("independent SSH target result differs")
         (self.evidence / "target-check.json").write_text(json.dumps({"status": "passed", "value": expected}) + "\n")
+        self.inside("failure", "task", timeout=240)
+        _, output = self.target_call("failure-result")
+        if json.dumps(json.loads(output), sort_keys=True) != json.dumps(expected, sort_keys=True):
+            raise RuntimeError("independent remote failure proof differs")
+        (self.evidence / "failure-target-check.json").write_text(json.dumps({"status": "passed", "value": expected}) + "\n")
+        self.stop_target()
+        self.inside("failure", "unreachable", timeout=240)
+        self.inside("complete-failures")
+
+    def stop_target(self):
+        self.docker.call(["stop", "--time", "10", self.target], timeout=30)
+        _, output = self.docker.call(["inspect", "--format", "{{json .State}}", self.target])
+        state = json.loads(output)
+        if state.get("Running") is not False or state.get("Pid") != 0:
+            raise RuntimeError("SSH target did not stop before the unreachable case")
+        (self.evidence / "target-stopped.json").write_text(json.dumps({"status": "passed", "state": state}) + "\n")
 
     def scan(self):
         code, output = self.inside("scan", checked=False)
@@ -88,13 +104,29 @@ class Remote:
 
 
 def validate(fixture, evidence):
-    for name in ("A03", "host-key-check", "ssh-command-check", "ssh-host-runner", "result"):
+    for name in ("A03", "A04", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-command-check", "ssh-host-runner", "result"):
         value = json.loads((fixture / "evidence" / f"{name}.json").read_text())
         if value.get("status") != "passed":
             raise RuntimeError(f"missing SSH pass evidence: {name}")
-    for name in ("credential-scan", "target-check"):
+    for name in ("credential-scan", "target-check", "failure-target-check", "target-stopped"):
         if json.loads((evidence / f"{name}.json").read_text()).get("status") != "passed":
             raise RuntimeError(f"missing SSH pass evidence: {name}")
     result = json.loads((fixture / "evidence/result.json").read_text())
     if result.get("cases") != ["A03"]:
         raise RuntimeError("SSH result has no A03 case")
+
+
+def a04_status(evidence):
+    report = evidence / "A04.json"
+    if report.exists():
+        return json.loads(report.read_text()).get("status", "incomplete")
+    status = "not run"
+    for case in ("A04-task-failure", "A04-unreachable"):
+        report = evidence / f"{case}.json"
+        if report.exists():
+            if json.loads(report.read_text()).get("status") == "failed":
+                return "failed"
+            status = "incomplete"
+        elif (evidence / f"{case}-admission.json").exists():
+            status = "incomplete"
+    return status
