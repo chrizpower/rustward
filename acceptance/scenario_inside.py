@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import pwd
+import os
 from inside import checked, user_command, wait_manager, stop_fixture_units
 from prepare import prepare_shared
 from ssh_inside import ROOT as SOURCE, TOOLS, probe, check_commands
@@ -20,6 +21,8 @@ def run(case, revision):
     if case == "A09":
         fixture["capture_limit"] = 65536
         (root / "fixture.json").write_text(json.dumps(fixture, indent=2) + "\n")
+    if case == "A10":
+        prepare_storage(root, account)
     evidence = root / "evidence"
     status = {"status":"failed", "case":case, "writers_stopped":False}
     try:
@@ -30,6 +33,11 @@ def run(case, revision):
         probe(account, runtime, evidence, settings["mode"])
         check_commands(account, runtime, evidence, settings["mode"])
         checked(user_command(account, [TOOLS / "acceptance", "run-scenario", root, case]), timeout=240)
+        if case == "A10":
+            capacity = os.statvfs(root / "logs")
+            status["log_filesystem"] = {"free_bytes":capacity.f_bavail * capacity.f_frsize, "total_bytes":capacity.f_blocks * capacity.f_frsize}
+            if status["log_filesystem"]["free_bytes"] != 0:
+                raise RuntimeError("log filesystem was not exhausted")
         if case == "A08":
             checked(user_command(account, [TOOLS / "acceptance", "runtime-queue-missing", root]), timeout=30)
             removed = root / "removed-runtimes"
@@ -56,6 +64,16 @@ def run(case, revision):
         finally:
             with (evidence / f"{case}-host.json").open("x") as output:
                 json.dump(status, output)
+
+
+def prepare_storage(root, account):
+    checked(["/usr/bin/mount", "-t", "tmpfs", "-o",
+             f"size=1048576,uid={account.pw_uid},gid={account.pw_gid},mode=0700,nosuid,nodev",
+             "tmpfs", root / "logs"], timeout=15)
+    with (root / "logs/.ballast").open("xb") as output:
+        output.write(b"\0" * 786432)
+        output.flush()
+        os.fsync(output.fileno())
 
 
 def confirm_stopped():

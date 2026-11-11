@@ -20,6 +20,6 @@ def options(known_hosts=None):
 def credentials(mode="success"):
     if mode in ("queued", "cancel", "timeout"):
         return CREDENTIALS / "stopping"
-    if mode in ("recovery", "async", "runtime-a", "runtime-b", "flood"):
+    if mode in ("recovery", "async", "runtime-a", "runtime-b", "flood", "storage"):
         return CREDENTIALS / "remaining"
     return CREDENTIALS

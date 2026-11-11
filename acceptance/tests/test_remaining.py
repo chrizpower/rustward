@@ -11,11 +11,52 @@ from fixtures import remote_state, ssh_policy
 from types import SimpleNamespace
 import scenario_inside
 import variant_prepare
-from types import SimpleNamespace
 from stopping_runner import expected_inputs
 
 
 class RemainingTests(unittest.TestCase):
+    def test_storage_pass_requires_exhaustion_and_cleanup_before_unlock(self):
+        with tempfile.TemporaryDirectory() as folder:
+            evidence = Path(folder)
+            root = evidence / 'remaining-A10-fixture/evidence'
+            root.mkdir(parents=True)
+            for name in ('host-key-check', 'ssh-command-check'):
+                (root / f'{name}.json').write_text('{"status":"passed"}')
+            (root / 'A10.json').write_text(json.dumps({'status':'passed', 'run_id':'a'*64,
+                'storage_gate_closed':True, 'stopped_while_sqlite_locked':True}))
+            host = {'status':'passed', 'writers_stopped':True, 'log_filesystem':{'free_bytes':0}}
+            (root / 'A10-host.json').write_text(json.dumps(host))
+            before = {'sqlite_write_lock_held':True, 'gate_failed':True,
+                'local_cleanup_confirmed':True, 'durable_result':None}
+            (root / 'A10-before-unlock.json').write_text(json.dumps(before))
+            (evidence / 'remaining-A10-target.json').write_text(json.dumps({'status':'passed', 'remote':{'run_id':'a'*64}}))
+            with patch.object(remaining_runner, 'CASES', {'A10':{}}):
+                remaining_runner.validate(evidence)
+                for key in ('sqlite_write_lock_held', 'gate_failed', 'local_cleanup_confirmed', 'durable_result'):
+                    changed = dict(before, **{key:'invalid'})
+                    (root / 'A10-before-unlock.json').write_text(json.dumps(changed))
+                    with self.assertRaises(RuntimeError): remaining_runner.validate(evidence)
+                (root / 'A10-before-unlock.json').write_text(json.dumps(before))
+                host['log_filesystem']['free_bytes'] = 4096
+                (root / 'A10-host.json').write_text(json.dumps(host))
+                with self.assertRaises(RuntimeError): remaining_runner.validate(evidence)
+
+    def test_storage_fault_mount_is_limited_to_the_case_logs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'logs').mkdir()
+            account = SimpleNamespace(pw_uid=1000, pw_gid=1000)
+            with patch.object(scenario_inside, 'checked') as mount:
+                scenario_inside.prepare_storage(root, account)
+            args = mount.call_args.args[0]
+            self.assertEqual(args[-1], root / 'logs')
+            self.assertEqual(args[2], 'tmpfs')
+            self.assertIn('size=1048576', args[4])
+            self.assertIn('nosuid,nodev', args[4])
+            self.assertEqual((root / 'logs/.ballast').stat().st_size, 786432)
+            self.assertFalse((root / 'state').exists())
+            self.assertEqual(ssh_policy.credentials('storage').name, 'remaining')
+
     def test_created_case_requires_stopped_writer_evidence(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

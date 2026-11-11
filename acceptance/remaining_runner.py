@@ -7,7 +7,8 @@ from stopping_runner import Stopping, expected_inputs
 CASES = {"A06": {"root":"/opt/rustward-a06", "mode":"recovery", "kind":"recovery"},
          "A07": {"root":"/opt/rustward-a07", "mode":"async", "kind":"async"},
          "A08": {"root":"/opt/rustward-a08", "mode":"runtime-a", "kind":"runtime-a"},
-         "A09": {"root":"/opt/rustward-a09", "mode":"flood", "kind":"flood"}}
+         "A09": {"root":"/opt/rustward-a09", "mode":"flood", "kind":"flood"},
+         "A10": {"root":"/opt/rustward-a10", "mode":"storage", "kind":"storage"}}
 
 
 class Remaining(Stopping):
@@ -85,6 +86,17 @@ def validate(evidence):
             if report.get("status") != "passed" or (name.endswith("-host") and report.get("writers_stopped") is not True):
                 raise RuntimeError(f"missing remaining-case evidence: {name}")
         native = json.loads((root / f"{case}.json").read_text())
+        if case == "A10":
+            host = json.loads((root / "A10-host.json").read_text())
+            before = json.loads((root / "A10-before-unlock.json").read_text())
+            if (host.get("log_filesystem", {}).get("free_bytes") != 0
+                or before.get("sqlite_write_lock_held") is not True
+                or before.get("gate_failed") is not True
+                or before.get("local_cleanup_confirmed") is not True
+                or before.get("durable_result") is not None
+                or native.get("storage_gate_closed") is not True
+                or native.get("stopped_while_sqlite_locked") is not True):
+                raise RuntimeError("missing storage-failure evidence")
         target = json.loads((evidence / f"remaining-{case}-target.json").read_text())
         if target.get("status") != "passed" or target.get("remote", {}).get("run_id") != native.get("run_id"):
             raise RuntimeError(f"remote run identity differs: {case}")

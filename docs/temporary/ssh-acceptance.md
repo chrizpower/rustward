@@ -184,9 +184,10 @@ command checks do not connect to a target or pass A03. Evidence is under
 
 ## Remaining work
 
-Run A05 and review its full evidence bundle. A06–A10, production secret
-configuration, remote stopping and recovery evidence, runtime selection changes,
-output flooding, and storage-failure acceptance remain open. The service loop,
+The user reported A05 passing. Run the implemented [A06–A10 cases](remaining-acceptance.md)
+and review their complete evidence. Remote recovery, runtime selection, output
+flooding, and storage-failure host verification remain open, as does production
+secret configuration. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this
 implementation. A03 does not prove production workload compatibility.
 

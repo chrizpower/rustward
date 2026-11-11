@@ -1,6 +1,6 @@
 # Remaining acceptance cases
 
-Status: A06–A09 are implemented but unrun on Docker. A10 remains work in progress.
+Status: A06–A10 are implemented but unrun on Docker.
 The user reported A01–A05 passing with source revision
 `1690669832608c67aa55d5d36734c33c73601ed9eb76d2a2609cad236e9d4e4e` and image
 `sha256:9eab44b973b203a3ffac40a3da340ff65de95b9da1a10d9d312cb792a56e940f`.
@@ -69,18 +69,53 @@ continues draining; truncation cannot close admission, stop work, or keep a slot
 The stderr marker need not be retained if stdout consumes the shared allowance.
 Docker independently checks the remote completion proof and admitted run ID.
 
+## A10: Log-storage failure
+
+Root setup mounts a private 1 MiB tmpfs at this case's log root and fills
+768 KiB with a ballast file. The state database, work, and evidence stay on the
+normal filesystem. Only the disposable controller container receives this mount.
+The task first confirms active remote work. An independent SQLite connection
+then holds a write lock, and a fixed trigger makes the local wrapper emit 2 MiB.
+This exhausts the log filesystem below the normal capture limit.
+
+Without controller polling or another successful database write, the emergency
+worker must close the storage gate and stop local work. A separate systemd
+adapter must confirm cleanup of the retained execution identity while the lock
+is still held. The database must have no result at this point. After unlock,
+new admission and dispatch must be refused, the active run must complete as
+Interruption with failed output and required review, and the queued run must
+remain unstarted. The gate stays closed and local capacity is released.
+
+The host report must confirm that the private log filesystem has zero free
+bytes. Docker independently reads the matching remote marker; it cannot use
+local cleanup as proof of remote completion. The mount remains through evidence
+copy and disappears with the container. No host or database disk is filled.
+
 ## Evidence and lifecycle
 
-`remaining-A06-fixture/` contains the case store, configuration, work, output,
-child-controller logs, startup proof, and case/host decisions. The independent
-remote observation is `remaining-A06-target.json`. The root result includes each
-implemented case. A missing or failed decision cannot produce an overall pass.
+`remaining-A06-fixture/` through `remaining-A10-fixture/` contain the case
+stores, configuration, work, output, and case/host decisions. Recovery cases also
+retain child-controller logs and startup proofs. Independent target observations
+use `remaining-A06-target.json` through `remaining-A10-target.json`. The root
+result includes A01–A10. A missing or failed decision cannot produce an overall pass.
 
 All created stores require stopped-writer confirmation before the credential
 scan and raw copies. The scanner covers these stores along with all earlier
 fixture roots. Target inspection and public logs are retained before teardown.
 No private key is copied. Each case records its own result; prior results are
 not rewritten to complete a later case.
+
+## Devbox checks
+
+`just check` passes: 214 Rust tests, 59 Python tests, and 95.71% Rust line
+coverage. Three opt-in host tests are ignored in normal checks. An explicit
+Docker attempt reports A01–A10 not run because Docker is not installed.
+Check logs and the blocked result are under
+`$HOME/artifacts/rustward/a06-a10-20261111/`.
+
+Direct local Ansible smoke checks confirmed that async work survived termination
+of its local process group and that the flood playbook emitted over 2 MiB.
+These checks did not use Rustward, systemd, or Docker and do not pass A07 or A09.
 
 Run the cases on Docker and inspect their complete evidence. The service loop,
 scheduling, live reload, retention, UI, telemetry, production secrets, migration,

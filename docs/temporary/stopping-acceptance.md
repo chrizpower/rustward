@@ -148,8 +148,8 @@ Docker attempt reports A01–A05 not run because Docker is absent from the devbo
 
 ## Remaining work and removal
 
-Run A05 on Docker and review the complete copied evidence. Remote recovery A06
-is next, followed by A07–A10. The service loop, scheduler execution, live reload,
+The user reported A05 passing. Run the complete suite and review copied
+evidence for the implemented [A06–A10 cases](remaining-acceptance.md). The service loop, scheduler execution, live reload,
 retention, UI, telemetry, production secret configuration, migration, and
 deployment remain outside this implementation.
 

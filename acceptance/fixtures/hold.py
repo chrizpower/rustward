@@ -15,7 +15,7 @@ def identity(pid):
 
 
 def marker(kind):
-    if kind not in ("queued", "cancel", "timeout", "recovery", "async", "runtime-a"):
+    if kind not in ("queued", "cancel", "timeout", "recovery", "async", "runtime-a", "storage"):
         raise ValueError("unknown holding case")
     return Path(f"/home/rustward-target/a05-{kind}.json")
 

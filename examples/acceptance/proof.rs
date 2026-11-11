@@ -247,3 +247,23 @@ pub fn truncated_success(state: &RunState, record: &Record, limit: u64) -> Resul
         "flood limits or truncation differ",
     )
 }
+
+pub fn storage_interruption(state: &RunState, record: &Record) -> Result<()> {
+    require(
+        state.phase == RunPhase::Completed
+            && state.result == Some(RunResult::Interruption)
+            && record.cleanup_confirmed
+            && record.review_required
+            && record.output_failed
+            && record.identity.is_some(),
+        "storage failure lacks durable interruption, cleanup, or review",
+    )?;
+    let output = record
+        .output_evidence
+        .as_ref()
+        .ok_or("missing failed output evidence")?;
+    require(
+        !output.recovered && output.retained_bytes() == Some(record.log_bytes),
+        "failed output evidence differs",
+    )
+}

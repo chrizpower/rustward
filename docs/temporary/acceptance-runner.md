@@ -58,8 +58,9 @@ The runner also executes the three existing opt-in tests: systemd child cleanup
 and unit isolation, systemd output capture, and prepared-runtime permissions.
 Zero tests executed is a failure. The suite requires their exact pass counts.
 
-A06–A10, production credentials and workload compatibility, UI, scheduling,
-reload, retention, telemetry, migration, and deployment remain open. A03 adds
+The implemented [A06–A10 cases](remaining-acceptance.md) need Docker verification.
+Production credentials and workload compatibility, UI, scheduling, reload,
+retention, telemetry, migration, and deployment remain open. A03 adds
 fixture-only credential files through a separate opt-in command. The local
 suite needs no credentials or conditional arguments.
 

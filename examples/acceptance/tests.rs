@@ -117,7 +117,7 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 14);
+    assert_eq!(config.task_count(), 15);
     for (task, mode) in [
         ("remote-failure", "failure"),
         ("remote-unreachable", "unreachable"),
@@ -311,4 +311,37 @@ fn flood_success_requires_drain_counts_and_bounded_truncation() {
         };
         assert!(proof::truncated_success(&state, &bad, 65536).is_err());
     }
+}
+
+#[test]
+fn storage_failure_cannot_report_success_or_discard_review() {
+    let state = RunState {
+        phase: RunPhase::Completed,
+        result: Some(RunResult::Interruption),
+    };
+    let mut r = record();
+    r.review_required = true;
+    r.output_failed = true;
+    r.output_evidence = Some(Evidence::from_report(Report::default(), false, false));
+    proof::storage_interruption(&state, &r).unwrap();
+    for change in 0..4 {
+        let mut bad = r.clone();
+        match change {
+            0 => bad.cleanup_confirmed = false,
+            1 => bad.review_required = false,
+            2 => bad.output_failed = false,
+            _ => bad.identity = None,
+        };
+        assert!(proof::storage_interruption(&state, &bad).is_err());
+    }
+    assert!(
+        proof::storage_interruption(
+            &RunState {
+                phase: RunPhase::Completed,
+                result: Some(RunResult::Success)
+            },
+            &r
+        )
+        .is_err()
+    );
 }

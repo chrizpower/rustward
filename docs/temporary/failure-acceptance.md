@@ -101,8 +101,8 @@ are under `$HOME/artifacts/rustward/a04-failures-20261111/`.
 coverage. Three real-host tests are ignored in normal checks. The explicit Docker
 attempt is blocked because Docker is not installed in the devbox.
 
-Run [A05 cancellation and timeout](stopping-acceptance.md) on Docker and review
-its copied evidence. A06–A10, the service loop, scheduling, live reload, retention, UI,
+The user reported A05 passing. Run the implemented [A06–A10 cases](remaining-acceptance.md)
+and review the copied evidence. The service loop, scheduling, live reload, retention, UI,
 production secret configuration, workload migration, and deployment remain open.
 
 Before removal, transfer lasting fixture interfaces to ARCHITECTURE.md, preserve

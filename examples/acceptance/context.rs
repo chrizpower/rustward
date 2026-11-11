@@ -104,9 +104,7 @@ impl Context {
                 .map_err(|e| format!("work root: {e:?}"))?,
             logs: WorkRoot::open(self.root.join("logs")).map_err(|e| format!("log root: {e:?}"))?,
         };
-        let (bus, _) = manager()?;
-        let supervisor = Systemd::new(bus, CgroupFs::default())
-            .map_err(|e| format!("systemd adapter: {e:?}"))?;
+        let supervisor = native_supervisor()?;
         Controller::open(
             self.database(),
             roots,
@@ -122,6 +120,11 @@ impl Context {
         )
         .map_err(|e| format!("controller: {e:?}").into())
     }
+}
+
+pub(super) fn native_supervisor() -> Result<Systemd<UserBus, CgroupFs>> {
+    let (bus, _) = manager()?;
+    Systemd::new(bus, CgroupFs::default()).map_err(|e| format!("systemd adapter: {e:?}").into())
 }
 
 fn validate_manager(uid: u32, expected: u32, version: &str) -> Result<()> {
