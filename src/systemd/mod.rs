@@ -313,58 +313,66 @@ impl<M: Manager, C: Cgroups> Supervisor for Systemd<M, C> {
         expected: Option<&ExecutionIdentity>,
     ) -> Result<Observation, Error> {
         let name = unit_name(run_id);
-        let before = match self.manager.snapshot(&name) {
-            Ok(snapshot) => snapshot,
-            Err(ManagerError::Missing) => return Ok(Observation::Missing),
-            Err(_) => return Err(Error::Unavailable),
-        };
-        let Some(identity) = self.identity(run_id, &before, expected)? else {
-            return Ok(Observation::Uncertain);
-        };
-        let group = self.cgroups.state(&identity.control_group);
-        let after = match self.manager.snapshot(&name) {
-            Ok(snapshot) => snapshot,
-            Err(_) => return Ok(Observation::Uncertain),
-        };
-        if before != after {
-            return Ok(Observation::Uncertain);
+        let mut retained = expected.cloned();
+        for _ in 0..3 {
+            let before = match self.manager.snapshot(&name) {
+                Ok(snapshot) => snapshot,
+                Err(ManagerError::Missing) => return Ok(Observation::Missing),
+                Err(_) => return Err(Error::Unavailable),
+            };
+            let Some(identity) = self.identity(run_id, &before, retained.as_ref())? else {
+                return Ok(Observation::Uncertain);
+            };
+            retained = Some(identity.clone());
+            let group = self.cgroups.state(&identity.control_group);
+            let after = match self.manager.snapshot(&name) {
+                Ok(snapshot) => snapshot,
+                Err(_) => return Ok(Observation::Uncertain),
+            };
+            if self.identity(run_id, &after, Some(&identity))?.is_none() {
+                return Ok(Observation::Uncertain);
+            }
+            if before != after {
+                continue;
+            }
+            let state = match before.active_state.as_str() {
+                "activating" => ExecutionState::Starting,
+                "active" if before.sub_state == "running" && before.main_pid > 0 => {
+                    ExecutionState::Running
+                }
+                "active" if before.sub_state == "exited" && before.exit_timestamp > 0 => {
+                    ExecutionState::Exited
+                }
+                "inactive" | "failed" => ExecutionState::Ended,
+                "deactivating" => ExecutionState::Stopping,
+                _ => return Ok(Observation::Uncertain),
+            };
+            let exit = if before.exit_timestamp == 0 {
+                None
+            } else {
+                match before.exit_code {
+                    1 => Some(ProcessExit::Code(before.exit_status)),
+                    2 | 3 => Some(ProcessExit::Signal(before.exit_status)),
+                    _ => None,
+                }
+            };
+            let cleanup = if state == ExecutionState::Ended
+                && before.job == 0
+                && before.main_pid == 0
+                && matches!(group, GroupState::Empty | GroupState::Absent)
+            {
+                Cleanup::Confirmed
+            } else {
+                Cleanup::Pending
+            };
+            return Ok(Observation::Known {
+                identity,
+                state,
+                exit,
+                cleanup,
+            });
         }
-        let state = match before.active_state.as_str() {
-            "activating" => ExecutionState::Starting,
-            "active" if before.sub_state == "running" && before.main_pid > 0 => {
-                ExecutionState::Running
-            }
-            "active" if before.sub_state == "exited" && before.exit_timestamp > 0 => {
-                ExecutionState::Exited
-            }
-            "inactive" | "failed" => ExecutionState::Ended,
-            "deactivating" => ExecutionState::Stopping,
-            _ => return Ok(Observation::Uncertain),
-        };
-        let exit = if before.exit_timestamp == 0 {
-            None
-        } else {
-            match before.exit_code {
-                1 => Some(ProcessExit::Code(before.exit_status)),
-                2 | 3 => Some(ProcessExit::Signal(before.exit_status)),
-                _ => None,
-            }
-        };
-        let cleanup = if state == ExecutionState::Ended
-            && before.job == 0
-            && before.main_pid == 0
-            && matches!(group, GroupState::Empty | GroupState::Absent)
-        {
-            Cleanup::Confirmed
-        } else {
-            Cleanup::Pending
-        };
-        Ok(Observation::Known {
-            identity,
-            state,
-            exit,
-            cleanup,
-        })
+        Ok(Observation::Uncertain)
     }
 
     fn stop(

@@ -305,10 +305,10 @@ invocation and cgroup. A mismatch prevents stop or release.
 
 ### Observation and cleanup
 
-Two fresh unit/service snapshots surround the cgroup read. A changed or lost
-snapshot produces uncertain evidence. A start job, main PID, or service-process
-creation timestamp alone is not proof that the program executed. Running is
-reported only for an active, running `Type=exec` unit with a main PID. Exit data
+Up to three fresh snapshot pairs surround new cgroup reads. Only matching
+snapshots provide evidence. Changed identity, lost reads, or three changed pairs
+remain uncertain. A start job, PID, or process timestamp does not prove execution.
+Running requires an active, running `Type=exec` unit with a main PID. Exit data
 uses the manager's exit timestamp, exit code, and signal status. An exit code is
 local evidence only; it does not prove an external outcome.
 

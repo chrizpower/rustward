@@ -311,13 +311,159 @@ fn reports_missing_changed_or_inconsistent_evidence_conservatively() {
     let raw = snapshot();
     let mut changed = raw.clone();
     changed.main_pid = 0;
-    for after in [Ok(changed), Err(ManagerError::Missing)] {
-        let mut adapter = Systemd::new(
-            manager(vec![Ok(raw.clone()), after], Ok(())),
+    for replies in [
+        vec![
+            Ok(raw.clone()),
+            Ok(changed.clone()),
+            Ok(raw.clone()),
+            Ok(changed.clone()),
+            Ok(raw.clone()),
+            Ok(changed),
+        ],
+        vec![Ok(raw.clone()), Err(ManagerError::Missing)],
+    ] {
+        let mut adapter =
+            Systemd::new(manager(replies, Ok(())), Groups(GroupState::Empty)).unwrap();
+        assert_eq!(adapter.observe(&id(), None), Ok(Observation::Uncertain));
+    }
+}
+
+#[test]
+fn rereads_a_normal_exit_transition_without_reporting_uncertainty() {
+    let running = snapshot();
+    let mut exited = running.clone();
+    exited.sub_state = "exited".into();
+    exited.main_pid = 0;
+    exited.exit_timestamp = 1;
+    exited.exit_code = 1;
+    let mut native = Systemd::new(
+        manager(
+            vec![
+                Ok(running),
+                Ok(exited.clone()),
+                Ok(exited.clone()),
+                Ok(exited),
+            ],
+            Ok(()),
+        ),
+        Groups(GroupState::Empty),
+    )
+    .unwrap();
+    assert_eq!(
+        native.observe(&id(), Some(&identity())).unwrap(),
+        Observation::Known {
+            identity: identity(),
+            state: ExecutionState::Exited,
+            exit: Some(ProcessExit::Code(0)),
+            cleanup: Cleanup::Pending,
+        }
+    );
+}
+
+#[test]
+fn accepts_a_matching_third_pair() {
+    let first = snapshot();
+    let mut second = first.clone();
+    second.job = 1;
+    let mut third = first.clone();
+    third.job = 2;
+    let mut native = Systemd::new(
+        manager(
+            vec![
+                Ok(first),
+                Ok(second.clone()),
+                Ok(second),
+                Ok(third.clone()),
+                Ok(third.clone()),
+                Ok(third),
+            ],
+            Ok(()),
+        ),
+        Groups(GroupState::Populated),
+    )
+    .unwrap();
+    assert!(matches!(
+        native.observe(&id(), None).unwrap(),
+        Observation::Known {
+            state: ExecutionState::Running,
+            cleanup: Cleanup::Pending,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn rereads_keep_the_first_identity_and_do_not_hide_errors() {
+    let first = snapshot();
+    let mut changed_state = first.clone();
+    changed_state.job = 1;
+    let mut changed_identity = first.clone();
+    changed_identity.invocation = vec![2; 16];
+    for replies in [
+        vec![Ok(first.clone()), Ok(changed_identity.clone())],
+        vec![
+            Ok(first.clone()),
+            Ok(changed_state.clone()),
+            Ok(changed_identity),
+        ],
+    ] {
+        let mut native = Systemd::new(manager(replies, Ok(())), Groups(GroupState::Empty)).unwrap();
+        assert_eq!(native.observe(&id(), None), Err(Error::IdentityMismatch));
+    }
+    for (error, expected) in [
+        (ManagerError::Missing, Ok(Observation::Missing)),
+        (ManagerError::Unavailable, Err(Error::Unavailable)),
+    ] {
+        let mut native = Systemd::new(
+            manager(
+                vec![Ok(first.clone()), Ok(changed_state.clone()), Err(error)],
+                Ok(()),
+            ),
             Groups(GroupState::Empty),
         )
         .unwrap();
-        assert_eq!(adapter.observe(&id(), None), Ok(Observation::Uncertain));
+        assert_eq!(native.observe(&id(), Some(&identity())), expected);
+    }
+}
+
+#[test]
+fn cleanup_uses_the_cgroup_read_from_the_matching_pair() {
+    struct ChangingGroups(VecDeque<GroupState>);
+    impl Cgroups for ChangingGroups {
+        fn state(&mut self, _: &str) -> GroupState {
+            self.0.pop_front().unwrap()
+        }
+    }
+    let mut ended = snapshot();
+    ended.active_state = "inactive".into();
+    ended.main_pid = 0;
+    let mut pending = ended.clone();
+    pending.job = 1;
+    for final_group in [
+        GroupState::Populated,
+        GroupState::Unknown,
+        GroupState::Empty,
+    ] {
+        let mut native = Systemd::new(
+            manager(
+                vec![
+                    Ok(pending.clone()),
+                    Ok(ended.clone()),
+                    Ok(ended.clone()),
+                    Ok(ended.clone()),
+                ],
+                Ok(()),
+            ),
+            ChangingGroups(VecDeque::from([GroupState::Empty, final_group])),
+        )
+        .unwrap();
+        let cleanup = if final_group == GroupState::Empty {
+            Cleanup::Confirmed
+        } else {
+            Cleanup::Pending
+        };
+        assert!(matches!(native.observe(&id(), Some(&identity())).unwrap(),
+            Observation::Known { cleanup: actual, .. } if actual == cleanup));
     }
 }
 

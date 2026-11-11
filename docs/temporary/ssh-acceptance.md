@@ -1,8 +1,9 @@
 # A03 SSH acceptance
 
 Status: Implemented. A copied Mac attempt passed the local suite, then failed
-during Docker network setup before A03 started. The network fix is not yet
-verified on Docker. The user accepted fixture-only credential files
+during Docker network setup before A03 started. A later attempt passed network
+setup, but A01 completed with Interruption despite exit code 0. A03 remains
+unrun. The exact earlier uncertainty is not yet established. The user accepted fixture-only credential files
 on 2026-11-11. Docker is absent from the devbox. Synthetic tests do not pass A03.
 The user reported the preceding A01/A02 suite passing on Docker Desktop; the
 complete successful bundle has not been independently inspected here.
@@ -43,7 +44,8 @@ code alone cannot pass A03.
 
 ## Credential and host-key rules
 
-Root setup generates a new Ed25519 client key inside the controller container.
+Root setup generates a new Ed25519 client key inside the controller container
+before the local suite starts, so its export marker is available if A01 fails.
 The key stays at `/run/rustward-credentials/client_key`, outside both exported
 fixture roots. Only the execution UID can read it (mode 0400); the enclosing
 folder is root-owned. The wrapper uses this fixed file path. Credential bytes
@@ -103,7 +105,7 @@ name for this attempt; there is no global cleanup.
 ## Devbox verification
 
 `just check` passes, including formatting, Clippy, file-size and repository
-isolation checks, Rust tests, 30 Python fixture tests, and the coverage threshold.
+isolation checks, Rust tests, 31 Python fixture tests, and the coverage threshold.
 The three real-host tests are ignored in normal checks. The explicit A03 Docker
 attempt reports blocked with A01/A02/A03 not run because Docker is absent.
 Checks and the blocked result are retained under
@@ -123,6 +125,38 @@ step. A failed scan with no JSON report now records a clear failed export
 decision instead of a JSON parse error. It still refuses raw copies. The original
 copied evidence is unchanged. Diagnostic notes and checks for the fix are under
 `$HOME/artifacts/rustward/a03-network-20261111/`.
+
+The copied attempt `20261111T142230Z-4ac2d18b` passed network setup. It failed in
+A01 before SSH preparation. A user-supplied decision summary shows Completed with
+Interruption, exit code 0, confirmed cleanup, synchronized output, no output
+failure, and required review. The first-result rule preserves an earlier
+uncertainty even when later exit and cleanup evidence is complete. The exact
+observation that caused it is not in the copied logs. A state-read race is a
+hypothesis, not a confirmed diagnosis.
+
+SSH mode now prepares its credential marker before running any workload. A local
+failure can therefore pass the normal credential scan and export its local
+fixture. It does not try to copy an SSH fixture that was never started. Local
+command failure records a primary reason in the root result. The Rust example
+also prints its structured failure decision, without task output or credential
+contents. No task is retried, and no retained result is changed. Checks and
+notes are under `$HOME/artifacts/rustward/a01-interruption-20261111/`.
+
+On 2026-11-11, the user accepted up to three fresh read pairs per systemd
+observation when state changes but execution identity remains fixed. Each pair
+uses a fresh cgroup read; only matching snapshots supply evidence. The first
+identity is retained across pairs, including when no stored identity was supplied.
+Changed identity, missing units, read errors, or three changed pairs do not
+become valid evidence. They retain the existing uncertainty and review behavior.
+There is no sleep, new start, or workload retry between read pairs.
+
+A synthetic test reproduces Running changing to Exited between reads. The old
+adapter reports uncertainty; the new adapter can obtain stable exit-code-0
+evidence from a later pair. Other tests check bounded failure, identity changes
+within and across pairs, read errors, and use of the matching pair's cgroup data
+for cleanup. This fixes a reproducible race consistent with the A01 report; it
+does not establish the exact observation in that earlier run. Existing admitted
+runs, results, review blocks, and identities are not rewritten.
 
 ## Remaining work
 

@@ -112,6 +112,7 @@ class PolicyTests(unittest.TestCase):
                     return 0, ""
             runner = Remote(Docker(), "test", evidence)
             runner.create_network()
+            runner.prepare_credentials()
             runner.run(evidence, "debian", "revision")
             runner.scan()
             runner.cleanup()
@@ -123,6 +124,9 @@ class PolicyTests(unittest.TestCase):
             self.assertNotIn("--volume", target)
             self.assertEqual(json.loads((evidence / "target-check.json").read_text())["status"], "passed")
             self.assertTrue(any("input_data" in options for _, options in calls))
+            self.assertEqual(sum(args[-1] == "client-key" for args, _ in calls), 1)
+            with self.assertRaisesRegex(RuntimeError, "already prepared"):
+                runner.prepare_credentials()
 
     def test_probe_requires_correct_key_success_and_wrong_key_rejection(self):
         with tempfile.TemporaryDirectory() as folder:

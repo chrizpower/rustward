@@ -121,7 +121,9 @@ pub fn run(root: &Path, remote: bool) -> Result<()> {
         if let Err(error) = outcome {
             let state = controller.run_state(&id).ok().flatten();
             let record = controller.record(&id).ok().flatten();
-            context.evidence(&format!("{case}.json"),&json!({"case":case,"status":"failed","run_id":id,"expected":"Success after cleanup and synchronized capture","reason":error.to_string(),"state":state,"record":record}))?;
+            let failure = json!({"case":case,"status":"failed","run_id":id,"expected":"Success after cleanup and synchronized capture","reason":error.to_string(),"state":state,"record":record});
+            eprintln!("Acceptance decision: {failure}");
+            context.evidence(&format!("{case}.json"), &failure)?;
             return Err(error);
         }
         completed.push(id);

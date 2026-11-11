@@ -10,10 +10,17 @@ class Remote:
         self.docker, self.name, self.evidence = docker, name, evidence
         self.target, self.network = name + "-target", name + "-network"
         self.target_created = self.network_created = False
+        self.public_key = None
+        self.fixture_started = False
 
     def create_network(self):
         self.network_created = True
         self.docker.call(["network", "create", "--internal", self.network])
+
+    def prepare_credentials(self):
+        if self.public_key is not None:
+            raise RuntimeError("fixture credentials are already prepared")
+        _, self.public_key = self.inside("client-key")
 
     def inside(self, operation, *arguments, **keywords):
         return self.docker.call(["exec", "-i", self.name, "/usr/bin/python3", "-I", "-B", "-c",
@@ -25,6 +32,8 @@ class Remote:
                                  "/opt/ssh_target.py", operation], **keywords)
 
     def run(self, context, debian_image, revision):
+        if self.public_key is None:
+            raise RuntimeError("prepare fixture credentials before running workloads")
         image_file = self.evidence / "target-image-id"
         self.docker.call(["build", "--pull", "--target", "ssh-target", "--iidfile", image_file,
             "--file", "acceptance/Dockerfile", "--build-arg", f"DEBIAN_IMAGE={debian_image}",
@@ -49,9 +58,9 @@ class Remote:
         _, output = self.docker.call(["inspect", self.target])
         metadata["address"] = json.loads(output)[0]["NetworkSettings"]["Networks"][self.network]["IPAddress"]
         (self.evidence / "target-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        _, public = self.inside("client-key")
-        self.target_call("authorize", input_data=public.encode())
+        self.target_call("authorize", input_data=self.public_key.encode())
         self.inside("pin", input_data=json.dumps(metadata).encode())
+        self.fixture_started = True
         self.inside("run", revision, timeout=480)
         _, output = self.target_call("result")
         expected = {"text": 'He said "hello"; it\'s a test', "count": 7, "enabled": True}

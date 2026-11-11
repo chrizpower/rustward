@@ -146,10 +146,14 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
             time.sleep(1)
         if not ready:
             raise RuntimeError("container did not reach basic.target")
+        if ssh is not None:
+            ssh.prepare_credentials()
         result["phase"] = "host-acceptance"
         code, _ = docker.call(["exec", name, "/usr/bin/python3", "-I", "-B", "-c",
                               f"import sys;sys.path.insert(0,{INSIDE!r});from inside import main;sys.exit(main())",
                               "--root", FIXTURE, "--tools", TOOLS, "--source-revision", source["revision"]], timeout=900, checked=False)
+        if code:
+            result["reason"] = "local host acceptance failed; see Docker exec logs"
         if code == 0 and remote:
             result["phase"] = "ssh-acceptance"
             ssh.run(evidence / "context", debian_image, source["revision"])
@@ -185,7 +189,7 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
                             result["cases"][case] = "incomplete"
                     if result["status"] == "passed":
                         validate_bundle(evidence / "fixture")
-                if remote:
+                if remote and ssh.fixture_started:
                     from ssh_runner import FIXTURE as SSH_FIXTURE, validate
                     code, _ = docker.call(["cp", f"{name}:{SSH_FIXTURE}/.", evidence / "ssh-fixture"], checked=False)
                     copied = copied and code == 0

@@ -90,7 +90,9 @@ class CleanupTests(unittest.TestCase):
                 if args[0] == "cp":
                     output = evidence / "fixture/evidence"
                     output.mkdir(parents=True)
-                    if complete:
+                    if complete and harness_code:
+                        (output / "A01.json").write_text('{"status":"failed"}')
+                    elif complete:
                         for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host"):
                             (output / f"{name}.json").write_text('{"status":"passed"}')
                         (output / "result.json").write_text(json.dumps({"status": "passed", "cases": ["A01", "A02"]}))
@@ -100,10 +102,13 @@ class CleanupTests(unittest.TestCase):
         class FakeRemote:
             def __init__(self, docker, name, evidence):
                 self.network = name + "-network"
+                self.fixture_started = False
             def create_network(self):
                 calls.append(["network", "create", "--internal", self.network])
+            def prepare_credentials(self):
+                calls.append(["prepare-credentials"])
             def run(self, *args):
-                pass
+                self.fixture_started = True
             def scan(self):
                 calls.append(["credential-scan"])
                 if scan_failed:
@@ -153,6 +158,19 @@ class CleanupTests(unittest.TestCase):
         self.assertIn(f"--network={creation[-1]}", controller)
         self.assertNotIn("--network=none", controller)
         self.assertLess(calls.index(creation), calls.index(controller))
+
+    def test_local_failure_in_ssh_mode_copies_local_decision_after_scan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code, result, calls = self.attempt(directory, harness_code=1, remote=True)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["cases"], {"A01": "failed", "A02": "not run", "A03": "not run"})
+        self.assertTrue(result["evidence_copied"])
+        self.assertIn("local host acceptance failed", result["reason"])
+        operations = [args[0] for args in calls]
+        admission = next(args for args in calls if "--root" in args)
+        self.assertLess(operations.index("prepare-credentials"), calls.index(admission))
+        self.assertLess(operations.index("credential-scan"), operations.index("cp"))
+        self.assertEqual(operations.count("cp"), 1)
 
     def test_diagnostic_timeout_still_collects_data_and_stops_the_container(self):
         with tempfile.TemporaryDirectory() as directory:
