@@ -134,6 +134,57 @@ pub fn run(root: &Path, case: &str, task: &str, kind: &str) -> Result<()> {
         ),
         "review vanished after cleanup",
     )?;
-    context.evidence(&format!("{case}.json"),&json!({"case":case,"status":"passed","run_id":id,"queued_run_id":queued,"before":before,"state":state,"record":record,"start_count":1}))?;
+    let mut acknowledgement = None;
+    let mut remote_after = serde_json::Value::Null;
+    if case == "A07" {
+        remote_after = stopping::remote_probe(&context, kind)?;
+        proof::remote_started(&remote_after, kind, &id)?;
+        require(
+            remote_after["pid"] == before["remote"]["pid"]
+                && remote_after["start_time"] == before["remote"]["start_time"],
+            "async process identity changed",
+        )?;
+        let mut admin =
+            Store::open(context.database()).map_err(|e| format!("review store: {e:?}"))?;
+        let reviewed = admin
+            .review(&id)
+            .map_err(|e| format!("review: {e:?}"))?
+            .ok_or("missing review")?;
+        let key = rustward::review::new_acknowledgement_id()
+            .map_err(|e| format!("acknowledgement ID: {e:?}"))?;
+        let note = "Fixture review: the matching remote asynchronous process is still alive. Local cleanup is complete. Accept the remaining external risk for this disposable test target; do not restart the interrupted run.";
+        let ack = admin
+            .acknowledge(&key, &reviewed, note)
+            .map_err(|e| format!("acknowledge: {e:?}"))?;
+        require(
+            admin
+                .acknowledge(&key, &reviewed, note)
+                .map_err(|e| format!("matching acknowledgement: {e:?}"))?
+                == ack,
+            "acknowledgement retry changed",
+        )?;
+        let after = c
+            .run_state(&id)
+            .map_err(|e| format!("acknowledged state: {e:?}"))?
+            .ok_or("lost acknowledged state")?;
+        require(
+            after == state
+                && !c
+                    .record(&id)
+                    .map_err(|e| format!("acknowledged record: {e:?}"))?
+                    .ok_or("lost record")?
+                    .review_required,
+            "acknowledgement changed the result or failed to clear review",
+        )?;
+        require(
+            c.run_state(&queued)
+                .map_err(|e| format!("retained queue: {e:?}"))?
+                .is_some_and(|s| s.phase == RunPhase::Queued)
+                && !context.work(&queued).exists(),
+            "acknowledgement started queued work",
+        )?;
+        acknowledgement = Some(ack);
+    }
+    context.evidence(&format!("{case}.json"),&json!({"case":case,"status":"passed","run_id":id,"queued_run_id":queued,"before":before,"state":state,"record":record,"start_count":1,"remote_after":remote_after,"acknowledgement":acknowledgement}))?;
     Ok(())
 }

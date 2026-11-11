@@ -9,7 +9,7 @@ from ssh_policy import CREDENTIALS, USER, credentials, options
 
 
 def read(runtime, kind):
-    if kind not in ("queued", "cancel", "timeout", "recovery"):
+    if kind not in ("queued", "cancel", "timeout", "recovery", "async"):
         raise ValueError("unknown stopping case")
     directory = credentials(kind)
     connection = json.loads((directory / "connection.json").read_text())

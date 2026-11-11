@@ -117,7 +117,7 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 10);
+    assert_eq!(config.task_count(), 11);
     for (task, mode) in [
         ("remote-failure", "failure"),
         ("remote-unreachable", "unreachable"),

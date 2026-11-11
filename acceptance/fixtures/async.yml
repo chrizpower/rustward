@@ -1,0 +1,22 @@
+---
+- name: Keep remote asynchronous work observable during recovery
+  hosts: fixture
+  gather_facts: false
+  tasks:
+    - name: Start a separate asynchronous command
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -I
+          - -B
+          - "{{ hold_program | default('/opt/rustward_hold.py') }}"
+          - async
+          - "{{ {'text': text, 'count': count, 'enabled': enabled} | to_json }}"
+          - "{{ hold_run_id }}"
+      async: 300
+      poll: 0
+      changed_when: false
+    - name: Keep the synchronous SSH client active
+      ansible.builtin.wait_for:
+        path: "{{ async_wait_path | default('/home/rustward-target/async-release') }}"
+        timeout: 300

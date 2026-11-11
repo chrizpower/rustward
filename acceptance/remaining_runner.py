@@ -4,7 +4,8 @@ from pathlib import Path
 import time
 from stopping_runner import Stopping, expected_inputs
 
-CASES = {"A06": {"root":"/opt/rustward-a06", "mode":"recovery", "kind":"recovery"}}
+CASES = {"A06": {"root":"/opt/rustward-a06", "mode":"recovery", "kind":"recovery"},
+         "A07": {"root":"/opt/rustward-a07", "mode":"async", "kind":"async"}}
 
 
 class Remaining(Stopping):
@@ -44,6 +45,8 @@ class Remaining(Stopping):
         _, output = self.target_call("hold-state", settings["kind"])
         value = json.loads(output)
         valid = value.get("state") in ("alive", "ended") and value.get("run_id") == report.get("run_id")
+        if case == "A07":
+            valid &= value.get("state") == "alive"
         valid &= json.dumps(value.get("inputs"), sort_keys=True) == json.dumps(expected_inputs(), sort_keys=True)
         if not valid:
             raise RuntimeError(f"independent remote evidence differs: {case}")

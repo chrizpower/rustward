@@ -10,6 +10,8 @@ import remaining_runner
 from fixtures import remote_state, ssh_policy
 from types import SimpleNamespace
 import scenario_inside
+from types import SimpleNamespace
+from stopping_runner import expected_inputs
 
 
 class RemainingTests(unittest.TestCase):
@@ -44,3 +46,15 @@ class RemainingTests(unittest.TestCase):
             self.assertEqual(ssh_policy.credentials('recovery').name,'remaining')
             with patch.object(remote_state,'credentials',return_value=root), patch.object(remote_state.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='{"state":"absent","kind":"recovery"}')):
                 self.assertEqual(remote_state.read(Path('/runtime'),'recovery')['kind'],'recovery')
+
+    def test_async_post_recovery_evidence_must_still_be_alive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            parent=SimpleNamespace(name='test',evidence=Path(folder))
+            runner=remaining_runner.Remaining(parent)
+            settings=remaining_runner.CASES['A07']
+            for state,accepted in [('alive',True),('ended',False)]:
+                value={'state':state,'kind':'async','run_id':'a'*64,'inputs':expected_inputs()}
+                with patch.object(runner,'target_call',return_value=(0,json.dumps(value))):
+                    if accepted:runner.observe_case('A07',settings,{'run_id':'a'*64})
+                    else:
+                        with self.assertRaises(RuntimeError):runner.observe_case('A07',settings,{'run_id':'a'*64})
