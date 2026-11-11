@@ -8,8 +8,9 @@ Status: Configuration validation, admission, dispatch, stopping, review, prepare
 runtime checks, and the [execution controller](docs/temporary/controller.md) are
 implemented as libraries. The controller connects capture, log accounting,
 manager UID binding, and pinned host dependencies. Tests use synthetic files,
-fake supervision, and a private D-Bus peer. Real systemd controller execution and
-Ansible acceptance remain unverified. An opt-in [A01/A02 runner](docs/temporary/acceptance-runner.md) is implemented. The main binary validates TOML files;
+fake supervision, and a private D-Bus peer. The user reported A01/A02 passing on
+Docker Desktop. The [local runner](docs/temporary/acceptance-runner.md) and
+[SSH case A03](docs/temporary/ssh-acceptance.md) are implemented; A03 is not run. The main binary validates TOML files;
 `rustward-exec` supplies the pinned environment launcher. There is no service loop.
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).

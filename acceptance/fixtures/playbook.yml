@@ -1,6 +1,6 @@
 ---
-- name: Check the synthetic local workload
-  hosts: local
+- name: Check the synthetic workload
+  hosts: fixture
   gather_facts: false
   tasks:
     - name: Check input values and types

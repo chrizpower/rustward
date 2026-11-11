@@ -27,7 +27,7 @@ def identify(tool, kind, path):
     return identity
 
 
-def configuration(root, runtime):
+def configuration(root, runtime, remote=False):
     definitions = root / "configuration"
     definitions.mkdir(mode=0o755)
     (definitions / "tasks").mkdir(mode=0o755)
@@ -35,9 +35,11 @@ def configuration(root, runtime):
     write(definitions / "rustward.toml", "version=2\n[storage]\n"
           f"state_database={json.dumps(str(root / 'state/state.db'))}\n"
           f"log_directory={json.dumps(str(root / 'logs'))}\n")
-    for name, script, mode in (("local-playbook", "playbook.py", None),
-                               ("ordinary", "ordinary.py", "complete"),
-                               ("recovery", "ordinary.py", "hold")):
+    tasks = [("local-playbook", "playbook.py", None), ("ordinary", "ordinary.py", "complete"),
+             ("recovery", "ordinary.py", "hold")]
+    if remote:
+        tasks.append(("remote-playbook", "remote.py", None))
+    for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:
             arguments.append({"literal": mode})
@@ -53,7 +55,7 @@ def configuration(root, runtime):
               "{id='enabled',type='boolean',required=true}]\n")
 
 
-def prepare(root, tools, user, revision):
+def prepare(root, tools, user, revision, remote=False):
     if os.geteuid() != 0:
         raise PermissionError("fixture preparation requires root ownership")
     os.umask(0o022)
@@ -82,7 +84,10 @@ def prepare(root, tools, user, revision):
     if not packages.exists():
         packages.mkdir(mode=0o755)
     copy_tree(Path("/usr/lib/python3/dist-packages"), packages / "dist-packages")
-    for name in ("mkdir", "chmod", "rm", "sleep", "cat"):
+    programs = ["mkdir", "chmod", "rm", "sleep", "cat"]
+    if remote:
+        programs += ["ssh", "sftp"]
+    for name in programs:
         shutil.copyfile(Path("/usr/bin") / name, stage / "bin" / name)
         (stage / "bin" / name).chmod(0o755)
     for path in sorted((Path(__file__).parent / "fixtures").iterdir()):
@@ -101,7 +106,7 @@ def prepare(root, tools, user, revision):
     runtime_id = identify(tools / "acceptance", "runtime", stage / "runtime.toml")
     runtime = root / "runtimes" / runtime_id
     stage.rename(runtime)
-    configuration(root, runtime)
+    configuration(root, runtime, remote=remote)
     ansible = subprocess.run([str(runtime / "bin/python3"), "-I", "-B", "-c",
                              "import sys;sys.path.insert(0,'lib/python3/dist-packages');"
                              "from ansible.release import __version__;print(__version__)"],

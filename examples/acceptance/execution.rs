@@ -69,7 +69,7 @@ pub fn drive(controller: &mut Native, id: &str, timeout: Duration) -> Result<()>
         thread::sleep(Duration::from_millis(20));
     }
 }
-pub fn run(root: &Path) -> Result<()> {
+pub fn run(root: &Path, remote: bool) -> Result<()> {
     let context = Context::load(root)?;
     require(
         fs::read_to_string("/etc/os-release")?
@@ -93,7 +93,12 @@ pub fn run(root: &Path) -> Result<()> {
         .set_paused(false)
         .map_err(|e| format!("resume: {e:?}"))?;
     let mut completed = Vec::new();
-    for (case, task) in [("A01", "local-playbook"), ("A02", "ordinary")] {
+    let cases: &[(&str, &str)] = if remote {
+        &[("A03", "remote-playbook")]
+    } else {
+        &[("A01", "local-playbook"), ("A02", "ordinary")]
+    };
+    for &(case, task) in cases {
         let id = admit(&context, &mut store, task)?;
         context.evidence(&format!("{case}-admission.json"),&json!({"case":case,"run_id":id,"expected":"Success after cleanup and synchronized capture","inputs":proof::inputs(),"runtime_id":context.fixture.runtime_id}))?;
         let outcome = (|| {
@@ -144,8 +149,16 @@ pub fn run(root: &Path) -> Result<()> {
         )?;
     }
     drop(reopened);
-    recovery::run(&context)?;
-    context.evidence("result.json",&json!({"status":"passed","cases":["A01","A02"],"additional":["local-recovery"],"not_run":["A03","A04","A05","A06","A07","A08","A09","A10"]}))?;
-    println!("A01, A02, and local recovery passed.");
+    if !remote {
+        recovery::run(&context)?;
+    }
+    let names: Vec<_> = cases.iter().map(|(name, _)| *name).collect();
+    let result = if remote {
+        json!({"status":"passed","cases":names,"not_run":["A04","A05","A06","A07","A08","A09","A10"]})
+    } else {
+        json!({"status":"passed","cases":names,"additional":["local-recovery"],"not_run":["A03","A04","A05","A06","A07","A08","A09","A10"]})
+    };
+    context.evidence("result.json", &result)?;
+    println!("Controller acceptance passed: {}", names.join(", "));
     Ok(())
 }

@@ -11,6 +11,7 @@ import sys
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "acceptance"))
 INSIDE = "/opt/rustward-acceptance-source"
 TOOLS = "/opt/rustward-acceptance-tools"
 FIXTURE = "/opt/rustward-acceptance"
@@ -64,14 +65,14 @@ class Docker:
         self.evidence = evidence
         self.sequence = 0
 
-    def call(self, arguments, timeout=120, checked=True):
+    def call(self, arguments, timeout=120, checked=True, input_data=None):
         self.sequence += 1
         prefix = self.evidence / f"docker-{self.sequence:02}"
         prefix.with_suffix(".command.json").write_text(json.dumps(["docker", *map(str, arguments)]) + "\n")
         with prefix.with_suffix(".stdout").open("wb") as output, prefix.with_suffix(".stderr").open("wb") as error:
             try:
                 result = subprocess.run(["docker", *map(str, arguments)], stdout=output,
-                                        stderr=error, timeout=timeout, check=False)
+                                        stderr=error, timeout=timeout, check=False, input=input_data)
             except subprocess.TimeoutExpired:
                 prefix.with_suffix(".status.json").write_text('{"status":"timeout"}\n')
                 raise
@@ -94,10 +95,12 @@ def validate_bundle(fixture):
         raise RuntimeError("acceptance bundle has no dependency provenance")
 
 
-def execute(repository, evidence, rust_image, debian_image):
+def execute(repository, evidence, rust_image, debian_image, remote=False):
     evidence.mkdir(parents=True, exist_ok=False)
     result = {"status": "blocked", "phase": "docker-preflight", "container": None,
               "cases": {"A01": "not run", "A02": "not run"}}
+    if remote:
+        result["cases"]["A03"] = "not run"
     (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     if not shutil.which("docker"):
         result["reason"] = "Docker is not installed"
@@ -107,6 +110,7 @@ def execute(repository, evidence, rust_image, debian_image):
     name = "rustward-acceptance-" + uuid.uuid4().hex
     created = False
     copied = False
+    ssh = None
     try:
         _, info = docker.call(["info", "--format", "{{json .}}"])
         details = json.loads(info)
@@ -142,6 +146,11 @@ def execute(repository, evidence, rust_image, debian_image):
         code, _ = docker.call(["exec", name, "/usr/bin/python3", "-I", "-B", "-c",
                               f"import sys;sys.path.insert(0,{INSIDE!r});from inside import main;sys.exit(main())",
                               "--root", FIXTURE, "--tools", TOOLS, "--source-revision", source["revision"]], timeout=900, checked=False)
+        if code == 0 and remote:
+            from ssh_runner import Remote
+            ssh = Remote(docker, name, evidence)
+            result["phase"] = "ssh-acceptance"
+            ssh.run(evidence / "context", debian_image, source["revision"])
         result["status"] = "passed" if code == 0 else "failed"
         result["phase"] = "complete" if code == 0 else "host-acceptance"
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
@@ -158,6 +167,10 @@ def execute(repository, evidence, rust_image, debian_image):
                 except (OSError, subprocess.SubprocessError) as error:
                     cleanup_errors.append(str(error))
             try:
+                if remote:
+                    if ssh is None:
+                        raise RuntimeError("SSH fixture setup did not start; raw export refused")
+                    ssh.scan()
                 code, _ = docker.call(["cp", f"{name}:{FIXTURE}/.", evidence / "fixture"], checked=False)
                 copied = code == 0
                 if copied:
@@ -170,12 +183,23 @@ def execute(repository, evidence, rust_image, debian_image):
                             result["cases"][case] = "incomplete"
                     if result["status"] == "passed":
                         validate_bundle(evidence / "fixture")
+                if remote:
+                    from ssh_runner import FIXTURE as SSH_FIXTURE, validate
+                    code, _ = docker.call(["cp", f"{name}:{SSH_FIXTURE}/.", evidence / "ssh-fixture"], checked=False)
+                    copied = copied and code == 0
+                    report = evidence / "ssh-fixture/evidence/A03.json"
+                    if report.exists():
+                        result["cases"]["A03"] = json.loads(report.read_text()).get("status", "incomplete")
+                    if result["status"] == "passed":
+                        validate(evidence / "ssh-fixture", evidence)
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 cleanup_errors.append(str(error))
             stopped = False
             try:
                 code, _ = docker.call(["stop", "--time", "20", name], checked=False)
                 stopped = code == 0
+                if ssh is not None:
+                    ssh.cleanup()
                 if copied and stopped and not cleanup_errors:
                     docker.call(["rm", name])
             except (OSError, RuntimeError, subprocess.SubprocessError) as error:
@@ -192,13 +216,14 @@ def execute(repository, evidence, rust_image, debian_image):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path)
+    parser.add_argument("--remote", action="store_true", help="also run A03 on an isolated SSH target")
     parser.add_argument("--rust-image", default="rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07")
     parser.add_argument("--debian-image", default="debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2")
     options = parser.parse_args()
     name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     evidence = options.artifacts or Path.home() / "artifacts/rustward/ansible-acceptance" / name
     print(f"Acceptance evidence: {evidence}", flush=True)
-    return execute(ROOT, evidence.resolve(), options.rust_image, options.debian_image)
+    return execute(ROOT, evidence.resolve(), options.rust_image, options.debian_image, remote=options.remote)
 
 
 if __name__ == "__main__":

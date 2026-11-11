@@ -67,7 +67,7 @@ class RunnerTests(unittest.TestCase):
                 docker.call(["failure"])
 
 class CleanupTests(unittest.TestCase):
-    def attempt(self, directory, harness_code=0, complete=True, logs_timeout=False):
+    def attempt(self, directory, harness_code=0, complete=True, logs_timeout=False, remote=False, scan_failed=False):
         root = Path(directory)
         evidence = root / "evidence"
         calls = []
@@ -97,8 +97,19 @@ class CleanupTests(unittest.TestCase):
                         (evidence / "fixture/fixture.json").write_text(json.dumps({"runtime_id": "a" * 64, "host_id": "b" * 64, "packages": "synthetic", "source_revision": "c" * 64}))
                 return 0, ""
 
-        with patch("container.shutil.which", return_value="/synthetic/docker"), patch("container.Docker", FakeDocker), patch("container.snapshot", return_value={"revision": "c" * 64}):
-            code = container.execute(root, evidence, "rust", "debian")
+        class FakeRemote:
+            def __init__(self, *args):
+                pass
+            def run(self, *args):
+                pass
+            def scan(self):
+                calls.append(["credential-scan"])
+                if scan_failed:
+                    raise RuntimeError("credential export check failed")
+            def cleanup(self):
+                calls.append(["ssh-cleanup"])
+        with patch("container.shutil.which", return_value="/synthetic/docker"), patch("container.Docker", FakeDocker), patch("container.snapshot", return_value={"revision": "c" * 64}), patch("ssh_runner.Remote", FakeRemote):
+            code = container.execute(root, evidence, "rust", "debian", remote=remote)
         return code, json.loads((evidence / "result.json").read_text()), calls
 
     def test_success_requires_collected_pass_evidence_and_stops_before_removal(self):
@@ -118,6 +129,18 @@ class CleanupTests(unittest.TestCase):
         self.assertIn("retained_container", result)
         self.assertIn("stop", [args[0] for args in calls])
         self.assertNotIn("rm", [args[0] for args in calls])
+
+    def test_credential_scan_failure_blocks_raw_copy_and_keeps_stopped_controller(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code, result, calls = self.attempt(directory, remote=True, scan_failed=True)
+        self.assertNotEqual(code, 0)
+        operations = [args[0] for args in calls]
+        self.assertIn("credential-scan", operations)
+        self.assertNotIn("cp", operations)
+        self.assertNotIn("rm", operations)
+        self.assertIn("stop", operations)
+        self.assertIn("ssh-cleanup", operations)
+        self.assertIn("retained_container", result)
 
     def test_diagnostic_timeout_still_collects_data_and_stops_the_container(self):
         with tempfile.TemporaryDirectory() as directory:

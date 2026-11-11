@@ -22,6 +22,9 @@ hooks-install:
 acceptance-container:
     python3 -I -B acceptance/container.py
 
+acceptance-ssh:
+    python3 -I -B acceptance/container.py --remote
+
 acceptance-host root tools user="rustward":
     python3 -I -B -c 'import sys; sys.path.insert(0, "acceptance"); from inside import main; sys.exit(main())' --root {{quote(root)}} --tools {{quote(tools)}} --user {{quote(user)}} --source-revision "$(git rev-parse HEAD)"
 

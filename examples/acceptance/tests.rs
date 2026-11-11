@@ -108,7 +108,7 @@ fn manifest_command_reuses_the_production_hash_encoding() {
 #[test]
 fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
     let root = tempfile::tempdir().unwrap();
-    let code = "import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);from prepare import configuration;configuration(Path(sys.argv[2]),Path('/synthetic/runtime'))";
+    let code = "import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);from prepare import configuration;configuration(Path(sys.argv[2]),Path('/synthetic/runtime'),remote=True)";
     let status = std::process::Command::new("python3")
         .args(["-I", "-B", "-c", code])
         .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("acceptance"))
@@ -117,7 +117,13 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 3);
+    assert_eq!(config.task_count(), 4);
+    assert_eq!(
+        config
+            .arguments("remote-playbook", &execution::values())
+            .unwrap(),
+        ["-I", "-B", "remote.py", proof::TEXT, "7", "true"]
+    );
     assert_eq!(
         config
             .arguments("local-playbook", &execution::values())

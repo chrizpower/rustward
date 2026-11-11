@@ -36,8 +36,9 @@ fn command(args: &[String]) -> Result<()> {
             println!("{id}"); Ok(())
         }
         ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
-        ["run", root]=>execution::run(Path::new(root)),
+        ["run", root]=>execution::run(Path::new(root), false),
+        ["run-ssh", root]=>execution::run(Path::new(root), true),
         ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
-        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, or recovery-child <root> <run-id>".into()),
+        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, or recovery-child <root> <run-id>".into()),
     }
 }

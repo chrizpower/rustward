@@ -1,6 +1,7 @@
 # Ansible acceptance test
 
-Status: A01/A02 harness and fixtures are implemented; real-systemd cases are not run. The user requested this
+Status: The user reported A01/A02 passing. A03 is implemented but unrun;
+A04–A10 remain unimplemented. The user requested this
 planning artifact on 2026-11-09. It tests the accepted generic execution rules
 with the main workload. It does not accept new execution policy or authorize
 production access, schedule migration, or deployment.
@@ -45,9 +46,9 @@ Semaphore workload review remains a separate gate.
 [Runtime manifest and path checks](runtime.md), UID/manager binding, pinned host
 dependencies, and controlled environment are implemented. The [local runner](acceptance-runner.md)
 uses a workload wrapper to pass the accepted typed inputs as JSON Ansible extra
-variables. A01/A02 need no conditional flags or credentials. Secret references,
-unattended credentials, and remote-target setup remain prerequisites for A03
-and later cases; no secret-handling acceptance claim is made here.
+variables. A01/A02 need no credentials. A03 uses the accepted
+[fixture-only credential files](ssh-acceptance.md). Production secret references
+and workload compatibility remain outside this slice.
 
 ## Test procedure and pass criteria
 
@@ -76,18 +77,22 @@ integration tests against the same execution path.
 
 ## Evidence and remaining work
 
-All real-systemd cases are currently **not run**. An executable A01/A02 harness,
-fixtures, and opt-in Docker/host commands now exist; see the
-[runner contract](acceptance-runner.md). The Docker attempt in this devbox is
-blocked because Docker is absent. Direct wrapper smoke tests and mechanical
-checks do not pass these cases. A03–A10 remain unimplemented.
+The user reported a complete local pass on Docker Desktop with source revision
+`523c67bc54608481d156b8a8b21526d780cc16318f81113025427686c56ad268`.
+The reported result includes A01/A02; the full successful bundle has not been
+independently inspected in the devbox. The earlier copied failed attempt is
+retained. See the [runner contract](acceptance-runner.md).
+
+A03 has executable fixtures and `just acceptance-ssh`, but is **not run**.
+Docker is absent from the devbox. Mechanical checks do not pass this case.
+A04–A10 remain unimplemented.
 
 For each execution, record the exact command, host baseline, dependency versions,
 case results, and relevant state, output, and target observations. Preserve
 failure evidence before cleanup. Record blocked and skipped cases with reasons;
 they do not count as passes. Keep credentials out of the evidence.
 
-Remaining work is to run A01/A02 on the isolated runner, implement A03–A10,
+Remaining work is to run A03 on the isolated runner, implement A04–A10,
 and review the results. Confirm how representative the synthetic
 fixture is during the separate workload compatibility review.
 

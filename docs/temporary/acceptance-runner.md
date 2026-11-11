@@ -1,10 +1,9 @@
 # Local acceptance runner
 
-Status: Implemented opt-in A01/A02 harness and Docker runner. The user requested
-this slice on 2026-11-09. Docker is absent from the devbox. A copied Mac run passed child cleanup and
-unit isolation, but failed its capture test during the user-bus connection.
-A01/A02 did not run. Mechanical checks and direct wrapper smoke tests have
-passed; they are not acceptance passes.
+Status: The user reported A01/A02 passing on Docker Desktop after the manager
+readiness fix. The complete successful bundle has not been inspected in the
+devbox. A copied earlier failure remains available. Docker is absent from the
+devbox. [A03 SSH acceptance](ssh-acceptance.md) is implemented but unrun.
 
 Before removal, transfer stable test interfaces and evidence to ARCHITECTURE.md,
 policy to GRAVITY.md, and terms to GLOSSARY.md. Preserve the remaining host,
@@ -57,11 +56,10 @@ The runner also executes the three existing opt-in tests: systemd child cleanup
 and unit isolation, systemd output capture, and prepared-runtime permissions.
 Zero tests executed is a failure. The suite requires their exact pass counts.
 
-A03–A10, remote credentials, production workload compatibility, UI, scheduling,
-reload, retention, telemetry, migration, and deployment remain outside this slice.
-No synthetic-secret claim is made: secret references and unattended credentials
-remain work for A03 and later cases. No conditional argument feature is needed
-for this fixed local fixture.
+A04–A10, production credentials and workload compatibility, UI, scheduling,
+reload, retention, telemetry, migration, and deployment remain open. A03 adds
+fixture-only credential files through a separate opt-in command. The local
+suite needs no credentials or conditional arguments.
 
 ## Docker command and isolation
 
@@ -83,7 +81,8 @@ host. Use a disposable host, never a production daemon. See [Docker privileges](
 and [systemd container requirements](https://systemd.io/CONTAINER_INTERFACE/).
 
 The runner does not mount host source, a Docker socket, host cgroups, or a host
-D-Bus socket. The runtime container has no network. A separate build step prepares
+D-Bus socket. The local suite runs with no network. The separate A03 command then connects
+the controller to an internal network with its disposable SSH target. A separate build step prepares
 all dependencies before execution. Private writable run/log/state folders belong
 to the execution user. The controller and tests run with all Linux capabilities
 removed through setpriv; the root setup process is not the executor. The image
@@ -172,8 +171,9 @@ The Docker command writes a unique directory under
 `--artifacts` path. It records commands as argument arrays, output, exit status,
 source hashes, fixed image ID, Docker inspection, journal data, fixture versions,
 runtime/host manifests, task configuration, per-case decisions, database files,
-work markers, and captured streams. The full fixture is copied before container
-removal, including on failure. The fixture contains synthetic data only.
+work markers, and captured streams. The local fixture is copied before container removal, including on failure.
+In A03 mode, a credential scan must pass before either fixture is copied; a
+failed scan retains the stopped controller and refuses raw export.
 
 The host runner ends test processes and the dedicated user manager before
 returning. Database files are copied after writers have stopped, not while a
@@ -207,7 +207,9 @@ not run. This partial result is not a complete acceptance pass.
 
 The runner now waits for authenticated manager readiness before the first host
 test. Synthetic tests cover delayed readiness, failed or hung probes, and wrong
-UID/version replies. The change still needs another Mac run. Diagnostic copies
+UID/version replies. The user reported a later complete local pass for source revision
+`523c67bc54608481d156b8a8b21526d780cc16318f81113025427686c56ad268`.
+The successful full bundle has not been independently inspected here. Diagnostic copies
 are under `$HOME/artifacts/rustward/manager-readiness-20261111/evidence/`.
 
 Normal checks build the Rust example and test evidence validation, duplicate

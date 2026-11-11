@@ -12,11 +12,18 @@ RUN mkdir /bundle && cp target/release/rustward-exec target/release/examples/acc
     python3 -c 'import json,shutil; records=[json.loads(line) for line in open("/test-artifacts.json")]; [shutil.copyfile(record["executable"],"/bundle/"+record["target"]["name"]) for record in records if record.get("executable")];' && \
     chmod 755 /bundle/*
 
+FROM ${DEBIAN_IMAGE} AS ssh-target
+RUN apt-get update && apt-get install --yes --no-install-recommends openssh-server python3 && \
+    rm -rf /var/lib/apt/lists/* && rm -f /etc/ssh/ssh_host_* && \
+    useradd --uid 1000 --create-home --shell /bin/sh --password '' rustward-target
+COPY acceptance/ssh_target.py /opt/ssh_target.py
+CMD ["/usr/bin/python3", "-I", "-B", "/opt/ssh_target.py", "serve"]
+
 FROM ${DEBIAN_IMAGE}
 ENV container=docker
 RUN apt-get update && apt-get install --yes --no-install-recommends \
       systemd systemd-sysv dbus dbus-user-session libpam-systemd \
-      ansible-core python3 coreutils libc-bin util-linux ca-certificates && \
+      ansible-core openssh-client python3 coreutils libc-bin util-linux ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --uid 1000 --create-home --shell /bin/bash rustward && \
     mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/rustward && \

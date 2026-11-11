@@ -20,15 +20,12 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Run the implemented [local acceptance runner](acceptance-runner.md) for A01/A02
-   on an isolated Docker host or Debian VM. The harness and synthetic fixtures
-   exist. A copied Mac run passed cleanup/isolation but failed the initial
-   user-bus connection. Rerun with the authenticated readiness check; A01/A02
-   remain unrun. Docker is absent from the devbox.
-2. Verify the Debian 13/systemd 257 dedicated manager, permissions, controlled
-   environment, pinned dependencies, cleanup, and capture through that path.
-   Then complete remote and failure cases A03–A10. Synthetic library tests are
-   not host acceptance evidence.
+1. Run implemented [A03 SSH acceptance](ssh-acceptance.md) with
+   `just acceptance-ssh` on the isolated Docker host. Docker is absent from the
+   devbox. The user reported A01/A02 passing after the manager readiness fix;
+   the complete successful bundle has not been independently inspected here.
+2. Review the A03 evidence, then implement failure and interruption cases
+   A04–A10. Synthetic library tests are not host acceptance evidence.
 3. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and
    implement retention reclamation. Keep scheduler and UI integration separate.
@@ -78,9 +75,9 @@ cleanup/output gates, and durable review. No test starts a real task.
 directories are implemented. The [controller](controller.md) now connects actual
 service/manager UID binding, pinned host manifests, controlled environment,
 capture, stopping, and atomic output accounting. The [local harness](acceptance-runner.md)
-now covers ordinary-command, local-playbook, and local recovery checks. Next:
-run A01/A02 in the [Ansible acceptance specification](ansible-acceptance.md).
-No acceptance case has run. Retention reclamation remains separate work. Review
+covers ordinary-command, local-playbook, and local recovery checks. The user
+reported A01/A02 passing. A03 is implemented but unrun; see the
+[Ansible acceptance specification](ansible-acceptance.md). Retention reclamation remains separate work. Review
 can be cleared only after local completion and acknowledgement of unchanged
 evidence. A dropped permit is not reissued.
 

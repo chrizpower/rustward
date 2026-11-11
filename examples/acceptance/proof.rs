@@ -93,10 +93,12 @@ pub fn case(
         json_file(&work.join("inputs.json"))? == inputs(),
         "wrapper input types or values differ",
     )?;
-    require(
-        json_file(&work.join("target.json"))? == inputs(),
-        "target content differs",
-    )?;
+    if case != "A03" {
+        require(
+            json_file(&work.join("target.json"))? == inputs(),
+            "target content differs",
+        )?;
+    }
     if case == "A02" {
         process_ended(&json_file(&work.join("child.json"))?)?;
     }
