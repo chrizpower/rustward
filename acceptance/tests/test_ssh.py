@@ -117,6 +117,8 @@ class PolicyTests(unittest.TestCase):
                         return 0, json.dumps([{"NetworkSettings": {"Networks": {"test-network": {"IPAddress": "172.19.0.2"}}}}])
                     if "scenario-report" in args:
                         return 0, json.dumps({"status":"passed","run_id":"a"*64})
+                    if args[-1] == "runtime-result":
+                        return 0, json.dumps({"runtime":"B","run_id":"a"*64,"inputs":{"text": 'He said "hello"; it\'s a test',"count":7,"enabled":True}})
                     if "hold-state" in args:
                         kind = args[-1]
                         return 0, json.dumps({"kind":kind,"state":"absent"} if kind == "queued" else

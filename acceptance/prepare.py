@@ -27,8 +27,8 @@ def identify(tool, kind, path):
     return identity
 
 
-def configuration(root, runtime, remote=False):
-    definitions = root / "configuration"
+def configuration(root, runtime, remote=False, directory="configuration"):
+    definitions = root / directory
     definitions.mkdir(mode=0o755)
     (definitions / "tasks").mkdir(mode=0o755)
     (definitions / "schedules").mkdir(mode=0o755)
@@ -44,7 +44,8 @@ def configuration(root, runtime, remote=False):
                   ("remote-queued", "remote.py", "queued"), ("remote-cancel", "remote.py", "cancel"),
                   ("remote-timeout", "remote.py", "timeout"),
                   ("remote-recovery", "remote.py", "recovery"),
-                  ("remote-async", "remote.py", "async")]
+                  ("remote-async", "remote.py", "async"),
+                  ("remote-runtime-a", "remote.py", "runtime-a"), ("remote-runtime-b", "remote.py", "runtime-b")]
     for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:

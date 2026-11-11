@@ -50,6 +50,8 @@ def command(arguments):
         from runpy import run_path
         state = run_path("/opt/rustward_hold.py")["state"]
         print(json.dumps(state(arguments[1])))
+    elif arguments == ["runtime-result"]:
+        print(RESULT.with_name("runtime.json").read_text(), end="")
     elif arguments == ["failure-result"]:
         print(RESULT.with_name("failure.json").read_text(), end="")
     elif arguments == ["result"]:

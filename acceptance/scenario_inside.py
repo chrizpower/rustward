@@ -12,17 +12,33 @@ def run(case, revision):
     settings = CASES[case]
     root = Path(settings["root"])
     account = pwd.getpwnam("rustward")
-    fixture = prepare_shared(root, SOURCE, "rustward", revision)
+    if case == "A08":
+        from variant_prepare import prepare
+        fixture = prepare(root, SOURCE, TOOLS, revision)
+    else:
+        fixture = prepare_shared(root, SOURCE, "rustward", revision)
     evidence = root / "evidence"
     status = {"status":"failed", "case":case, "writers_stopped":False}
     try:
         checked(["/usr/bin/systemctl", "start", f"user@{account.pw_uid}.service"], timeout=30)
         checked(user_command(account, ["/usr/bin/systemctl", "--user", "start", "dbus.socket"]), timeout=30)
         wait_manager(account, TOOLS, evidence)
-        runtime = SOURCE / "runtimes" / fixture["runtime_id"]
+        runtime = (root if case == "A08" else SOURCE) / "runtimes" / fixture["runtime_id"]
         probe(account, runtime, evidence, settings["mode"])
         check_commands(account, runtime, evidence, settings["mode"])
         checked(user_command(account, [TOOLS / "acceptance", "run-scenario", root, case]), timeout=240)
+        if case == "A08":
+            checked(user_command(account, [TOOLS / "acceptance", "runtime-queue-missing", root]), timeout=30)
+            removed = root / "removed-runtimes"
+            removed.mkdir()
+            (root / "runtimes" / fixture["runtime_id"]).rename(removed / fixture["runtime_id"])
+            checked(user_command(account, [TOOLS / "acceptance", "runtime-missing", root]), timeout=120)
+            selection = json.loads((evidence / "A08-selection.json").read_text())
+            missing = json.loads((evidence / "A08-missing.json").read_text())
+            if selection.get("status") != "passed" or missing.get("status") != "passed":
+                raise RuntimeError("runtime selection evidence is incomplete")
+            with (evidence / "A08.json").open("x") as output:
+                json.dump({"case":"A08","status":"passed","run_id":selection["run_id"],"selection":selection,"missing":missing}, output)
         status["status"] = "passed"
     finally:
         try:

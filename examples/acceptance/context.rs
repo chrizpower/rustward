@@ -26,6 +26,8 @@ pub struct Fixture {
     pub ansible_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_b_id: Option<String>,
 }
 pub struct Context {
     pub root: PathBuf,

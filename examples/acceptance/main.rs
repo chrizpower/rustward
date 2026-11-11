@@ -5,6 +5,7 @@ mod failure;
 mod proof;
 mod recovery;
 mod remote_recovery;
+mod runtime_selection;
 mod stopping;
 #[cfg(test)]
 mod tests;
@@ -41,6 +42,9 @@ fn command(args: &[String]) -> Result<()> {
         ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
         ["run", root]=>execution::run(Path::new(root), false),
         ["remote-child",root,id,case,kind]=>remote_recovery::child(Path::new(root),id,case,kind),
+        ["run-scenario",root,"A08"]=>runtime_selection::run(Path::new(root)),
+        ["runtime-queue-missing",root]=>runtime_selection::queue_missing(Path::new(root)),
+        ["runtime-missing",root]=>runtime_selection::missing(Path::new(root)),
         ["run-scenario",root,"A07"]=>remote_recovery::run(Path::new(root),"A07","remote-async","async"),
         ["run-scenario",root,"A06"]=>remote_recovery::run(Path::new(root),"A06","remote-recovery","recovery"),
         ["run-stop", root, kind]=>stopping::run(Path::new(root), kind),

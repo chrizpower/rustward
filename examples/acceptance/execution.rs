@@ -27,15 +27,23 @@ pub fn values() -> BTreeMap<String, toml::Value> {
 }
 pub fn admit(context: &Context, store: &mut Store, task: &str) -> Result<String> {
     let config = config::load(context.root.join("configuration/rustward.toml"))?;
+    admit_request(store, &config, task, &context.fixture.runtime_id).map(|(_, id)| id)
+}
+pub fn admit_request(
+    store: &mut Store,
+    config: &config::Config,
+    task: &str,
+    runtime_id: &str,
+) -> Result<(String, String)> {
     let key = store.issue_key().map_err(|e| format!("issue key: {e:?}"))?;
     let first = store
-        .admit(&key, &config, task, &values(), &context.fixture.runtime_id)
+        .admit(&key, config, task, &values(), runtime_id)
         .map_err(|e| format!("admit: {e:?}"))?;
     let Admission::Admitted { run_id } = first else {
         return Err("first submission was not admitted".into());
     };
     let again = store
-        .admit(&key, &config, task, &values(), &context.fixture.runtime_id)
+        .admit(&key, config, task, &values(), runtime_id)
         .map_err(|e| format!("matching retry: {e:?}"))?;
     require(
         again
@@ -44,7 +52,7 @@ pub fn admit(context: &Context, store: &mut Store, task: &str) -> Result<String>
             },
         "retry did not retain the run ID",
     )?;
-    Ok(run_id)
+    Ok((key, run_id))
 }
 pub fn start(controller: &mut Native, id: &str) -> Result<()> {
     require(

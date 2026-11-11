@@ -10,7 +10,7 @@ from ssh_policy import CREDENTIALS, USER, TARGET, options, credentials
 
 
 def arguments(runtime, work, values, connection, mode="success"):
-    if mode not in ("success", "failure", "unreachable", "queued", "cancel", "timeout", "recovery", "async"):
+    if mode not in ("success", "failure", "unreachable", "queued", "cancel", "timeout", "recovery", "async", "runtime-a", "runtime-b"):
         raise ValueError("unknown remote fixture mode")
     address = ipaddress.IPv4Address(connection["address"])
     if not address.is_private or address.is_multicast or address.is_unspecified:
@@ -29,7 +29,8 @@ def arguments(runtime, work, values, connection, mode="success"):
     inventory = work / "inventory.ini"
     with inventory.open("x") as output:
         output.write("[fixture]\nssh-target\n")
-    playbook = "async.yml" if mode == "async" else ("failure.yml" if mode == "failure" else ("hold.yml" if mode in ("queued", "cancel", "timeout", "recovery") else "playbook.yml"))
+    playbook = "async.yml" if mode == "async" else ("failure.yml" if mode == "failure" else ("hold.yml" if mode in ("queued", "cancel", "timeout", "recovery", "runtime-a") else "playbook.yml"))
+    if mode == "runtime-b": playbook = "runtime.yml"
     return ["ansible-playbook", "-i", str(inventory), str(runtime / playbook),
             "--extra-vars", json.dumps(values)]
 
@@ -41,7 +42,11 @@ def main():
     work, values = begin(inputs)
     save(work / "privileges.json", check_privileges())
     connection = json.loads((credentials(mode) / "connection.json").read_text())
-    marker = {"success": "A03", "failure": "A04_TASK_FAILURE", "unreachable": "A04_UNREACHABLE", "queued": "A05_QUEUED", "cancel": "A05_CANCEL", "timeout": "A05_TIMEOUT", "recovery": "A06", "async": "A07"}[mode]
+    marker = {"success": "A03", "failure": "A04_TASK_FAILURE", "unreachable": "A04_UNREACHABLE", "queued": "A05_QUEUED", "cancel": "A05_CANCEL", "timeout": "A05_TIMEOUT", "recovery": "A06", "async": "A07", "runtime-a": "A08", "runtime-b": "A08"}[mode]
+    if mode in ("runtime-a", "runtime-b"):
+        version = (runtime / "selection.txt").read_text().strip()
+        save(work / "runtime-version.json", {"version":version})
+        print(f"A08_RUNTIME_{version}", flush=True)
     print(f"{marker}_STDOUT", flush=True)
     print(f"{marker}_STDERR", file=sys.stderr, flush=True)
     from ansible.cli.playbook import main as playbook

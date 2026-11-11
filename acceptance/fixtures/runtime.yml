@@ -1,0 +1,10 @@
+---
+- name: Record the new runtime's completed remote work
+  hosts: fixture
+  gather_facts: false
+  tasks:
+    - name: Save the runtime B proof
+      ansible.builtin.copy:
+        dest: /home/rustward-target/runtime.json
+        content: "{{ {'run_id': hold_run_id, 'runtime': 'B', 'inputs': {'text': text, 'count': count, 'enabled': enabled}} | to_json }}"
+        mode: '0600'

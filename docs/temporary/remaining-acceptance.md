@@ -1,6 +1,6 @@
 # Remaining acceptance cases
 
-Status: A06/A07 are implemented but unrun on Docker. A08–A10 remain work in progress.
+Status: A06–A08 are implemented but unrun on Docker. A09/A10 remain work in progress.
 The user reported A01–A05 passing with source revision
 `1690669832608c67aa55d5d36734c33c73601ed9eb76d2a2609cad236e9d4e4e` and image
 `sha256:9eab44b973b203a3ffac40a3da340ff65de95b9da1a10d9d312cb792a56e940f`.
@@ -38,6 +38,24 @@ one explicit acknowledgement note accepting the remaining external risk for
 this disposable target. Matching acknowledgement retries return the same record.
 The result stays Interruption and queued work is not started. Docker must also
 observe the same async run alive. Other fixture stores' review blocks remain.
+
+## A08: Runtime selection
+
+Root setup publishes separate protected A and B runtime trees and records their
+production manifest IDs. The source runtime used by other cases is not changed.
+The same task ID has separate A/B configuration selections. A is admitted before
+B is selected, matching retries still return A, and A must execute A's code.
+While A is active at a confirmed remote holding marker, a new admission selects
+B and stays queued until A completes. A fixed release message lets A finish;
+then the new run must execute B's code and complete the independent B target proof.
+The original snapshot, arguments, revisions, fingerprint, and runtime ID must
+remain byte-for-byte unchanged while queued, active, and completed.
+
+A third A run is admitted before root setup moves only this case's A tree out
+of its catalog. Dispatch must fail before any program starts, with no B
+substitution. The removed tree is retained under `removed-runtimes/` as evidence.
+The original admission and completed A history must remain unchanged. These are
+private fixture preparations, not a runtime selection UI or production migration.
 
 ## Evidence and lifecycle
 

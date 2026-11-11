@@ -10,6 +10,7 @@ import remaining_runner
 from fixtures import remote_state, ssh_policy
 from types import SimpleNamespace
 import scenario_inside
+import variant_prepare
 from types import SimpleNamespace
 from stopping_runner import expected_inputs
 
@@ -58,3 +59,19 @@ class RemainingTests(unittest.TestCase):
                     if accepted:runner.observe_case('A07',settings,{'run_id':'a'*64})
                     else:
                         with self.assertRaises(RuntimeError):runner.observe_case('A07',settings,{'run_id':'a'*64})
+
+    def test_variants_publish_different_ids_without_changing_the_shared_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);original=root/'original';runtime=original/'runtimes'/'source';runtime.mkdir(parents=True)
+            (original/'hosts').mkdir();(original/'hosts'/('c'*64+'.toml')).write_text('synthetic host')
+            (original/'fixture.json').write_text(json.dumps({'runtime_id':'source','host_id':'c'*64,'source_revision':'revision'}))
+            (runtime/'runtime.toml').write_text('original manifest');(runtime/'program').write_text('synthetic program')
+            destination=root/'case'
+            account=SimpleNamespace(pw_uid=1000,pw_gid=1000)
+            def identify(tool,kind,path):return ('a' if (path.parent/'selection.txt').read_text().strip()=='A' else 'b')*64
+            with patch.object(variant_prepare.pwd,'getpwnam',return_value=account),patch('prepare.os.chown'),patch.object(variant_prepare,'identify',side_effect=identify):
+                metadata=variant_prepare.prepare(destination,original,Path('/tools'),'revision')
+            self.assertNotEqual(metadata['runtime_id'],metadata['runtime_b_id'])
+            self.assertEqual((runtime/'runtime.toml').read_text(),'original manifest')
+            self.assertEqual((destination/'runtimes'/('a'*64)/'selection.txt').read_text(),'A\n')
+            self.assertTrue((destination/'configuration-b/tasks/runtime-selection.toml').exists())
