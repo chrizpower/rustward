@@ -5,7 +5,8 @@ with source revision `6a9e019fcc068bbf217723c8f7e8c6ff51e5653015354e169298fd34b1
 and image `sha256:f7b6d639b86a93f75c1a91e13bf48e43bd1a1b9af5f164b2311a26f5899f4c2f`.
 The complete successful bundle has not been copied here. The earlier copied
 bundle verifies A01/A02 and records the A03 fixture failure. Docker is absent
-from the devbox. [A04](failure-acceptance.md) is now included but unrun.
+from the devbox. The user also reported A04 passing. [A05](stopping-acceptance.md) is now included
+but unrun.
 
 ## Run and scope
 
@@ -24,7 +25,7 @@ python3 -I -B acceptance/container.py --remote --artifacts "$HOME/artifacts/rust
 Use a new folder. SSH mode creates a unique internal Docker network and starts
 the controller on it. It first runs A01/A02 and local recovery with no target
 peer. It then builds and starts a disposable SSH target on that same network.
-It then runs the two A04 failure cases. The local-only command keeps
+It then runs the two A04 failure cases and the A05 stopping cases. The local-only command keeps
 `--network=none`. No host ports, source mounts,
 Docker socket, production inventory, or production credentials are supplied.
 The controller container remains privileged for systemd; use an isolated Docker
@@ -92,7 +93,7 @@ Evidence uses the local runner's unique artifact folder. It adds:
   through standard input; private keys are never transferred through Docker.
 
 After writers and the dedicated manager stop, the runner scans every regular
-file in both fixture roots, including SQLite files, configuration, inputs, and
+file in the local, SSH, and both A05 fixture roots, including SQLite files, configuration, inputs, and
 output. It searches for a literal private-key marker of at least 64 bytes and
 handles matches across read boundaries. It also checks file names. It rejects
 symlinks, special files, and excluded entries without following or reading them.
@@ -100,7 +101,7 @@ The marker is selected from the generated private key and is not part of the
 public key. This test checks that literal marker; it does not prove detection of
 all possible encodings or fragments of a secret.
 
-Both raw fixture copies require a successful scan. If scanning fails or cannot
+All raw fixture copies require a successful scan. If scanning fails or cannot
 finish, the runner reports failure and refuses raw fixture export. A safe scan
 report can identify the affected file, with marker-bearing paths hidden. The
 stopped controller is retained for review. Stored history is not rewritten or
@@ -183,7 +184,7 @@ command checks do not connect to a target or pass A03. Evidence is under
 
 ## Remaining work
 
-Run A04 and review its full evidence bundle. A05–A10, production secret
+Run A05 and review its full evidence bundle. A06–A10, production secret
 configuration, remote stopping and recovery evidence, runtime selection changes,
 output flooding, and storage-failure acceptance remain open. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this

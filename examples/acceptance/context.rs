@@ -24,6 +24,8 @@ pub struct Fixture {
     pub packages: String,
     pub python_version: String,
     pub ansible_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog_root: Option<PathBuf>,
 }
 pub struct Context {
     pub root: PathBuf,
@@ -34,6 +36,13 @@ impl Context {
         require(root.is_absolute(), "fixture root must be absolute")?;
         let fixture: Fixture = serde_json::from_slice(&fs::read(root.join("fixture.json"))?)?;
         require(fixture.version == 1, "unsupported fixture version")?;
+        require(
+            fixture
+                .catalog_root
+                .as_ref()
+                .is_none_or(|path| path.is_absolute()),
+            "catalog root must be absolute",
+        )?;
         require(
             fixture.execution_uid != 0 && fixture.preparation_uid != fixture.execution_uid,
             "invalid fixture ownership policy",
@@ -53,8 +62,13 @@ impl Context {
     pub fn work(&self, id: &str) -> PathBuf {
         self.root.join("work").join(id)
     }
+    fn catalog_root(&self) -> &Path {
+        self.fixture.catalog_root.as_deref().unwrap_or(&self.root)
+    }
     pub fn runtime(&self) -> PathBuf {
-        self.root.join("runtimes").join(&self.fixture.runtime_id)
+        self.catalog_root()
+            .join("runtimes")
+            .join(&self.fixture.runtime_id)
     }
     pub fn evidence(&self, name: &str, value: &impl Serialize) -> Result<()> {
         let path = self.root.join("evidence").join(name);
@@ -78,9 +92,9 @@ impl Context {
         };
         let limits = runtime::Limits::default();
         let roots = Roots {
-            runtimes: runtime::Catalog::open(self.root.join("runtimes"), policy, limits)
+            runtimes: runtime::Catalog::open(self.catalog_root().join("runtimes"), policy, limits)
                 .map_err(|e| format!("runtime catalog: {e:?}"))?,
-            hosts: runtime::host::Catalog::open(self.root.join("hosts"), policy, limits)
+            hosts: runtime::host::Catalog::open(self.catalog_root().join("hosts"), policy, limits)
                 .map_err(|e| format!("host catalog: {e:?}"))?,
             work: WorkRoot::open(self.root.join("work"))
                 .map_err(|e| format!("work root: {e:?}"))?,

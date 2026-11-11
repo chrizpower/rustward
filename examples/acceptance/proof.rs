@@ -68,6 +68,31 @@ fn complete(state: &RunState, record: &Record, result: RunResult, code: i32) -> 
         record.identity.is_some() && record.exit == Some(ProcessExit::Code(code)),
         "completion lacks the expected identity or exit evidence",
     )?;
+    output(record)
+}
+pub fn complete_stopped(state: &RunState, record: &Record, result: RunResult) -> Result<()> {
+    let reason = match result {
+        RunResult::Cancellation => "cancellation",
+        RunResult::Timeout => "timeout",
+        _ => return Err("expected Cancellation or Timeout".into()),
+    };
+    require(
+        state.phase == RunPhase::Completed && state.result == Some(result),
+        "stop result was not retained",
+    )?;
+    require(
+        record.cleanup_confirmed && record.review_required && !record.output_failed,
+        "stopped run lacks cleanup or external review evidence",
+    )?;
+    require(
+        record.identity.is_some()
+            && record.exit.is_some()
+            && record.stop_reason.as_deref() == Some(reason),
+        "stopped run lacks identity, exit, or stop reason",
+    )?;
+    output(record)
+}
+fn output(record: &Record) -> Result<()> {
     let output = record
         .output_evidence
         .as_ref()
@@ -146,4 +171,19 @@ pub fn workload(context: &Context, id: &str, case: &str, record: &Record) -> Res
         "missing stderr marker",
     )?;
     Ok(parent)
+}
+
+pub fn remote_started(value: &Value, kind: &str, run_id: &str) -> Result<()> {
+    require(
+        value["kind"] == kind && value["state"] == "alive" && value["run_id"] == run_id,
+        "remote work is not confirmed alive",
+    )?;
+    require(value["inputs"] == inputs(), "remote work inputs differ")?;
+    require(
+        value["pid"].as_u64().is_some_and(|pid| pid > 0)
+            && value["start_time"]
+                .as_str()
+                .is_some_and(|time| !time.is_empty()),
+        "remote process identity is missing",
+    )
 }

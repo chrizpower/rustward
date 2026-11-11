@@ -1,7 +1,7 @@
 # Ansible acceptance test
 
 Status: The copied Docker bundle confirms A01/A02 passing. The user later
-reported A03 passing. A04 is implemented but unrun; A05–A10 remain unimplemented. The user requested this
+reported A03/A04 passing. A05 is implemented but unrun; A06–A10 remain unimplemented. The user requested this
 planning artifact on 2026-11-09. It tests the accepted generic execution rules
 with the main workload. It does not accept new execution policy or authorize
 production access, schedule migration, or deployment.
@@ -90,7 +90,11 @@ before admission. The user later reported A03 passing with source revision
 `6a9e019fcc068bbf217723c8f7e8c6ff51e5653015354e169298fd34b1c800af`
 and image `sha256:f7b6d639b86a93f75c1a91e13bf48e43bd1a1b9af5f164b2311a26f5899f4c2f`.
 Its complete successful bundle has not been copied here. [A04](failure-acceptance.md)
-is implemented but unrun. A05–A10 remain unimplemented. Docker is absent from the devbox;
+subsequently passed per user report with source revision
+`acecb1693da76cb8a98b1f4eef472ba67fa786ba0946e7cc1ba6de39108c8720`
+and image `sha256:262ba411fae690a60aaf80cb56d50a468e8df50b4de23528ce9536442af16411`.
+Its full successful bundle has not been copied here.
+[A05](stopping-acceptance.md) is implemented but unrun; A06–A10 remain unimplemented. Docker is absent from the devbox;
 mechanical checks do not pass A03.
 
 For each execution, record the exact command, host baseline, dependency versions,
@@ -98,7 +102,7 @@ case results, and relevant state, output, and target observations. Preserve
 failure evidence before cleanup. Record blocked and skipped cases with reasons;
 they do not count as passes. Keep credentials out of the evidence.
 
-Remaining work is to run A04 on the isolated runner, implement A05–A10,
+Remaining work is to run A05 on the isolated runner, implement A06–A10,
 and review the results. Confirm how representative the synthetic
 fixture is during the separate workload compatibility review.
 

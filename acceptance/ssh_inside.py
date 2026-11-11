@@ -15,18 +15,20 @@ ROOT = Path("/opt/rustward-ssh-acceptance")
 TOOLS = Path("/opt/rustward-acceptance-tools")
 
 
-def pin(value):
+def pin(value, directory=None):
+    directory = CREDENTIALS if directory is None else directory
     fields = value["host_key"].split()
     if len(fields) != 2 or fields[0] != "ssh-ed25519":
         raise ValueError("invalid fixture host public key")
-    (CREDENTIALS / "known_hosts").write_text(f"{ALIAS} {' '.join(fields)}\n")
-    (CREDENTIALS / "known_hosts").chmod(0o644)
-    (CREDENTIALS / "connection.json").write_text(json.dumps({"address": value["address"], "port": 2222}))
-    (CREDENTIALS / "connection.json").chmod(0o644)
+    (directory / "known_hosts").write_text(f"{ALIAS} {' '.join(fields)}\n")
+    (directory / "known_hosts").chmod(0o644)
+    (directory / "connection.json").write_text(json.dumps({"address": value["address"], "port": 2222}))
+    (directory / "connection.json").chmod(0o644)
 
 
-def probe(account, runtime, evidence):
-    connection = json.loads((CREDENTIALS / "connection.json").read_text())
+def probe(account, runtime, evidence, mode="success"):
+    directory = CREDENTIALS if mode == "success" else CREDENTIALS / "stopping"
+    connection = json.loads((directory / "connection.json").read_text())
     # Both probes are read-only. An admitted task is never retried.
     def command(known):
         return user_command(account, [runtime / "bin/ssh", *options(known),
@@ -34,13 +36,13 @@ def probe(account, runtime, evidence):
                             f"{USER}@{connection['address']}", "true"])
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        result = invoke(command(CREDENTIALS / "known_hosts"), timeout=10, capture=True)
+        result = invoke(command(directory / "known_hosts"), timeout=10, capture=True)
         if result.returncode == 0:
             break
         time.sleep(0.2)
     else:
         raise RuntimeError("pinned SSH target did not become ready")
-    wrong = invoke(command(CREDENTIALS / "wrong_known_hosts"), timeout=15, capture=True)
+    wrong = invoke(command(directory / "wrong_known_hosts"), timeout=15, capture=True)
     rejected = wrong.returncode != 0 and "Host key verification failed" in wrong.stderr
     (evidence / "host-key-check.json").write_text(json.dumps({"status": "passed" if rejected else "failed",
         "wrong_key_rejected": rejected, "correct_key_accepted": True,
@@ -49,9 +51,9 @@ def probe(account, runtime, evidence):
         raise RuntimeError("wrong host key was not rejected")
 
 
-def check_commands(account, runtime, evidence):
+def check_commands(account, runtime, evidence, mode="success"):
     result = checked(user_command(account, [runtime / "bin/python3", "-I", "-B",
-                     runtime / "ssh_commands.py", evidence / "ssh-commands"]),
+                     runtime / "ssh_commands.py", evidence / "ssh-commands", mode]),
                      capture_output=True, timeout=30)
     report = json.loads(result.stdout)
     if report.get("status") != "passed":
@@ -127,6 +129,11 @@ def main():
         raise PermissionError("SSH fixture setup requires root")
     if operation == "client-key":
         print(json.dumps(client_key()))
+    elif operation == "pin-stopping":
+        directory = CREDENTIALS / "stopping"
+        directory.mkdir(mode=0o755)
+        pin(json.load(sys.stdin), directory)
+        (directory / "wrong_known_hosts").write_bytes((CREDENTIALS / "wrong_known_hosts").read_bytes())
     elif operation == "pin":
         pin(json.load(sys.stdin))
     elif operation == "run":
@@ -135,8 +142,17 @@ def main():
         run_failure(sys.argv[2])
     elif operation == "complete-failures":
         complete_failures()
+    elif operation == "stopping":
+        from stop_inside import run as run_stop
+        run_stop(sys.argv[2], sys.argv[3])
+    elif operation == "complete-stopping":
+        from stop_inside import complete
+        complete()
     elif operation == "scan":
-        report = export_status([Path("/opt/rustward-acceptance"), ROOT])
+        from stop_inside import confirm_stopped
+        confirm_stopped()
+        from stopping_runner import ROOTS
+        report = export_status([Path("/opt/rustward-acceptance"), ROOT, *map(Path, ROOTS.values())])
         print(json.dumps(report))
         return 0 if report["status"] == "passed" else 1
     else:

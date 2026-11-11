@@ -1,0 +1,16 @@
+---
+- name: Hold synchronous remote work for a stopping test
+  hosts: fixture
+  gather_facts: false
+  tasks:
+    - name: Record remote startup and hold the command
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -I
+          - -B
+          - "{{ hold_program | default('/opt/rustward_hold.py') }}"
+          - "{{ hold_kind }}"
+          - "{{ {'text': text, 'count': count, 'enabled': enabled} | to_json }}"
+          - "{{ hold_run_id }}"
+      changed_when: false

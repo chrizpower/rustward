@@ -4,6 +4,7 @@ mod execution;
 mod failure;
 mod proof;
 mod recovery;
+mod stopping;
 #[cfg(test)]
 mod tests;
 
@@ -38,9 +39,10 @@ fn command(args: &[String]) -> Result<()> {
         }
         ["probe-manager"]=>{println!("{}",context::probe_manager()?);Ok(())},
         ["run", root]=>execution::run(Path::new(root), false),
+        ["run-stop", root, kind]=>stopping::run(Path::new(root), kind),
         ["run-failure", root, kind]=>failure::run(Path::new(root), kind),
         ["run-ssh", root]=>execution::run(Path::new(root), true),
         ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
-        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, run-failure <root> <task|unreachable>, or recovery-child <root> <run-id>".into()),
+        _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, run-failure <root> <task|unreachable>, run-stop <root> <cancel|timeout>, or recovery-child <root> <run-id>".into()),
     }
 }

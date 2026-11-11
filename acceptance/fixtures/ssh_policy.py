@@ -15,3 +15,7 @@ def options(known_hosts=None):
             "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=none", "-o", "ForwardAgent=no",
             "-o", "ClearAllForwardings=yes", "-o", "PasswordAuthentication=no",
             "-o", "KbdInteractiveAuthentication=no", "-o", "ConnectTimeout=5"]
+
+
+def credentials(mode="success"):
+    return CREDENTIALS / "stopping" if mode in ("queued", "cancel", "timeout") else CREDENTIALS

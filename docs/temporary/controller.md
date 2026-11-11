@@ -209,12 +209,12 @@ explicit links, and completion rollback. Storage-failure stopping is tested
 while a second preparation and a database write lock are held. Launcher smoke
 tests use synthetic values and ordinary test utilities without a real manager.
 
-The three opt-in isolated-host tests remain unrun here. The implemented
-[local acceptance runner](acceptance-runner.md) adds the complete controller path
-for A01/A02 and a separate local recovery check. Docker is absent in the devbox;
-no real-systemd case has passed. Direct workload-wrapper smoke tests are not
-controller acceptance. Real cleanup, permissions, and output behavior remain
-gates before extending the service. A03–A10 remain unimplemented.
+The copied Docker bundle confirms A01/A02, local recovery, and the three legacy
+host tests passing. The user reports A03/A04 passing; the latest full bundle
+has not been copied here. [A05 stopping acceptance](stopping-acceptance.md) is
+implemented but unrun. Docker is absent from the devbox. Direct workload-wrapper
+smoke checks are not controller acceptance. A06–A10 and the remaining integration
+gates still need evidence.
 
 The service execution loop, HTTP/UI/API, scheduler execution and occurrence
 checkpoints, live reload, runtime selection UI, retention reclamation,

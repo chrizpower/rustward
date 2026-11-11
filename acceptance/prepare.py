@@ -40,7 +40,9 @@ def configuration(root, runtime, remote=False):
     if remote:
         tasks += [("remote-playbook", "remote.py", None),
                   ("remote-failure", "remote.py", "failure"),
-                  ("remote-unreachable", "remote.py", "unreachable")]
+                  ("remote-unreachable", "remote.py", "unreachable"),
+                  ("remote-queued", "remote.py", "queued"), ("remote-cancel", "remote.py", "cancel"),
+                  ("remote-timeout", "remote.py", "timeout")]
     for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:
@@ -51,10 +53,38 @@ def configuration(root, runtime, remote=False):
         write(definitions / "tasks" / f"{name}.toml",
               f"label={json.dumps(name)}\nexecutable={json.dumps(str(runtime / 'bin/python3'))}\n"
               f"working_directory={json.dumps(str(runtime))}\narguments=[{arguments}]\n"
-              "timeout_seconds=180\ncleanup_grace_seconds=2\n"
+              f"timeout_seconds={60 if mode == 'timeout' else 180}\ncleanup_grace_seconds=2\n"
               "inputs=[{id='text',type='string',required=true},"
               "{id='count',type='integer',required=true},"
               "{id='enabled',type='boolean',required=true}]\n")
+
+
+def create_root(root, account):
+    root.mkdir(mode=0o755)
+    for name in ("runtimes", "hosts"):
+        (root / name).mkdir(mode=0o755)
+    for name in ("work", "logs", "state", "evidence"):
+        path = root / name
+        path.mkdir(mode=0o700)
+        os.chown(path, account.pw_uid, account.pw_gid)
+
+
+def prepare_shared(root, source_root, user, revision):
+    os.umask(0o022)
+    account = pwd.getpwnam(user)
+    if os.geteuid() != 0 or account.pw_uid == 0:
+        raise PermissionError("fixture preparation requires root and a non-root execution user")
+    root, source_root = Path(root), Path(source_root)
+    if not root.is_absolute() or root != root.resolve() or root.exists():
+        raise ValueError("use a new absolute fixture root without symlinks")
+    fixture = json.loads((source_root / "fixture.json").read_text())
+    if fixture["source_revision"] != revision or fixture["execution_uid"] != account.pw_uid:
+        raise ValueError("shared fixture selection changed")
+    create_root(root, account)
+    configuration(root, source_root / "runtimes" / fixture["runtime_id"], remote=True)
+    fixture["catalog_root"] = str(source_root)
+    write(root / "fixture.json", json.dumps(fixture, indent=2) + "\n")
+    return fixture
 
 
 def prepare(root, tools, user, revision, remote=False):
@@ -67,13 +97,7 @@ def prepare(root, tools, user, revision, remote=False):
     account = pwd.getpwnam(user)
     if account.pw_uid == 0:
         raise ValueError("execution user must be non-root")
-    root.mkdir(mode=0o755)
-    for name in ("runtimes", "hosts"):
-        (root / name).mkdir(mode=0o755)
-    for name in ("work", "logs", "state", "evidence"):
-        path = root / name
-        path.mkdir(mode=0o700)
-        os.chown(path, account.pw_uid, account.pw_gid)
+    create_root(root, account)
     stage = root / "staging"
     stage.mkdir(mode=0o755)
     (stage / "bin").mkdir(mode=0o755)

@@ -1,6 +1,9 @@
 # A04 failure acceptance
 
-Status: Implemented, not run on Docker. The user requested A04 on 2026-11-11,
+Status: Implemented. The user reported A01–A04 passing on Docker, with source
+revision `acecb1693da76cb8a98b1f4eef472ba67fa786ba0946e7cc1ba6de39108c8720`
+and image `sha256:262ba411fae690a60aaf80cb56d50a468e8df50b4de23528ce9536442af16411`.
+The complete successful bundle has not been copied here. The user requested A04 on 2026-11-11,
 after reporting A01/A02/A03 passing. The complete successful A03 bundle has not
 been copied here. Docker is absent from the devbox. Direct playbook smoke checks
 and synthetic tests do not pass A04.
@@ -78,7 +81,7 @@ subcase reports failure. Missing case, target, or cleanup evidence prevents a
 pass. The original credential scan covers both additional runs' retained state
 and output before either fixture is copied. No credential bytes enter inputs,
 arguments, environment variables, or copied fixture roots. The target is never
-restarted to repeat a task.
+restarted to repeat a task. A05 uses a new target container with its own host pin.
 
 ## Verification and remaining work
 
@@ -98,8 +101,8 @@ are under `$HOME/artifacts/rustward/a04-failures-20261111/`.
 coverage. Three real-host tests are ignored in normal checks. The explicit Docker
 attempt is blocked because Docker is not installed in the devbox.
 
-Run A04 on Docker and review its copied evidence. A05 cancellation and timeout
-is next. A06–A10, the service loop, scheduling, live reload, retention, UI,
+Run [A05 cancellation and timeout](stopping-acceptance.md) on Docker and review
+its copied evidence. A06–A10, the service loop, scheduling, live reload, retention, UI,
 production secret configuration, workload migration, and deployment remain open.
 
 Before removal, transfer lasting fixture interfaces to ARCHITECTURE.md, preserve

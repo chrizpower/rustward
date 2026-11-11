@@ -12,6 +12,8 @@ class Remote:
         self.target_created = self.network_created = False
         self.public_key = None
         self.fixture_started = False
+        self.stopping = None
+        self.target_image = None
 
     def create_network(self):
         self.network_created = True
@@ -43,6 +45,7 @@ class Remote:
             raise RuntimeError("SSH target build has no fixed image ID")
         if not self.network_created:
             raise RuntimeError("create the internal network before starting the controller")
+        self.target_image = image
         self.target_created = True
         self.docker.call(["run", "--detach", "--pull=never", "--name", self.target,
             "--network", self.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755", image])
@@ -75,6 +78,9 @@ class Remote:
         self.stop_target()
         self.inside("failure", "unreachable", timeout=240)
         self.inside("complete-failures")
+        from stopping_runner import Stopping
+        self.stopping = Stopping(self)
+        self.stopping.run(revision)
 
     def stop_target(self):
         self.docker.call(["stop", "--time", "10", self.target], timeout=30)
@@ -95,6 +101,8 @@ class Remote:
             raise RuntimeError("credential export check failed; raw fixture export refused")
 
     def cleanup(self):
+        if self.stopping is not None:
+            self.stopping.cleanup()
         if self.target_created:
             self.docker.call(["rm", "--force", self.target])
         if self.network_created:
@@ -104,7 +112,7 @@ class Remote:
 
 
 def validate(fixture, evidence):
-    for name in ("A03", "A04", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-command-check", "ssh-host-runner", "result"):
+    for name in ("A03", "A04", "A05", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-command-check", "ssh-host-runner", "result"):
         value = json.loads((fixture / "evidence" / f"{name}.json").read_text())
         if value.get("status") != "passed":
             raise RuntimeError(f"missing SSH pass evidence: {name}")
@@ -114,6 +122,8 @@ def validate(fixture, evidence):
     result = json.loads((fixture / "evidence/result.json").read_text())
     if result.get("cases") != ["A03"]:
         raise RuntimeError("SSH result has no A03 case")
+    from stopping_runner import validate as validate_stopping
+    validate_stopping(evidence)
 
 
 def a04_status(evidence):

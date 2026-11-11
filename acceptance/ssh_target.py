@@ -46,6 +46,10 @@ def command(arguments):
         if len(fields) != 2 or fields[0] != "ssh-ed25519":
             raise ValueError("invalid synthetic public key")
         (ROOT / "authorized_keys").write_text(" ".join(fields) + "\n")
+    elif len(arguments) == 2 and arguments[0] == "hold-state":
+        from runpy import run_path
+        state = run_path("/opt/rustward_hold.py")["state"]
+        print(json.dumps(state(arguments[1])))
     elif arguments == ["failure-result"]:
         print(RESULT.with_name("failure.json").read_text(), end="")
     elif arguments == ["result"]:

@@ -115,6 +115,10 @@ class PolicyTests(unittest.TestCase):
                         return 0, '{"Running":false,"Pid":0}'
                     if args[0] == "inspect":
                         return 0, json.dumps([{"NetworkSettings": {"Networks": {"test-network": {"IPAddress": "172.19.0.2"}}}}])
+                    if "hold-state" in args:
+                        kind = args[-1]
+                        return 0, json.dumps({"kind":kind,"state":"absent"} if kind == "queued" else
+                            {"kind":kind,"state":"alive","pid":42,"start_time":"100","run_id":"a"*64,"inputs":{"text": 'He said "hello"; it\'s a test', "count":7,"enabled":True}})
                     if args[-1] == "metadata":
                         return 0, '{"host_key":"ssh-ed25519 public","port":2222}'
                     if args[-1] == "client-key":
@@ -132,10 +136,14 @@ class PolicyTests(unittest.TestCase):
             runner.cleanup()
             self.assertIn(["network", "create", "--internal", "test-network"], [args for args, _ in calls])
             self.assertFalse(any(args[:2] == ["network", "connect"] for args, _ in calls))
-            target = next(args for args, _ in calls if args[0] == "run")
-            self.assertNotIn("--privileged", target)
-            self.assertNotIn("--publish", target)
-            self.assertNotIn("--volume", target)
+            targets = [args for args, _ in calls if args[0] == "run"]
+            self.assertEqual(len(targets), 2)
+            for target in targets:
+                self.assertNotIn("--privileged", target)
+                self.assertNotIn("--publish", target)
+                self.assertNotIn("--volume", target)
+                self.assertIn("test-network", target)
+            self.assertFalse(any(args[0] == "start" for args, _ in calls))
             self.assertEqual(json.loads((evidence / "target-check.json").read_text())["status"], "passed")
             self.assertTrue(any("input_data" in options for _, options in calls))
             actions = [args for args, _ in calls]
@@ -184,14 +192,15 @@ class PolicyTests(unittest.TestCase):
             root = Path(folder)
             evidence = root / "evidence"
             evidence.mkdir()
-            for name in ("A03", "A04", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-host-runner", "credential-scan", "target-check", "failure-target-check", "target-stopped"):
+            for name in ("A03", "A04", "A05", "A04-task-failure", "A04-unreachable", "A04-task-failure-host", "A04-unreachable-host", "host-key-check", "ssh-host-runner", "credential-scan", "target-check", "failure-target-check", "target-stopped"):
                 (evidence / f"{name}.json").write_text('{"status":"passed"}')
             (evidence / "result.json").write_text('{"status":"passed","cases":["A03"]}')
             with self.assertRaises(OSError):
                 validate(root, evidence)
             report = evidence / "ssh-command-check.json"
             report.write_text('{"status":"passed"}')
-            validate(root, evidence)
+            with patch("stopping_runner.validate"):
+                validate(root, evidence)
             report.write_text('{"status":"failed"}')
             with self.assertRaisesRegex(RuntimeError, "ssh-command-check"):
                 validate(root, evidence)

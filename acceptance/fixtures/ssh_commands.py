@@ -7,16 +7,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from common import TEXT, dependencies
 from remote import arguments
-from ssh_policy import CREDENTIALS
+from ssh_policy import credentials
 
 
-def check(runtime, work, connection):
+def check(runtime, work, connection, mode="success"):
     from ansible.plugins.loader import init_plugin_loader, connection_loader
     from ansible.playbook.play_context import PlayContext
 
     work.mkdir()
     values = {"text": TEXT, "count": 7, "enabled": True}
-    variables = json.loads(arguments(runtime, work, values, connection)[-1])
+    variables = json.loads(arguments(runtime, work, values, connection, mode)[-1])
     forbidden = work / ("control-sockets-" + "x" * 128)
     variables["ansible_control_path_dir"] = str(forbidden)
     init_plugin_loader()
@@ -43,5 +43,6 @@ def check(runtime, work, connection):
 
 if __name__ == "__main__":
     runtime = dependencies()
-    connection = json.loads((CREDENTIALS / "connection.json").read_text())
-    print(json.dumps(check(runtime, Path(sys.argv[1]), connection)))
+    mode = sys.argv[2] if len(sys.argv) == 3 else "success"
+    connection = json.loads((credentials(mode) / "connection.json").read_text())
+    print(json.dumps(check(runtime, Path(sys.argv[1]), connection, mode)))

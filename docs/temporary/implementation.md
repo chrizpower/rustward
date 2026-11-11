@@ -20,12 +20,12 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. Run implemented [A04 failure acceptance](failure-acceptance.md) with
-   `just acceptance-ssh`. It includes separate remote-task failure and unreachable
-   target runs after A03. Docker is absent from the devbox. The user reported A03
-   passing; the complete successful bundle has not been copied here.
-2. Review A04 evidence, then implement cancellation and timeout case A05, followed
-   by A06–A10. Synthetic library tests and direct playbook smoke checks are not
+1. Run implemented [A05 stopping acceptance](stopping-acceptance.md) with
+   `just acceptance-ssh`. It includes queued cancellation, active cancellation,
+   and a real 60-second timeout after A01–A04. Docker is absent from the devbox.
+   The user reported A01–A04 passing; the latest full bundle is not copied here.
+2. Review A05 evidence, then implement remote recovery case A06, followed by
+   A07–A10. Synthetic library tests and direct playbook smoke checks are not
    host acceptance evidence.
 3. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and

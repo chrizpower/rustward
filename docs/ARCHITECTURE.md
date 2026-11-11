@@ -82,8 +82,8 @@ Activation, reload, scheduling, and the service execution loop remain unimplemen
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
-Copied evidence passes A01/A02; the user reports A03 passed.
-[A04](temporary/failure-acceptance.md) is unrun. [Telemetry](temporary/telemetry.md) is unimplemented.
+A01/A02 pass in copied evidence; A03/A04 pass per user report.
+[A05](temporary/stopping-acceptance.md) is unrun. [Telemetry](temporary/telemetry.md) is unimplemented.
 
 ## Design boundaries
 

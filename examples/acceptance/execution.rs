@@ -160,7 +160,7 @@ pub fn run(root: &Path, remote: bool) -> Result<()> {
     }
     let names: Vec<_> = cases.iter().map(|(name, _)| *name).collect();
     let result = if remote {
-        json!({"status":"passed","cases":names,"scope":"A03","not_run":["A05","A06","A07","A08","A09","A10"]})
+        json!({"status":"passed","cases":names,"scope":"A03","not_run":["A06","A07","A08","A09","A10"]})
     } else {
         json!({"status":"passed","cases":names,"additional":["local-recovery"],"not_run":["A03","A04","A05","A06","A07","A08","A09","A10"]})
     };

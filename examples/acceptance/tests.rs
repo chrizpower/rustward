@@ -117,10 +117,13 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 6);
+    assert_eq!(config.task_count(), 9);
     for (task, mode) in [
         ("remote-failure", "failure"),
         ("remote-unreachable", "unreachable"),
+        ("remote-queued", "queued"),
+        ("remote-cancel", "cancel"),
+        ("remote-timeout", "timeout"),
     ] {
         assert_eq!(
             config.arguments(task, &execution::values()).unwrap(),
@@ -189,4 +192,64 @@ fn expected_failure_requires_its_exit_cleanup_and_complete_capture() {
         );
     }
     assert!(proof::complete_failure(&state, &record(), 0).is_err());
+}
+
+#[test]
+fn stopped_completion_requires_retained_result_cleanup_and_review() {
+    for (result, reason) in [
+        (RunResult::Cancellation, "cancellation"),
+        (RunResult::Timeout, "timeout"),
+    ] {
+        let state = RunState {
+            phase: RunPhase::Completed,
+            result: Some(result.clone()),
+        };
+        let mut evidence = record();
+        evidence.review_required = true;
+        evidence.stop_reason = Some(reason.into());
+        proof::complete_stopped(&state, &evidence, result.clone()).unwrap();
+        for change in 0..8 {
+            let mut invalid = evidence.clone();
+            match change {
+                0 => invalid.cleanup_confirmed = false,
+                1 => invalid.review_required = false,
+                2 => invalid.output_failed = true,
+                3 => invalid.identity = None,
+                4 => invalid.exit = None,
+                5 => invalid.stop_reason = None,
+                6 => invalid.output_evidence.as_mut().unwrap().synchronized = false,
+                _ => invalid.output_evidence.as_mut().unwrap().recovered = true,
+            }
+            assert!(proof::complete_stopped(&state, &invalid, result.clone()).is_err());
+        }
+        assert!(
+            proof::complete_stopped(
+                &RunState {
+                    phase: RunPhase::Completed,
+                    result: Some(RunResult::Success)
+                },
+                &evidence,
+                result.clone()
+            )
+            .is_err()
+        );
+        assert!(proof::complete_stopped(&state, &evidence, RunResult::Failure).is_err());
+    }
+}
+#[test]
+fn remote_start_proof_needs_the_expected_case_inputs_and_live_process() {
+    let value = serde_json::json!({"state":"alive","kind":"cancel","inputs":proof::inputs(),"pid":42,"start_time":"100","run_id":"a".repeat(64)});
+    proof::remote_started(&value, "cancel", &"a".repeat(64)).unwrap();
+    for (field, bad) in [
+        ("state", serde_json::json!("ended")),
+        ("kind", serde_json::json!("timeout")),
+        ("run_id", serde_json::json!("b".repeat(64))),
+        ("inputs", serde_json::json!({})),
+        ("pid", serde_json::json!(0)),
+        ("start_time", serde_json::json!("")),
+    ] {
+        let mut changed = value.clone();
+        changed[field] = bad;
+        assert!(proof::remote_started(&changed, "cancel", &"a".repeat(64)).is_err());
+    }
 }
