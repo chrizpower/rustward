@@ -117,7 +117,7 @@ fn prepared_tasks_use_the_accepted_layout_and_argument_generation() {
         .unwrap();
     assert!(status.success());
     let config = rustward::config::load(root.path().join("configuration/rustward.toml")).unwrap();
-    assert_eq!(config.task_count(), 9);
+    assert_eq!(config.task_count(), 10);
     for (task, mode) in [
         ("remote-failure", "failure"),
         ("remote-unreachable", "unreachable"),
@@ -251,5 +251,37 @@ fn remote_start_proof_needs_the_expected_case_inputs_and_live_process() {
         let mut changed = value.clone();
         changed[field] = bad;
         assert!(proof::remote_started(&changed, "cancel", &"a".repeat(64)).is_err());
+    }
+}
+
+#[test]
+fn recovered_proof_retains_identity_and_unknown_historical_counts() {
+    let state = RunState {
+        phase: RunPhase::Completed,
+        result: Some(RunResult::Interruption),
+    };
+    let mut r = record();
+    r.review_required = true;
+    r.output_failed = true;
+    r.output_evidence = Some(Evidence::from_report(Report::default(), true, true));
+    let before = serde_json::json!({"record":{"identity":r.identity}});
+    proof::recovered(&state, &r, &before).unwrap();
+    for change in 0..5 {
+        let mut invalid = r.clone();
+        match change {
+            0 => invalid.cleanup_confirmed = false,
+            1 => invalid.review_required = false,
+            2 => invalid.output_failed = false,
+            3 => invalid.identity = None,
+            _ => {
+                invalid
+                    .output_evidence
+                    .as_mut()
+                    .unwrap()
+                    .stdout
+                    .observed_bytes = Some(0)
+            }
+        };
+        assert!(proof::recovered(&state, &invalid, &before).is_err());
     }
 }

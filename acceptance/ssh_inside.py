@@ -27,7 +27,7 @@ def pin(value, directory=None):
 
 
 def probe(account, runtime, evidence, mode="success"):
-    directory = CREDENTIALS if mode == "success" else CREDENTIALS / "stopping"
+    directory = CREDENTIALS if mode == "success" else CREDENTIALS / ("stopping" if mode in ("queued", "cancel", "timeout") else "remaining")
     connection = json.loads((directory / "connection.json").read_text())
     # Both probes are read-only. An admitted task is never retried.
     def command(known):
@@ -129,8 +129,8 @@ def main():
         raise PermissionError("SSH fixture setup requires root")
     if operation == "client-key":
         print(json.dumps(client_key()))
-    elif operation == "pin-stopping":
-        directory = CREDENTIALS / "stopping"
+    elif operation in ("pin-stopping", "pin-remaining"):
+        directory = CREDENTIALS / ("stopping" if operation == "pin-stopping" else "remaining")
         directory.mkdir(mode=0o755)
         pin(json.load(sys.stdin), directory)
         (directory / "wrong_known_hosts").write_bytes((CREDENTIALS / "wrong_known_hosts").read_bytes())
@@ -148,11 +148,21 @@ def main():
     elif operation == "complete-stopping":
         from stop_inside import complete
         complete()
+    elif operation == "scenario":
+        from scenario_inside import run as run_scenario
+        run_scenario(sys.argv[2], sys.argv[3])
+    elif operation == "scenario-report":
+        from remaining_runner import CASES
+        case = sys.argv[2]
+        print((Path(CASES[case]["root"]) / "evidence" / f"{case}.json").read_text())
     elif operation == "scan":
         from stop_inside import confirm_stopped
         confirm_stopped()
+        from scenario_inside import confirm_stopped as confirm_scenarios
+        confirm_scenarios()
+        from remaining_runner import CASES
         from stopping_runner import ROOTS
-        report = export_status([Path("/opt/rustward-acceptance"), ROOT, *map(Path, ROOTS.values())])
+        report = export_status([Path("/opt/rustward-acceptance"), ROOT, *map(Path, ROOTS.values()), *[Path(value["root"]) for value in CASES.values()]])
         print(json.dumps(report))
         return 0 if report["status"] == "passed" else 1
     else:

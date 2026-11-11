@@ -104,6 +104,7 @@ class CleanupTests(unittest.TestCase):
                 self.network = name + "-network"
                 self.fixture_started = False
                 self.stopping = None
+                self.remaining = None
             def create_network(self):
                 calls.append(["network", "create", "--internal", self.network])
             def prepare_credentials(self):
@@ -164,7 +165,7 @@ class CleanupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             code, result, calls = self.attempt(directory, harness_code=1, remote=True)
         self.assertNotEqual(code, 0)
-        self.assertEqual(result["cases"], {"A01": "failed", "A02": "not run", "A03": "not run", "A04": "not run", "A05": "not run"})
+        self.assertEqual(result["cases"], {"A01": "failed", "A02": "not run", "A03": "not run", "A04": "not run", "A05": "not run", "A06": "not run"})
         self.assertTrue(result["evidence_copied"])
         self.assertIn("local host acceptance failed", result["reason"])
         operations = [args[0] for args in calls]

@@ -42,7 +42,8 @@ def configuration(root, runtime, remote=False):
                   ("remote-failure", "remote.py", "failure"),
                   ("remote-unreachable", "remote.py", "unreachable"),
                   ("remote-queued", "remote.py", "queued"), ("remote-cancel", "remote.py", "cancel"),
-                  ("remote-timeout", "remote.py", "timeout")]
+                  ("remote-timeout", "remote.py", "timeout"),
+                  ("remote-recovery", "remote.py", "recovery")]
     for name, script, mode in tasks:
         arguments = [{"literal": "-I"}, {"literal": "-B"}, {"literal": script}]
         if mode:

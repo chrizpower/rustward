@@ -115,6 +115,8 @@ class PolicyTests(unittest.TestCase):
                         return 0, '{"Running":false,"Pid":0}'
                     if args[0] == "inspect":
                         return 0, json.dumps([{"NetworkSettings": {"Networks": {"test-network": {"IPAddress": "172.19.0.2"}}}}])
+                    if "scenario-report" in args:
+                        return 0, json.dumps({"status":"passed","run_id":"a"*64})
                     if "hold-state" in args:
                         kind = args[-1]
                         return 0, json.dumps({"kind":kind,"state":"absent"} if kind == "queued" else
@@ -137,7 +139,7 @@ class PolicyTests(unittest.TestCase):
             self.assertIn(["network", "create", "--internal", "test-network"], [args for args, _ in calls])
             self.assertFalse(any(args[:2] == ["network", "connect"] for args, _ in calls))
             targets = [args for args, _ in calls if args[0] == "run"]
-            self.assertEqual(len(targets), 2)
+            self.assertEqual(len(targets), 3)
             for target in targets:
                 self.assertNotIn("--privileged", target)
                 self.assertNotIn("--publish", target)
@@ -199,7 +201,7 @@ class PolicyTests(unittest.TestCase):
                 validate(root, evidence)
             report = evidence / "ssh-command-check.json"
             report.write_text('{"status":"passed"}')
-            with patch("stopping_runner.validate"):
+            with patch("stopping_runner.validate"), patch("remaining_runner.validate"):
                 validate(root, evidence)
             report.write_text('{"status":"failed"}')
             with self.assertRaisesRegex(RuntimeError, "ssh-command-check"):

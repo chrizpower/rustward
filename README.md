@@ -10,8 +10,8 @@ implemented as libraries. The controller connects capture, log accounting,
 manager UID binding, and pinned host dependencies. Tests use synthetic files,
 fake supervision, and a private D-Bus peer. Copied Docker evidence confirms
 A01/A02 passing. The [local runner](docs/temporary/acceptance-runner.md) and
-[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The user reports A03/A04
-passing; [A05](docs/temporary/stopping-acceptance.md) needs its first Docker run. The main binary validates TOML files;
+[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The user reports A03–A05
+passing. [Remaining acceptance cases](docs/temporary/remaining-acceptance.md) need Docker verification. The main binary validates TOML files;
 `rustward-exec` supplies the pinned environment launcher. There is no service loop.
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).

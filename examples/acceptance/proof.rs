@@ -187,3 +187,31 @@ pub fn remote_started(value: &Value, kind: &str, run_id: &str) -> Result<()> {
         "remote process identity is missing",
     )
 }
+
+pub fn recovered(state: &RunState, record: &Record, before: &Value) -> Result<()> {
+    require(
+        state.phase == RunPhase::Completed && state.result == Some(RunResult::Interruption),
+        "recovery did not retain Interruption",
+    )?;
+    require(
+        record.cleanup_confirmed && record.review_required && record.output_failed,
+        "recovery lacks cleanup or review",
+    )?;
+    require(
+        record.identity.is_some()
+            && serde_json::to_value(&record.identity)? == before["record"]["identity"],
+        "recovery changed execution identity",
+    )?;
+    let output = record
+        .output_evidence
+        .as_ref()
+        .ok_or("missing recovered output")?;
+    require(
+        output.recovered
+            && output.stdout.observed_bytes.is_none()
+            && output.stderr.observed_bytes.is_none()
+            && output.stdout.truncated.is_none()
+            && output.stderr.truncated.is_none(),
+        "recovery invented historical counts",
+    )
+}

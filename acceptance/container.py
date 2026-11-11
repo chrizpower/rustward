@@ -101,6 +101,8 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
               "cases": {"A01": "not run", "A02": "not run"}}
     if remote:
         result["cases"].update(A03="not run", A04="not run", A05="not run")
+        from remaining_runner import CASES
+        result["cases"].update({case:"not run" for case in CASES})
     (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     if not shutil.which("docker"):
         result["reason"] = "Docker is not installed"
@@ -201,6 +203,10 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
                         copied = ssh.stopping.copy() and copied
                     from stopping_runner import status as a05_status
                     result["cases"]["A05"] = a05_status(evidence)
+                    from remaining_runner import CASES, status as remaining_status
+                    if ssh.remaining is not None:
+                        copied = ssh.remaining.copy() and copied
+                    result["cases"].update({case:remaining_status(evidence, case) for case in CASES})
                     if result["status"] == "passed":
                         validate(evidence / "ssh-fixture", evidence)
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

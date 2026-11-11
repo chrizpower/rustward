@@ -74,7 +74,7 @@ fn queued(context: &Context, store: &mut Store, controller: &mut Native) -> Resu
     Ok(id)
 }
 
-fn remote_probe(context: &Context, kind: &str) -> Result<Value> {
+pub(super) fn remote_probe(context: &Context, kind: &str) -> Result<Value> {
     let output = Command::new(context.runtime().join("bin/python3"))
         .args(["-I", "-B"])
         .arg(context.runtime().join("remote_state.py"))
@@ -84,7 +84,7 @@ fn remote_probe(context: &Context, kind: &str) -> Result<Value> {
     Ok(serde_json::from_slice(&output.stdout)?)
 }
 
-fn wait_remote(
+pub(super) fn wait_remote(
     context: &Context,
     controller: &mut Native,
     id: &str,

@@ -18,4 +18,8 @@ def options(known_hosts=None):
 
 
 def credentials(mode="success"):
-    return CREDENTIALS / "stopping" if mode in ("queued", "cancel", "timeout") else CREDENTIALS
+    if mode in ("queued", "cancel", "timeout"):
+        return CREDENTIALS / "stopping"
+    if mode in ("recovery",):
+        return CREDENTIALS / "remaining"
+    return CREDENTIALS

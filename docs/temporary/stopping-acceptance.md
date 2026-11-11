@@ -1,6 +1,6 @@
 # A05 stopping acceptance
 
-Status: Implemented, not run on Docker. The user requested A05 on 2026-11-11
+Status: Implemented. The user reported A01–A05 passing on Docker. The user requested A05 on 2026-11-11
 after reporting A01–A04 passing. The latest complete successful bundle has not
 been copied here. Docker is absent from the devbox. Synthetic tests and direct
 local Ansible checks do not pass A05.

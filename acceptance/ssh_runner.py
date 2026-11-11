@@ -13,6 +13,7 @@ class Remote:
         self.public_key = None
         self.fixture_started = False
         self.stopping = None
+        self.remaining = None
         self.target_image = None
 
     def create_network(self):
@@ -81,6 +82,9 @@ class Remote:
         from stopping_runner import Stopping
         self.stopping = Stopping(self)
         self.stopping.run(revision)
+        from remaining_runner import Remaining
+        self.remaining = Remaining(self)
+        self.remaining.run(revision)
 
     def stop_target(self):
         self.docker.call(["stop", "--time", "10", self.target], timeout=30)
@@ -101,6 +105,8 @@ class Remote:
             raise RuntimeError("credential export check failed; raw fixture export refused")
 
     def cleanup(self):
+        if self.remaining is not None:
+            self.remaining.cleanup()
         if self.stopping is not None:
             self.stopping.cleanup()
         if self.target_created:
@@ -124,6 +130,8 @@ def validate(fixture, evidence):
         raise RuntimeError("SSH result has no A03 case")
     from stopping_runner import validate as validate_stopping
     validate_stopping(evidence)
+    from remaining_runner import validate as validate_remaining
+    validate_remaining(evidence)
 
 
 def a04_status(evidence):
