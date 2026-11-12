@@ -3,8 +3,8 @@
 Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
 manual admission, dispatch, stopping, review, and the [execution controller](temporary/controller.md)
-are implemented as libraries. Copied Docker evidence confirms A01–A09; A10
-lacks exported logs. The service loop is absent. Green marks implemented parts.
+are implemented as libraries. Copied Docker evidence confirms A01–A10.
+The service loop is absent. Green marks implemented parts.
 
 Follow [Gravity](GRAVITY.md). Unaccepted mechanisms in [requirements](temporary/requirements.md)
 remain proposals. This diagram does not authorize execution, migration, or deployment.
@@ -25,7 +25,7 @@ flowchart TB
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
         Queue["Manual admission, bounded queue,<br/>and queued cancellation<br/>Implemented library"]
-        Dispatch["Launch, stopping, review,<br/>and controller<br/>Implemented library; fake tests"]
+        Dispatch["Launch, stopping, review,<br/>and controller<br/>Implemented library; Docker tested"]
         Adapter["Supervision interface and systemd adapter<br/>Implemented library"]
         Capture["Bounded per-run output capture<br/>Implemented library"]
     end
@@ -82,7 +82,7 @@ Activation, reload, scheduling, and the service execution loop remain unimplemen
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
-Copied passes: A01–A09. A10 lacks raw logs; see the
+Copied passes: A01–A10, including A10 raw logs; see the
 [evidence review](temporary/acceptance-review.md). [Telemetry](temporary/telemetry.md) is pending.
 
 ## Design boundaries
@@ -123,7 +123,7 @@ a separate session interface below.
 The caller selects an opaque prepared runtime identity; admission retains it but
 does not verify runtime files. [Prepared verification](temporary/runtime.md) is
 a separate dispatch gate. Runtime preparation, restore procedures, and
-execution integration remain gated by their accepted contracts.
+service integration remain gated by their accepted contracts.
 
 ### Storage and transactions
 

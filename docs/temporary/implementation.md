@@ -3,8 +3,8 @@
 Status: Temporary work list. Configuration, admission, dispatch, stopping,
 review, runtime verification, and the [execution controller](controller.md) are
 implemented as libraries. The controller connects the systemd adapter, pinned
-host dependencies, capture, and log accounting. Isolated-host acceptance,
-retention, and the service loop remain open.
+host dependencies, capture, and log accounting. The copied Docker review
+confirms A01–A10. Retention and the service loop remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -20,16 +20,10 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 ## Next implementation work
 
-1. The A10 mounted-log export fix and regression checks are implemented.
-   The [copied evidence review](acceptance-review.md) confirms A01–A09; A10's
-   earlier native pass lacks raw output. Preserve the existing bundle.
-2. Run the corrected Docker fixture and review the new A10 files before closing
-   the suite. Docker is absent from the devbox. Do not reconstruct missing
-   evidence or treat synthetic checks as host acceptance.
-3. Specify remaining task resource controls, custom environment/secret references,
+1. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and
    implement retention reclamation. Keep scheduler and UI integration separate.
-4. Review a sanitized Semaphore export before claiming workload compatibility.
+2. Review a sanitized Semaphore export before claiming workload compatibility.
    Select the license before release. Access, migration, and deployment remain
    separate gates, not prerequisites for synthetic configuration tests.
 
@@ -76,8 +70,8 @@ directories are implemented. The [controller](controller.md) now connects actual
 service/manager UID binding, pinned host manifests, controlled environment,
 capture, stopping, and atomic output accounting. The [local harness](acceptance-runner.md)
 covers ordinary-command, local-playbook, and local recovery checks. The
-[copied evidence review](acceptance-review.md) confirms A01–A09 and records
-the A10 output export gap. Retention reclamation remains separate work. Review
+[copied evidence review](acceptance-review.md) confirms A01–A10, including
+A10's exported output. Retention reclamation remains separate work. Review
 can be cleared only after local completion and acknowledgement of unchanged
 evidence. A dropped permit is not reissued.
 
@@ -114,9 +108,9 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   clock changes, outages, schedule edits, and first installation.
 - Verify the selected systemd baseline, manager, and permissions on an isolated
   Debian 13 test host. The [supervision adapter contract](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
-  is implemented with synthetic tests; its opt-in host test remains unrun.
-  Validate process-boundary enforcement and cleanup evidence. Integrate the
-  implemented acknowledgement record.
+  and three opt-in host tests pass in the copied Docker bundle.
+  Preserve process-boundary enforcement, cleanup evidence, and the implemented
+  acknowledgement record during service integration.
 - Verify controller user binding and host dependencies on the isolated host.
   Specify safe removal of run work directories.
 - Verify controller log accounting and implement retention cleanup,
@@ -128,7 +122,9 @@ must translate accepted behavior into testable mechanisms, not reopen it:
 These are engineering specifications and validation gates. Host-specific
 choices, new behavior trade-offs, and any conflicts with accepted policy need
 further review. Backup tooling, production integration, and workload-specific
-evidence remain outside this interview. Admission storage, queued cancellation, and schema migration are tested; process execution behavior is not verified.
+evidence remain outside this interview. Admission storage, queued cancellation,
+and schema migration are tested. The controller passes A01–A10 on Docker;
+production workloads and service integration need separate evidence.
 
 ## Retained mechanism proposals
 

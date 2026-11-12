@@ -63,8 +63,8 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 ### P02: Preserve accepted work and stop on uncertainty
 
 - **Type and status:** Accepted. Admission, dispatch, stopping, and
-  [acknowledgement](temporary/review.md) are tested libraries. Real execution
-  integration remains gated; see [execution.md](temporary/execution.md).
+  [acknowledgement](temporary/review.md) pass A01–A10 on Docker.
+  Service integration is future work; see [execution.md](temporary/execution.md).
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof
@@ -96,7 +96,7 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   retained runtimes need storage management.
 - **Check:** Update the selected runtime while work is queued and active.
   Confirm both retain their selection. Follow [runtime verification](temporary/runtime.md),
-  accepted by the user on 2026-11-09; real execution remains gated.
+  accepted by the user on 2026-11-09; Docker acceptance passes.
 - **Revisit:** Automatic preparation or mutable code requires a new decision.
 
 ### P06: Stop on state or log storage failure
@@ -210,8 +210,8 @@ See [the glossary](GLOSSARY.md).
 
 These scenarios expose sensitive decisions: systemd permissions, the launch and
 recording crash window, storage-independent stopping, runtime retention, and the
-distinction between local cleanup and external completion. Manual admission is implemented and tested as a library. Process execution
-is not implemented or verified.
+distinction between local cleanup and external completion. The implemented
+controller passes A01–A10 on Docker. Service integration remains future work.
 
 ## Coverage and open decisions
 

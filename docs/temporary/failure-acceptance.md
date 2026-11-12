@@ -2,8 +2,8 @@
 
 Status: The copied bundle confirms A04 task failure and unreachable-target
 results, including retained Failure and captured output.
-See the [evidence review](acceptance-review.md) for the current bundle and
-remaining A10 output export gap. Docker is absent from the devbox.
+See the [evidence review](acceptance-review.md) for the latest A01–A10 pass,
+including A10's exported output. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -98,8 +98,8 @@ are under `$HOME/artifacts/rustward/a04-failures-20261111/`.
 coverage. Three real-host tests are ignored in normal checks. The explicit Docker
 attempt is blocked because Docker is not installed in the devbox.
 
-The copied review confirms A01–A09. Resolve the [A10 export gap](acceptance-review.md)
-and review the corrected Docker evidence. The service loop, scheduling, live reload, retention, UI,
+The [copied review](acceptance-review.md) confirms A01–A10 and closes the
+A10 export gap. The service loop, scheduling, live reload, retention, UI,
 production secret configuration, workload migration, and deployment remain open.
 
 Before removal, transfer lasting fixture interfaces to ARCHITECTURE.md, preserve

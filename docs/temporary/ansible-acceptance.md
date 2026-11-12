@@ -1,7 +1,7 @@
 # Ansible acceptance test
 
-Status: The [copied evidence review](acceptance-review.md) confirms A01–A09.
-A10's native pass lacks raw output, so the full suite remains open. The user requested this
+Status: The [copied evidence review](acceptance-review.md) confirms A01–A10,
+including A10's exported output. The user requested this
 planning artifact on 2026-11-09. It tests the accepted generic execution rules
 with the main workload. It does not accept new execution policy or authorize
 production access, schedule migration, or deployment.
@@ -96,9 +96,10 @@ and image `sha256:262ba411fae690a60aaf80cb56d50a468e8df50b4de23528ce9536442af164
 Its full successful bundle has not been copied here.
 The user reported A05 passing with source revision `1690669832608c67aa55d5d36734c33c73601ed9eb76d2a2609cad236e9d4e4e`
 and image `sha256:9eab44b973b203a3ffac40a3da340ff65de95b9da1a10d9d312cb792a56e940f`.
-The newer copied bundle `20261111T220223Z-f06268ab` confirms A01–A09.
-Its A10 database and native report pass, but the raw logs are absent. See the
-[evidence review](acceptance-review.md) for provenance, checks, and follow-up.
+The earlier copied bundle `20261111T220223Z-f06268ab` confirms A01–A09.
+Its A10 database and native report pass, but the raw logs are absent. The latest
+bundle `20261112T011632Z-e422c0e8` confirms A01–A10 with the missing output export
+corrected. See the [evidence review](acceptance-review.md) for provenance and checks.
 Docker remains absent from the devbox.
 
 For each execution, record the exact command, host baseline, dependency versions,

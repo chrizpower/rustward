@@ -209,10 +209,10 @@ explicit links, and completion rollback. Storage-failure stopping is tested
 while a second preparation and a database write lock are held. Launcher smoke
 tests use synthetic values and ordinary test utilities without a real manager.
 
-The [copied Docker evidence review](acceptance-review.md) confirms A01–A09,
-local recovery, and the three legacy host tests. A10's native report and database
-pass, but its raw logs are absent. Correct the mounted-log export and review a
-new Docker result before closing the full suite. Docker is absent from the devbox.
+The [copied Docker evidence review](acceptance-review.md) confirms A01–A10,
+local recovery, and the three legacy host tests. A10's saved output matches its
+record and export hashes. The earlier export gap is closed by the later run.
+Docker is absent from the devbox; review used the copied bundle.
 
 The service execution loop, HTTP/UI/API, scheduler execution and occurrence
 checkpoints, live reload, runtime selection UI, retention reclamation,

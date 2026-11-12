@@ -2,8 +2,8 @@
 
 Status: The copied bundle confirms A05 queued cancellation, active cancellation,
 and the real 60-second timeout.
-See the [evidence review](acceptance-review.md) for the current bundle and
-remaining A10 output export gap. Docker is absent from the devbox.
+See the [evidence review](acceptance-review.md) for the latest A01–A10 pass,
+including A10's exported output. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -148,8 +148,8 @@ Docker attempt reports A01–A05 not run because Docker is absent from the devbo
 
 ## Remaining work and removal
 
-The copied review confirms A05. Resolve the [A10 export gap](acceptance-review.md)
-and review the corrected Docker evidence before closing the suite. The service loop, scheduler execution, live reload,
+The [copied review](acceptance-review.md) confirms A01–A10, including A05,
+and closes the A10 export gap. The service loop, scheduler execution, live reload,
 retention, UI, telemetry, production secret configuration, migration, and
 deployment remain outside this implementation.
 

@@ -2,8 +2,8 @@
 
 Status: The copied bundle confirms A01/A02, local recovery, and all three legacy
 host tests.
-See the [evidence review](acceptance-review.md) for the current bundle and
-remaining A10 output export gap. Docker is absent from the devbox.
+See the [evidence review](acceptance-review.md) for the latest A01–A10 pass,
+including A10's exported output. Docker is absent from the devbox.
 
 Before removal, transfer stable test interfaces and evidence to ARCHITECTURE.md,
 policy to GRAVITY.md, and terms to GLOSSARY.md. Preserve the remaining host,
@@ -56,7 +56,7 @@ The runner also executes the three existing opt-in tests: systemd child cleanup
 and unit isolation, systemd output capture, and prepared-runtime permissions.
 Zero tests executed is a failure. The suite requires their exact pass counts.
 
-The copied review confirms A01–A09; the [A10 export gap](acceptance-review.md) remains open.
+The [copied review](acceptance-review.md) confirms A01–A10, including A10's exported logs.
 Production credentials and workload compatibility, UI, scheduling, reload,
 retention, telemetry, migration, and deployment remain open. A03 adds
 fixture-only credential files through a separate opt-in command. The local

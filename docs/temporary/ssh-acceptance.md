@@ -2,8 +2,8 @@
 
 Status: The copied bundle confirms A03, including SSH host-key and command-builder
 checks and independent target proof.
-See the [evidence review](acceptance-review.md) for the current bundle and
-remaining A10 output export gap. Docker is absent from the devbox.
+See the [evidence review](acceptance-review.md) for the latest A01–A10 pass,
+including A10's exported output. Docker is absent from the devbox.
 
 ## Run and scope
 
@@ -181,8 +181,8 @@ command checks do not connect to a target or pass A03. Evidence is under
 
 ## Remaining work
 
-The copied review confirms A01–A09. Resolve the [A10 export gap](acceptance-review.md)
-and review the corrected Docker evidence. Production secret configuration remains
+The [copied review](acceptance-review.md) confirms A01–A10 and closes the
+A10 export gap. Production secret configuration remains
 open. The service loop,
 scheduler, reload, retention, UI, migration, and deployment remain outside this
 implementation. A03 does not prove production workload compatibility.

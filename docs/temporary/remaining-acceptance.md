@@ -1,9 +1,9 @@
 # Remaining acceptance cases
 
-Status: The copied bundle confirms A01–A09. A10's native decision passes,
-but its raw logs were not exported. The complete suite remains open; see the
-[evidence review](acceptance-review.md) for provenance and required follow-up.
-Docker is absent from the devbox; this review used retained evidence.
+Status: A01–A10 pass the [copied evidence review](acceptance-review.md) for
+`20261112T011632Z-e422c0e8`. The latest run includes A10's exported logs and
+closes the earlier export gap. Docker is absent from the devbox; this review
+used retained evidence.
 
 Run `just acceptance-ssh` on the existing isolated Docker host. Each remaining
 case has its own store, writable roots, case decision, readiness checks, and host
@@ -95,8 +95,8 @@ both streams, including an empty stream, and compares their lengths with the
 case record and hashes with the export manifest. Missing or changed output
 prevents a complete pass. No host or database disk is filled.
 
-The earlier reviewed bundle lacks these mounted logs. The export fix is
-implemented, but a new Docker run is required to close that evidence gap.
+The earlier bundle lacks these mounted logs. The latest validated Docker run
+includes them and closes that export gap. Preserve both bundles unchanged.
 
 ## Evidence and lifecycle
 
@@ -124,7 +124,7 @@ Direct local Ansible smoke checks confirmed that async work survived termination
 of its local process group and that the flood playbook emitted over 2 MiB.
 These checks did not use Rustward, systemd, or Docker and do not pass A07 or A09.
 
-Run the corrected A10 export on Docker and review the new output. The service loop,
+The A01–A10 fixture milestone is verified. The service loop,
 scheduling, live reload, retention, UI, telemetry, production secrets, migration,
 and deployment remain outside this work.
 

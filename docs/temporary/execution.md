@@ -8,7 +8,7 @@ Scheduling, restore, and the service loop remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is tested with synthetic manager responses. The [controller](controller.md)
 connects dispatch, log accounting, capture, and storage-failure stopping.
-Real-host acceptance remains gated. Retention remains future work. Absorb
+A01–A10 Docker evidence is reviewed. Retention remains future work. Absorb
 lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound
@@ -197,7 +197,7 @@ The user accepted content-addressed manifests, separate preparation ownership,
 and preserved absolute task paths on 2026-11-09. [Runtime verification](runtime.md)
 is implemented with separate writable run directories. Environment, dependency
 policy and UID/manager binding are implemented in the controller. Directory
-removal and isolated-host acceptance remain open.
+removal remains open. A01–A10 Docker acceptance is verified.
 
 ## Definition revision contract
 
