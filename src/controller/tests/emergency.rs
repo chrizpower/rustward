@@ -91,6 +91,10 @@ impl Preparation for PanicPreparation {
     fn prepare(&self, _: dispatch::Permit, _: u64, _: &Registry) -> Prepared {
         panic!("synthetic preparation panic")
     }
+    fn remove_logs(&self, _: &RunId) -> Result<(), admission::Error> {
+        unreachable!()
+    }
+
     fn recover(&self, _: &RunId, _: u64) -> Result<capture::Report, capture::CaptureError> {
         panic!("synthetic recovery panic")
     }

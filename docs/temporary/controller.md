@@ -215,6 +215,6 @@ record and export hashes. The earlier export gap is closed by the later run.
 Docker is absent from the devbox; review used the copied bundle.
 
 The service execution loop, HTTP/UI/API, scheduler execution and occurrence
-checkpoints, live reload, runtime selection UI, retention reclamation,
+checkpoints, live reload, runtime selection UI, age-based retention,
 work-directory removal, restore tooling, custom environment/secrets, telemetry,
 production migration, and deployment remain outside this implementation.

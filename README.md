@@ -83,7 +83,8 @@ The `capture` library supplies stdout/stderr descriptors and retains separate
 raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.
 It continues draining after truncation and reports storage failures separately.
 See the [capture contract](docs/temporary/capture.md). The controller connects
-dispatch log accounting and storage-failure stopping. Retention remains unimplemented.
+dispatch log accounting and storage-failure stopping. It reclaims completed-run
+logs under capacity pressure. Age-based retention remains open.
 
 Structured service logs and a private Prometheus-compatible `/metrics` endpoint
 for the monitoring service are accepted future work. See the [telemetry contract](docs/temporary/telemetry.md).

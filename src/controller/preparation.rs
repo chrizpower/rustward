@@ -20,6 +20,7 @@ pub(super) struct Prepared {
 }
 pub(super) trait Preparation: Send + Sync + 'static {
     fn prepare(&self, permit: Permit, limit: u64, registry: &Registry) -> Prepared;
+    fn remove_logs(&self, id: &crate::supervision::RunId) -> Result<(), crate::admission::Error>;
     fn recover(
         &self,
         id: &crate::supervision::RunId,
@@ -134,6 +135,14 @@ impl Preparation for Roots {
         }
         result
     }
+    fn remove_logs(&self, id: &crate::supervision::RunId) -> Result<(), crate::admission::Error> {
+        let root = self
+            .logs
+            .checked_directory()
+            .map_err(|_| crate::admission::Error::Storage)?;
+        capture::remove_logs(root, id).map_err(|_| crate::admission::Error::Storage)
+    }
+
     fn recover(
         &self,
         id: &crate::supervision::RunId,

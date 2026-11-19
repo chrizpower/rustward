@@ -153,7 +153,11 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
         Ok(result)
     }
     pub fn start_next(&mut self) -> Result<Start, Error> {
-        let permit = match self.session.claim_next().map_err(Error::State)? {
+        let permit = match self
+            .session
+            .claim_with_reclamation(|id| self.preparation.remove_logs(id))
+            .map_err(Error::State)?
+        {
             Claim::Blocked(block) => return Ok(Start::Blocked(block)),
             Claim::Ready(permit) => permit,
         };

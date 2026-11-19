@@ -68,8 +68,8 @@ A competing new acknowledgement ID for an acknowledged review returns ReviewChan
 Keep the acknowledgement ID and submitted Review until the response is known.
 
 The stored record uses encoding 1. Acknowledgements have no deletion or editing
-API in this slice. Retention reclamation and its retry guarantees remain future
-work. The copy preserves reviewed metadata if run history is later removed.
+API in this slice. The copy preserves reviewed metadata after the controller
+reclaims log capacity or future cleanup removes run history.
 
 ## Failure, compatibility, and verification
 

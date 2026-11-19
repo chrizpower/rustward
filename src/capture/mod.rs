@@ -1,8 +1,10 @@
 mod evidence;
 mod recovery;
+mod retention;
 use crate::supervision::{Output, RunId};
 pub use evidence::{Evidence, StreamEvidence};
 pub use recovery::recover;
+pub(crate) use retention::remove_logs;
 use std::{
     fs::{DirBuilder, File, OpenOptions},
     io::{self, Read, Write},

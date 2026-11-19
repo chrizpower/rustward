@@ -42,14 +42,30 @@ active work. Review and storage failures still prevent its start.
 Log accounting is a conservative prerequisite for this library: reserve each
 run's full allowance against one aggregate limit. Keep reservations through
 uncertainty and cleanup. On completion replace the allowance with the declared
-synchronized retained byte count. There is no retention cleanup or reservation
-reclamation API in this slice. This accounting alone does not reserve physical
-disk space or integrate capture. Limits come from the caller, not live reload.
+synchronized retained byte count. The controller uses the internal claim path
+that reclaims completed-run logs. The public `Session::claim_next` uses accounting
+only. Limits come from the caller.
 
 Cancellation and dispatch share the SQLite write lock. Cancellation first means
 Completed/Cancellation and no launch permit. Dispatch first means `NotQueued`
 from `cancel_queued`; active stopping uses `Session::cancel_active` and `poll`. FIFO never bypasses a block.
 Reducing capacity does not evict active runs or alter admitted snapshots.
+
+## Log reclamation
+
+The controller reclaims logs when the next queued run needs capacity. It removes
+eligible completed-run logs in completion order, with admission sequence as the
+tie breaker. It preserves output needed for unresolved review and charges for
+active runs. If eligible logs cannot free enough space for the full reservation,
+the controller leaves the run queued.
+
+The controller removes the capture files and synchronizes their directories
+before it releases the charge. The charge update and new reservation commit
+together. After an interruption, already absent files can be handled again
+without releasing capacity twice. A removal failure invokes P06. Run history,
+admission records, and historical capture evidence stay available. The current
+log charge can be zero even when historical evidence records captured bytes.
+Age-based cleanup remains open.
 
 ## State and evidence
 

@@ -173,3 +173,155 @@ fn recovery_synchronizes_partial_logs_without_starting_again() {
         Start::Blocked(Block::ReviewRequired)
     ));
 }
+
+fn complete_for_retention(f: &Fixture, c: &mut Controller<Fake>, id: &str) {
+    assert!(matches!(c.start_next().unwrap(), Start::Preparing(run) if run.as_str() == id));
+    until(|| {
+        c.tick(Instant::now()).unwrap();
+        f.fake.0.lock().unwrap().writers.contains_key(id)
+    });
+    f.ended(id);
+    completed(c, id);
+}
+
+#[test]
+fn reclaims_only_the_oldest_logs_needed_for_dispatch() {
+    let mut f = Fixture::new();
+    let (_, oldest) = f.admit();
+    let (_, newer) = f.admit();
+    let (_, queued) = f.admit();
+    let mut c = f.controller(Limits {
+        log_bytes_per_run: 40,
+        retained_log_bytes: 80,
+        ..Limits::default()
+    });
+    c.set_paused(false).unwrap();
+    complete_for_retention(&f, &mut c, &oldest);
+    complete_for_retention(&f, &mut c, &newer);
+    complete_for_retention(&f, &mut c, &queued);
+    assert!(!f.preparation.logs.join(&oldest).exists());
+    assert!(f.preparation.logs.join(&newer).join("stdout.log").is_file());
+    assert_eq!(
+        c.run_state(&oldest).unwrap().unwrap().result,
+        Some(RunResult::Success)
+    );
+    let record = c.record(&oldest).unwrap().unwrap();
+    assert_eq!(record.log_bytes, 0);
+    assert_eq!(record.output_evidence.unwrap().retained_bytes(), Some(31));
+}
+
+#[test]
+fn keeps_review_output_when_dispatch_is_blocked() {
+    let mut f = Fixture::new();
+    let (_, protected) = f.admit();
+    let (_, queued) = f.admit();
+    let limits = Limits {
+        log_bytes_per_run: 40,
+        retained_log_bytes: 40,
+        ..Limits::default()
+    };
+    {
+        let mut c = f.controller(limits);
+        c.set_paused(false).unwrap();
+        c.start_next().unwrap();
+        started(&mut c, &f);
+    }
+    f.ended(&protected);
+    f.safety = Safety::default();
+    let mut c = f.controller(limits);
+    completed(&mut c, &protected);
+    assert!(matches!(
+        c.start_next().unwrap(),
+        Start::Blocked(Block::ReviewRequired)
+    ));
+    assert!(
+        f.preparation
+            .logs
+            .join(&protected)
+            .join("stdout.log")
+            .is_file()
+    );
+    assert_eq!(c.record(&protected).unwrap().unwrap().log_bytes, 31);
+    assert_eq!(
+        c.run_state(&queued).unwrap().unwrap().phase,
+        RunPhase::Queued
+    );
+}
+
+#[test]
+fn deletion_failure_keeps_the_charge_and_restart_retries_partial_removal() {
+    let mut f = Fixture::new();
+    let (_, old) = f.admit();
+    let (_, queued) = f.admit();
+    let limits = Limits {
+        log_bytes_per_run: 40,
+        retained_log_bytes: 40,
+        ..Limits::default()
+    };
+    let directory = f.preparation.logs.join(&old);
+    let stderr = directory.join("stderr.log");
+    {
+        let mut c = f.controller(limits);
+        c.set_paused(false).unwrap();
+        complete_for_retention(&f, &mut c, &old);
+        fs::rename(&stderr, directory.join("saved")).unwrap();
+        std::os::unix::fs::symlink("saved", &stderr).unwrap();
+        assert!(matches!(
+            c.start_next(),
+            Err(crate::controller::Error::State(admission::Error::Storage))
+        ));
+        assert!(c.failed());
+        assert!(!directory.join("stdout.log").exists());
+        assert!(directory.join("saved").is_file());
+    }
+    fs::remove_file(&stderr).unwrap();
+    fs::rename(directory.join("saved"), &stderr).unwrap();
+    f.safety = Safety::default();
+    let mut c = f.controller(limits);
+    assert_eq!(c.record(&old).unwrap().unwrap().log_bytes, 31);
+    assert_eq!(
+        c.run_state(&queued).unwrap().unwrap().phase,
+        RunPhase::Queued
+    );
+    complete_for_retention(&f, &mut c, &queued);
+    assert!(!directory.exists());
+    assert_eq!(c.record(&old).unwrap().unwrap().log_bytes, 0);
+}
+
+#[test]
+fn rolled_back_claim_retries_after_durable_file_removal() {
+    let mut f = Fixture::new();
+    let (_, old) = f.admit();
+    let (_, queued) = f.admit();
+    let limits = Limits {
+        log_bytes_per_run: 40,
+        retained_log_bytes: 40,
+        ..Limits::default()
+    };
+    let db = rusqlite::Connection::open(&f.path).unwrap();
+    {
+        let mut c = f.controller(limits);
+        c.set_paused(false).unwrap();
+        complete_for_retention(&f, &mut c, &old);
+        db.execute_batch(
+            "CREATE TRIGGER reject_claim BEFORE INSERT ON launches
+             BEGIN SELECT RAISE(ABORT, 'synthetic claim failure'); END;",
+        )
+        .unwrap();
+        assert!(matches!(
+            c.start_next(),
+            Err(crate::controller::Error::State(admission::Error::Storage))
+        ));
+        assert!(!f.preparation.logs.join(&old).exists());
+    }
+    db.execute_batch("DROP TRIGGER reject_claim").unwrap();
+    f.safety = Safety::default();
+    let mut c = f.controller(limits);
+    assert_eq!(c.record(&old).unwrap().unwrap().log_bytes, 31);
+    assert_eq!(
+        c.run_state(&queued).unwrap().unwrap().phase,
+        RunPhase::Queued
+    );
+    complete_for_retention(&f, &mut c, &queued);
+    assert_eq!(c.record(&old).unwrap().unwrap().log_bytes, 0);
+}

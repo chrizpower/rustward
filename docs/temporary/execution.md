@@ -8,7 +8,8 @@ Scheduling, restore, and the service loop remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is tested with synthetic manager responses. The [controller](controller.md)
 connects dispatch, log accounting, capture, and storage-failure stopping.
-A01–A10 Docker evidence is reviewed. Retention remains future work. Absorb
+A01–A10 Docker evidence is reviewed. The controller reclaims log capacity.
+Age-based retention remains future work. Absorb
 lasting behavior into ARCHITECTURE.md, policies and exceptions into
 GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
 all contracts, open decisions, and implementation status, then update inbound

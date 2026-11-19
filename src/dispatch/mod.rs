@@ -19,6 +19,7 @@ use crate::{
 
 mod evidence;
 mod preflight;
+mod retention;
 mod runtime;
 pub use preflight::LaunchFailure;
 pub use runtime::{PrepareError, PreparedPermit};
@@ -215,6 +216,20 @@ impl Session {
 
     /// Reserve a slot and full log allowance for the oldest queued run.
     pub fn claim_next(&mut self) -> Result<Claim, Error> {
+        self.claim(None)
+    }
+
+    pub(crate) fn claim_with_reclamation(
+        &mut self,
+        mut remove_logs: impl FnMut(&RunId) -> Result<(), Error>,
+    ) -> Result<Claim, Error> {
+        self.claim(Some(&mut remove_logs))
+    }
+
+    fn claim(
+        &mut self,
+        remove_logs: Option<&mut retention::RemoveLogs<'_>>,
+    ) -> Result<Claim, Error> {
         if self.safety.failed() {
             return Err(Error::Closed);
         }
@@ -231,13 +246,26 @@ impl Session {
             if active >= limits.active_runs { return Ok(Claim::Blocked(Block::ExecutionCapacity)); }
             let used: i64 = transaction.query_row("SELECT COALESCE(sum(log_bytes),0) FROM launches", [], |r| r.get(0)).map_err(storage)?;
             let used = u64::try_from(used).map_err(|_| Error::Storage)?;
-            if used > limits.retained_log_bytes || limits.log_bytes_per_run > limits.retained_log_bytes - used {
+            let Some(available) = limits.retained_log_bytes.checked_sub(limits.log_bytes_per_run) else {
+                return Ok(Claim::Blocked(Block::LogCapacity));
+            };
+            let needed = used.saturating_sub(available) as i64;
+            if needed > 0 && remove_logs.is_none() {
                 return Ok(Claim::Blocked(Block::LogCapacity));
             }
             let row: Option<(String, Vec<u8>, String, String)> = transaction.query_row(
                 "SELECT run_id, task_snapshot, arguments, runtime_id FROM runs WHERE phase='queued' ORDER BY sequence LIMIT 1",
                 [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).optional().map_err(storage)?;
             let Some((run_id, snapshot, arguments, runtime_id)) = row else { return Ok(Claim::Blocked(Block::Empty)); };
+            if let Some(remove_logs) = remove_logs
+                && needed > 0
+                && !retention::reclaim(&transaction, needed, remove_logs)?
+            {
+                return Ok(Claim::Blocked(Block::LogCapacity));
+            }
+            if self.safety.failed() {
+                return Err(Error::Closed);
+            }
             let command: Command = serde_json::from_slice(&snapshot).map_err(|_| Error::Storage)?;
             let now = Instant::now();
             timing = Some((run_id.clone(), stopping::Active::new(now, command.timeout_seconds, command.cleanup_grace_seconds)?));

@@ -246,8 +246,9 @@ with Interruption unless a result was already decided. Uncertainty blocks new
 starts; missing units do not prove cleanup. Review remains required after
 completion and reopen until explicit [acknowledgement](temporary/review.md). Slots and log
 accounting remain reserved through uncertainty; completed logs still count.
-No retention reclamation is provided. See the [dispatch contract](temporary/dispatch.md)
-for APIs, failure cases, compatibility, and remaining integration gates.
+The controller reclaims completed logs oldest first when dispatch needs capacity.
+See the [dispatch contract](temporary/dispatch.md#log-reclamation).
+
 
 ## Supervision interface and systemd adapter
 

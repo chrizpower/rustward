@@ -9,7 +9,7 @@ P07 in [Gravity](../GRAVITY.md); the terms are in [the glossary](../GLOSSARY.md)
 This library supplies output descriptors to the supervision adapter. It does
 not dispatch tasks, reserve aggregate log space, remove retained logs, or change
 run state. The [dispatch library](dispatch.md) provides conservative log accounting. The [controller](controller.md) connects reservations, runtime verification,
-protected roots, and storage-failure stopping. Retention and real-host acceptance
+protected roots, and storage-failure stopping. Age-based retention and real-host acceptance
 remain open.
 
 ## Interface and files

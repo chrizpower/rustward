@@ -52,6 +52,11 @@ impl WorkRoot {
         private(&file, self.owner)?;
         ancestors(&self.path, self.owner)
     }
+    pub(crate) fn checked_directory(&self) -> Result<&File, Error> {
+        self.check()?;
+        Ok(&self.root)
+    }
+
     pub fn create(&self, run_id: &RunId) -> Result<WorkDirectory, Error> {
         self.create_checked(run_id, || {})
     }

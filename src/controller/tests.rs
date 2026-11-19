@@ -200,6 +200,11 @@ impl Preparation for Prepare {
             failure,
         }
     }
+    fn remove_logs(&self, id: &RunId) -> Result<(), admission::Error> {
+        let root = File::open(&self.logs).unwrap();
+        capture::remove_logs(&root, id).map_err(|_| admission::Error::Storage)
+    }
+
     fn recover(&self, id: &RunId, limit: u64) -> Result<capture::Report, capture::CaptureError> {
         capture::recover(&self.logs, id, limit)
     }

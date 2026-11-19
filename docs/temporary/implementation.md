@@ -4,7 +4,8 @@ Status: Temporary work list. Configuration, admission, dispatch, stopping,
 review, runtime verification, and the [execution controller](controller.md) are
 implemented as libraries. The controller connects the systemd adapter, pinned
 host dependencies, capture, and log accounting. The copied Docker review
-confirms A01–A10. Retention and the service loop remain open.
+confirms A01–A10. The controller reclaims log capacity. Age-based retention
+and the service loop remain open.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -22,7 +23,7 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 
 1. Specify remaining task resource controls, custom environment/secret references,
    and metadata/buffer bounds. Connect the controller to the future service and
-   implement retention reclamation. Keep scheduler and UI integration separate.
+   implement age-based retention. Keep scheduler and UI integration separate.
 2. Review a sanitized Semaphore export before claiming workload compatibility.
    Select the license before release. Access, migration, and deployment remain
    separate gates, not prerequisites for synthetic configuration tests.
@@ -71,7 +72,8 @@ service/manager UID binding, pinned host manifests, controlled environment,
 capture, stopping, and atomic output accounting. The [local harness](acceptance-runner.md)
 covers ordinary-command, local-playbook, and local recovery checks. The
 [copied evidence review](acceptance-review.md) confirms A01–A10, including
-A10's exported output. Retention reclamation remains separate work. Review
+A10's exported output. Synthetic tests cover capacity reclamation, protected
+output, partial removal, and rollback after removal. Review
 can be cleared only after local completion and acknowledgement of unchanged
 evidence. A dropped permit is not reissued.
 
@@ -113,8 +115,8 @@ must translate accepted behavior into testable mechanisms, not reopen it:
   acknowledgement record during service integration.
 - Verify controller user binding and host dependencies on the isolated host.
   Specify safe removal of run work directories.
-- Verify controller log accounting and implement retention cleanup,
-  record/log deletion, and retention age calculation. Test protected evidence and actual storage faults.
+- Implement age-based record and log cleanup. Verify deletion and retention age
+  calculation. Verify capacity reclamation against storage faults on an isolated host.
 - Specify a consistent application-state backup and explicit restore procedure.
   Test that missing old-generation keys cannot admit work and restored queued
   records cannot execute without review.
