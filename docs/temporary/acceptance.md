@@ -174,7 +174,8 @@ isolation, output capture, and runtime permissions. The current runner
 also requires the daemon case. It admits through `ctl`, tests matching retries
 and log reclamation, checks recovery and protected output after a restart, and
 checks planned drain with active and queued work. The daemon decision is
-`fixture/evidence/daemon.json`.
+`fixture/evidence/daemon.json`. The scheduler case checks rejected reload, restart-safe pause,
+and one durable start. See `fixture/evidence/scheduler.json`.
 
 For a direct systemd check, run `cargo test --locked --test systemd_host -- --ignored`
 on the isolated host. The

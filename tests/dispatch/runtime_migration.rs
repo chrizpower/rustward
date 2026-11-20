@@ -51,7 +51,7 @@ fn version_five_and_six_migration_keep_old_acknowledgements_and_runtime_identity
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            7
+            8
         );
         let acknowledgement = store.acknowledgement(&acknowledgement_id).unwrap().unwrap();
         assert_eq!(acknowledgement.review.launch.launch_failure, None);

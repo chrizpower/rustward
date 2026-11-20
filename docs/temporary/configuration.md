@@ -67,8 +67,8 @@ Validate the complete candidate set before activation, including unique IDs,
 path rules, task definitions, schedule task references, and fixed input values.
 Reject an invalid update as a whole and retain the previous active set. Do not
 silently omit an invalid definition or activate only the valid files. The service
-activates the complete set at startup. Live reload, its trigger, and its
-consistent-read mechanism remain open.
+loads the complete set at startup and on an explicit `reload` request.
+See the [operational contract](operations.md#live-reload).
 
 Queued and active runs retain their accepted definitions and original identities
 after edits, moves, or removal. Keep existing request-key comparison rules: a
@@ -104,18 +104,17 @@ Bounds are 1 MiB per file, 16 MiB total file content including the service file,
 root. Each folder and file counts as one entry. Root directories do not count.
 Reads are bounded before parsing. Limit failures reject the complete set.
 
-The caller must keep files unchanged during loading. The loader reads the
-complete service file and both roots twice. It compares file paths, content,
-and folder sets and rejects observed changes or any read failure. This is not
-an atomic filesystem snapshot and cannot detect every concurrent edit. A future
-reload must provide a consistent candidate set before activation. A failed load
-returns an error and leaves an existing caller-owned `Config` unchanged.
+The loader holds the service directory open for both reads. It opens definition
+roots inside that directory relative to the held directory. Two matching reads
+of the complete candidate detect observed in-place edits. Publish a complete
+immutable directory to keep its service, task, and schedule files consistent.
+Keep separately located definition roots unchanged while loading. A failed load
+leaves an existing caller-owned `Config` unchanged.
 
 Tests exercise nested equal basenames, invalid paths, duplicate identity checks,
 symlink files/folders/ancestors, missing and empty roots, loading bounds, invalid
 references and fixed values, whole-set failure, observed edits, root relocation,
-definition moves, and retained admission identity. Scheduler integration must
-still test rename behavior without pause-state transfer or missed-work replay.
+definition moves, and retained admission identity. Scheduler tests cover rename behavior, pause state, and restart without replay.
 
 ## Implemented version 2
 
@@ -126,8 +125,9 @@ inspect program availability, contact hosts, or load credentials.
 
 This implements the configuration and input portions of F01, F03, F04, F06,
 and F15. The [local service](service.md#local-service) activates validated
-configuration at startup and applies queue, execution, and log limits. Reload,
-occurrence evaluation, scheduler execution, and age-based retention remain open.
+configuration at startup and applies queue, execution, and log limits. Explicit
+reload activates new definitions and retains those service settings. Age-based
+retention remains open.
 
 ## Format change and compatibility
 

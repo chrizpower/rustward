@@ -1,5 +1,6 @@
 //! Local service entry point and control loop.
 mod control;
+mod schedule;
 
 use std::{
     ffi::OsString,
@@ -127,7 +128,10 @@ fn open<S: Supervisor + Clone + Send + 'static>(
     let safety = Safety::default();
     let controller = open_controller(path, roots, limits, safety.clone())?;
     let store = Store::open_with_safety(path, safety.clone()).map_err(state_error)?;
-    Service::new(config, options.runtime_id, store, controller, safety).map_err(state_error)
+    let mut service =
+        Service::new(config, options.runtime_id, store, controller, safety).map_err(state_error)?;
+    service.config_path = Some(options.config);
+    Ok(service)
 }
 
 fn run<S: Supervisor + Clone + Send + 'static>(
@@ -180,6 +184,9 @@ fn state_error(error: admission::Error) -> String {
 
 struct Service<S: Supervisor + Clone + Send + 'static> {
     config: Config,
+    config_path: Option<PathBuf>,
+    matchers: Vec<(croner::Cron, Vec<u8>)>,
+    clock: schedule::Clock,
     runtime_id: String,
     store: Store,
     controller: Controller<S>,
@@ -203,9 +210,15 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             .set_paused(true)
             .map_err(|_| admission::Error::Storage)?;
         store.set_queue_limit(config.service().limits.queued_runs)?;
+        let now = schedule::minute(admission::utc_ms()?);
+        let matchers = admission::schedule::matchers(&config);
+        store.activate_schedules(&config, &matchers, now)?;
         store.set_closed(false)?;
         Ok(Self {
             config,
+            config_path: None,
+            matchers,
+            clock: schedule::Clock::new(now),
             runtime_id,
             store,
             controller,
@@ -253,7 +266,17 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                     Ok(true)
                 };
             }
-        } else if !self.paused {
+        } else {
+            if let Err(error) = self.evaluate_schedules()
+                && error != admission::Error::Busy
+            {
+                self.safety.fail();
+                eprintln!("Evaluate schedules: {error:?}");
+                return Ok(false);
+            }
+            if self.paused {
+                return Ok(false);
+            }
             match self.controller.start_next() {
                 Ok(Start::Preparing(_)) => self.block = None,
                 Ok(Start::Blocked(block)) => self.block = Some(block),
@@ -267,6 +290,58 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         Ok(false)
     }
 
+    fn evaluate_schedules(&mut self) -> Result<(), admission::Error> {
+        if self.matchers.is_empty() {
+            return Ok(());
+        }
+        self.evaluate_schedules_at(admission::utc_ms()?, Instant::now())
+    }
+
+    fn evaluate_schedules_at(
+        &mut self,
+        wall: i64,
+        monotonic: Instant,
+    ) -> Result<(), admission::Error> {
+        if let Some((minute, changed)) = self.clock.sample(wall, monotonic) {
+            self.store.evaluate_schedules(
+                &self.config,
+                &self.matchers,
+                &self.runtime_id,
+                minute,
+                changed,
+            )?;
+            self.clock.evaluated(minute);
+        }
+        Ok(())
+    }
+
+    fn reload(&mut self) -> Result<Value, admission::Error> {
+        use admission::Error;
+        if self.shutdown || self.safety.failed() {
+            return Err(Error::Closed);
+        }
+        let path = self
+            .config_path
+            .as_ref()
+            .ok_or(Error::InvalidConfiguration)?;
+        let candidate = config::load(path).map_err(|_| Error::InvalidConfiguration)?;
+        let old = self.config.service();
+        let new = candidate.service();
+        if new.storage != old.storage || new.limits != old.limits || new.retention != old.retention
+        {
+            return Err(Error::InvalidConfiguration);
+        }
+        let matchers = admission::schedule::matchers(&candidate);
+        let now = schedule::minute(admission::utc_ms()?);
+        self.store.activate_schedules(&candidate, &matchers, now)?;
+        let result =
+            json!({"tasks":candidate.task_count(),"schedules":candidate.schedules().len()});
+        self.config = candidate;
+        self.matchers = matchers;
+        self.clock = schedule::Clock::new(now);
+        Ok(result)
+    }
+
     fn request(&mut self, request: Request) -> Response {
         match self.handle(request) {
             Ok(value) => Response::Ok(value),
@@ -276,6 +351,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
 
     fn handle(&mut self, request: Request) -> Result<Value, admission::Error> {
         use admission::Error;
+        let paused = matches!(&request, Request::SchedulePause { .. });
         match request {
             Request::IssueKey => {
                 if self.shutdown || self.safety.failed() {
@@ -355,6 +431,21 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 &review,
                 &note
             )?)),
+            Request::Reload => self.reload(),
+            Request::SchedulePause { schedule_id } | Request::ScheduleResume { schedule_id } => {
+                if self.shutdown || self.safety.failed() {
+                    return Err(Error::Closed);
+                }
+                self.store.pause_schedule(schedule_id.as_deref(), paused)?;
+                Ok(json!(null))
+            }
+            Request::ScheduleHistory {
+                schedule_id,
+                after_due_ms,
+                after_gap_id,
+            } => self
+                .store
+                .schedule_history(&schedule_id, after_due_ms, after_gap_id),
             Request::Shutdown => {
                 self.shutdown = true;
                 Ok(json!(null))

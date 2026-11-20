@@ -32,6 +32,10 @@ impl Schedule {
         &self.inputs
     }
 
+    pub(crate) fn matcher(&self) -> Cron {
+        parse_cron(&self.cron).expect("schedule was validated")
+    }
+
     pub(super) fn validate_cron(&mut self) -> Result<(), String> {
         parse_cron(&self.cron).map_err(|reason| format!("schedule {}: {reason}", self.id))?;
         self.cron = self.cron.split_whitespace().collect::<Vec<_>>().join(" ");

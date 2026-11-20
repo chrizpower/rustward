@@ -146,12 +146,15 @@ def run(root, tools, user, revision):
             raise RuntimeError("controller acceptance did not produce its pass evidence")
         status["phase"] = "daemon-acceptance"
         service_case.run(root, tools, account, fixture, user_command)
+        status["phase"] = "scheduler-acceptance"
+        service_case.run_schedules(root, tools, account, fixture, user_command)
         status = {"status": "passed", "phase": "complete"}
     finally:
         (evidence / "host-runner.json").write_text(json.dumps(status, sort_keys=True) + "\n")
         try:
             stop_fixture_units(root, account)
             stop_fixture_units(root / "daemon", account)
+            stop_fixture_units(root / "scheduled", account)
         finally:
             checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
 

@@ -42,6 +42,18 @@ pub(super) enum Request {
         review: Box<crate::review::Review>,
         note: String,
     },
+    Reload,
+    SchedulePause {
+        schedule_id: Option<String>,
+    },
+    ScheduleResume {
+        schedule_id: Option<String>,
+    },
+    ScheduleHistory {
+        schedule_id: String,
+        after_due_ms: Option<i64>,
+        after_gap_id: Option<i64>,
+    },
     Shutdown,
 }
 

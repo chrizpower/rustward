@@ -377,3 +377,102 @@ fn failed_dispatch_write_closes_admission() {
     ));
     assert!(service.step().is_err());
 }
+
+#[test]
+fn reload_preserves_active_schedules_after_invalid_candidate() {
+    let fixture = Fixture::new();
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("tasks")).unwrap();
+    fs::create_dir(root.path().join("schedules")).unwrap();
+    let path = root.path().join("rustward.toml");
+    let settings = include_str!("../../examples/rustward.toml");
+    fs::write(&path, settings).unwrap();
+    fs::copy(
+        "examples/tasks/synthetic-report.toml",
+        root.path().join("tasks/synthetic-report.toml"),
+    )
+    .unwrap();
+    let mut daemon = Service::new(
+        config::load(&path).unwrap(),
+        "runtime-1".into(),
+        Store::open_with_safety(&fixture.path, fixture.safety.clone()).unwrap(),
+        fixture.controller(Limits::default()),
+        fixture.safety.clone(),
+    )
+    .unwrap();
+    daemon.config_path = Some(path.clone());
+    let schedule = root.path().join("schedules/latest.toml");
+    let valid = "task='synthetic-report'\ncron='* * * * *'\n[inputs]\nname='sample'\n";
+    fs::write(&schedule, valid).unwrap();
+    assert_eq!(ok(daemon.request(Request::Reload))["schedules"], 1);
+    let request_history = || Request::ScheduleHistory {
+        schedule_id: "latest".into(),
+        after_due_ms: None,
+        after_gap_id: None,
+    };
+    let prior = ok(daemon.request(request_history()));
+    fs::write(&schedule, "invalid").unwrap();
+    assert!(
+        matches!(daemon.request(Request::Reload), Response::Error(message) if message == "InvalidConfiguration")
+    );
+    assert_eq!(ok(daemon.request(request_history())), prior);
+    fs::write(&schedule, valid).unwrap();
+    fs::write(&path, format!("{settings}\n[limits]\nqueued_runs=1\n")).unwrap();
+    assert!(
+        matches!(daemon.request(Request::Reload), Response::Error(message) if message == "InvalidConfiguration")
+    );
+    fs::write(&path, settings).unwrap();
+
+    let minute = prior["checkpoint_ms"].as_i64().unwrap();
+    let now = Instant::now();
+    daemon.evaluate_schedules_at(minute + 60_000, now).unwrap();
+    let history = ok(daemon.request(request_history()));
+    let run_id = history["occurrences"][0]["run_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(
+        ok(daemon.request(Request::Status { run_id }))["phase"],
+        "Queued"
+    );
+    ok(daemon.request(Request::SchedulePause {
+        schedule_id: Some("latest".into()),
+    }));
+    daemon
+        .evaluate_schedules_at(minute + 120_000, now + Duration::from_secs(60))
+        .unwrap();
+    assert_eq!(
+        ok(daemon.request(request_history()))["occurrences"][1]["decision"],
+        "paused"
+    );
+    ok(daemon.request(Request::ScheduleResume {
+        schedule_id: Some("latest".into()),
+    }));
+    assert_eq!(ok(daemon.request(request_history()))["paused"], false);
+    ok(daemon.request(Request::Resume));
+    daemon.step().unwrap();
+    started(&mut daemon.controller, &fixture);
+    let run_id = history["occurrences"][0]["run_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    fixture.ended(&run_id);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while daemon.controller.active_runs() > 0 {
+        assert!(Instant::now() < deadline);
+        daemon.step().unwrap();
+        thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(
+        ok(daemon.request(Request::Status { run_id }))["result"],
+        "Success"
+    );
+    daemon.evaluate_schedules().unwrap();
+    ok(daemon.request(Request::Shutdown));
+    assert!(
+        matches!(daemon.request(Request::Reload), Response::Error(message) if message == "Closed")
+    );
+    assert!(
+        matches!(daemon.request(Request::SchedulePause { schedule_id: None }), Response::Error(message) if message == "Closed")
+    );
+}

@@ -1,52 +1,54 @@
 # Operational contracts
 
-Scheduling, live reload, age-based retention, restore, and telemetry are
-accepted future work. The local service implements manual work and planned
-drain. Its interface is in [service.md](service.md).
+Scheduling and explicit reload are implemented. Age-based retention, restore,
+and telemetry are accepted future work. See the [service interface](service.md).
 
 ## Scheduling
 
-Schedule definitions come only from TOML files under the accepted
-[file contract](configuration.md#accepted-file-layout). The database retains
-runtime state, not editable schedule definitions. A schedule ID is its path
-relative to the schedule root without `.toml`. A rename or move within the root
-removes one identity and adds another. Do not transfer old pause state or
-occurrence history automatically. Preserve accepted runs and old records. Apply
-first-installation behavior to the new schedule without replaying missed work.
-Initial pause and checkpoint mechanisms remain open.
+The service evaluates the accepted five-field UTC cron subset with `croner`.
+Each schedule ID is its path relative to the schedule root without `.toml`.
+SQLite schema 8 stores occurrence decisions, schedule revisions, evaluation
+checkpoints, gaps, and pause state. A decision, its admitted run, and its
+checkpoint commit in one transaction. Manual requests and scheduled
+occurrences share the queue and retain their own identities.
 
-At an unchanged path, the schedule ID stays stable. Occurrence identity is
-schedule ID plus UTC due time. Record the schedule-definition revision separately. Editing a schedule
-does not make an already handled due time eligible again. Updated definitions
-apply to future occurrences.
+Occurrence identity is the schedule ID and UTC due time. Edits keep the ID and
+cannot reopen a handled due time. A rename uses the new path as a new ID.
+Existing runs and earlier history remain. A new schedule starts unpaused
+subject to the global schedule pause. Its first checkpoint covers the current
+UTC minute, with an unknown preceding interval. On reactivation of an old ID
+its checkpoint remains protected and its individual pause resets.
 
-Use the strict five-field UTC cron subset in the
-[configuration contract](configuration.md#schedule-schema). Allow numeric values,
-lists, ranges, and standalone `*`. Reject steps and extensions. Day of month or
-day of week must be exactly `*`. The user accepted this restriction in the cron
-review on 2026-11-08, replacing the earlier acceptance of combined day fields
-with OR matching. Use an established parser/evaluator for accepted expressions.
+The service samples wall time and monotonic time. It evaluates the next UTC
+minute when coverage is continuous. On restart, a gap covers any interval
+after the stored checkpoint through the current minute. If more than one
+minute elapses without evaluation or the wall clock jumps, the service records
+a gap and skips the affected work. A backward jump cannot lower a checkpoint.
+The service treats a backward wall-clock step or a difference over two seconds
+between wall and monotonic elapsed time as a clock change. It counts missed
+occurrences for intervals up to 24 hours when the schedule was continuously
+configured with the same revision and the time bounds are known.
 
-Subset validation and library matching tests are implemented with `croner`.
-Scheduler execution, durable occurrence decisions, and clock-change handling
-remain future work.
-
-Allow at most one queued run per schedule. Further due occurrences are recorded
-as skipped while that queued run remains. An active run may have one queued
-successor. The shared queue limit still applies.
-
-Persist evaluation checkpoints together with occurrence decisions. Report
-intervals without reliable evaluation as schedule gaps, with a missed count
-only when known. Skip missed work on restart. Apply the accepted [control
-effects](../GRAVITY.md#accepted-operational-controls). Test outages, clock changes
-in both directions, schedule edits, and first installation.
+Schedule pause records known due occurrences as skipped. A paused schedule
+does not affect manual admission or dispatch. An active run can have one queued
+successor from the same schedule. Further occurrences skip while that successor
+remains queued. The same queue limit applies to both kinds of admission.
 
 ## Live reload
 
-Validate a consistent complete candidate set before activation. Keep the
-previous set if validation fails. Preserve accepted runs and handled
-occurrences. The activation trigger and consistent-read mechanism remain open.
-See the [configuration contract](configuration.md#validation-and-retained-work).
+Send `{"command":"reload"}` through `rustward ctl`. The service reads the same
+configuration path it used at startup and validates the entire candidate.
+Storage, limit, and retention setting changes require a restart. The service
+keeps the previous configuration if loading, validation, or activation fails.
+Accepted runs and handled occurrences are retained. Activation applies the new
+definitions to future minutes.
+
+Publish a complete immutable configuration directory at the configured path.
+The loader holds one directory descriptor for the service file and definition
+roots that live within that directory. Keep externally located definition roots
+unchanged throughout a reload. Keep the previous directory available until any
+reload that opened it has finished. The reader rejects observed changes but
+does not provide a filesystem snapshot of in-place edits.
 
 ## Age-based retention
 

@@ -11,6 +11,7 @@ use toml::Value;
 
 use crate::config::Config;
 
+pub(crate) mod schedule;
 mod schema;
 
 pub(crate) fn utc_ms() -> Result<i64, Error> {
@@ -27,6 +28,8 @@ type KeyMac = Hmac<Sha256>;
 pub enum Error {
     InvalidKey,
     InvalidInputs,
+    InvalidConfiguration,
+    UnknownSchedule,
     InvalidRuntime,
     TooLarge,
     PayloadConflict,
@@ -265,7 +268,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=7).contains(&version) {
+        } else if !(1..=8).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -313,6 +316,9 @@ impl Store {
         }
         if version < 7 {
             schema::migrate_controller(&transaction)?;
+        }
+        if version < 8 {
+            schedule::migrate(&transaction)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {
@@ -477,28 +483,48 @@ impl Store {
             if closed || closed_for_request || safety.failed() {
                 return Err(Error::Closed);
             }
-            if runtime_id.is_empty() || runtime_id.len() > 1024 {
-                return Err(Error::InvalidRuntime);
-            }
-            let arguments = config.arguments(task_id, submitted_values).map_err(|_| Error::InvalidInputs)?;
-            let (snapshot, config_snapshot) = config.admission_snapshot(task_id);
-            let arguments = serde_json::to_string(&arguments).unwrap();
-            if snapshot.len() + arguments.len() > 1024 * 1024 {
-                return Err(Error::TooLarge);
-            }
-            let count: u32 = transaction.query_row("SELECT count(*) FROM runs WHERE phase='queued'", [], |row| row.get(0)).map_err(storage)?;
-            if count >= limit {
-                return Err(Error::QueueFull);
-            }
-            let run_id = hex::encode(random_bytes()?);
-            transaction.execute(
-                "INSERT INTO runs (run_id, task_id, task_snapshot, task_revision, config_revision, submitted_inputs, arguments, runtime_id, phase)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued')",
-                params![run_id, task_id, snapshot, revision(b"rustward-definition-v1", &snapshot), revision(b"rustward-configuration-v2", &config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id]
-            ).map_err(storage)?;
+            let run_id = insert_run(&transaction, config, task_id, submitted_values, runtime_id, limit)?;
             transaction.execute("INSERT INTO admissions VALUES (?1, ?2, ?3)", params![key, fingerprint, run_id]).map_err(storage)?;
             transaction.commit().map_err(storage)?;
             Ok(Admission::Admitted { run_id })
         })
     }
+}
+
+fn insert_run(
+    transaction: &rusqlite::Transaction<'_>,
+    config: &Config,
+    task_id: &str,
+    submitted_values: &BTreeMap<String, Value>,
+    runtime_id: &str,
+    limit: u32,
+) -> Result<String, Error> {
+    if runtime_id.is_empty() || runtime_id.len() > 1024 {
+        return Err(Error::InvalidRuntime);
+    }
+    let arguments = config
+        .arguments(task_id, submitted_values)
+        .map_err(|_| Error::InvalidInputs)?;
+    let (snapshot, config_snapshot) = config.admission_snapshot(task_id);
+    let arguments = serde_json::to_string(&arguments).unwrap();
+    if snapshot.len() + arguments.len() > 1024 * 1024 {
+        return Err(Error::TooLarge);
+    }
+    let count: u32 = transaction
+        .query_row(
+            "SELECT count(*) FROM runs WHERE phase='queued'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(storage)?;
+    if count >= limit {
+        return Err(Error::QueueFull);
+    }
+    let run_id = hex::encode(random_bytes()?);
+    transaction.execute(
+        "INSERT INTO runs (run_id, task_id, task_snapshot, task_revision, config_revision, submitted_inputs, arguments, runtime_id, phase)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued')",
+        params![run_id, task_id, snapshot, revision(b"rustward-definition-v1", &snapshot), revision(b"rustward-configuration-v2", &config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id]
+    ).map_err(storage)?;
+    Ok(run_id)
 }

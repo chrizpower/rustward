@@ -32,9 +32,11 @@ fn load_checked(path: &Path, between_reads: impl FnOnce()) -> Result<Config, Str
         return Err("service file must be named rustward.toml".into());
     }
     let absolute = std::path::absolute(path).map_err(|e| e.to_string())?;
-    let first = collect(&absolute)?;
+    let parent = absolute.parent().unwrap();
+    let directory = open(CWD, parent)?;
+    let first = collect(&directory, parent)?;
     between_reads();
-    if first != collect(&absolute)? {
+    if first != collect(&directory, parent)? {
         return Err("configuration changed during loading; keep files unchanged and retry".into());
     }
     let service = Service::parse(&first.service, absolute.parent().unwrap())?;
@@ -96,15 +98,39 @@ fn read(file: File, label: &str, total: &mut usize) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|_| format!("{label}: expected UTF-8"))
 }
 
-fn collect(path: &Path) -> Result<Candidate, String> {
+fn collect(directory: &File, parent: &Path) -> Result<Candidate, String> {
     let mut candidate = Candidate::default();
-    candidate.service = read(open(CWD, path)?, "rustward.toml", &mut candidate.bytes)?;
-    let service = Service::parse(&candidate.service, path.parent().unwrap())?;
+    candidate.service = read(
+        open(directory, Path::new("rustward.toml"))?,
+        "rustward.toml",
+        &mut candidate.bytes,
+    )?;
+    let service = Service::parse(&candidate.service, parent)?;
     for (scope, root) in [
         ("tasks", &service.definitions.tasks),
         ("schedules", &service.definitions.schedules),
     ] {
-        walk(open(CWD, root)?, "", scope, 0, &mut candidate)?;
+        let root = match root.strip_prefix(parent) {
+            Ok(relative)
+                if relative.components().all(|part| {
+                    matches!(
+                        part,
+                        std::path::Component::Normal(_) | std::path::Component::CurDir
+                    )
+                }) =>
+            {
+                open(
+                    directory,
+                    if relative.as_os_str().is_empty() {
+                        Path::new(".")
+                    } else {
+                        relative
+                    },
+                )?
+            }
+            _ => open(CWD, root)?,
+        };
+        walk(root, "", scope, 0, &mut candidate)?;
     }
     candidate.folders.sort();
     Ok(candidate)
@@ -184,5 +210,34 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("changed during loading"));
         assert_eq!(previous.task_count(), 0);
+    }
+
+    #[test]
+    fn keeps_one_configuration_directory_during_publication() {
+        let root = tempfile::tempdir().unwrap();
+        let active = root.path().join("active");
+        let replacement = root.path().join("replacement");
+        for generation in [&active, &replacement] {
+            std::fs::create_dir_all(generation.join("tasks")).unwrap();
+            std::fs::create_dir(generation.join("schedules")).unwrap();
+            std::fs::write(
+                generation.join("rustward.toml"),
+                include_str!("../../examples/rustward.toml"),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            replacement.join("tasks/new.toml"),
+            include_str!("../../examples/tasks/synthetic-report.toml"),
+        )
+        .unwrap();
+        let path = active.join("rustward.toml");
+        let opened = load_checked(&path, || {
+            std::fs::rename(&active, root.path().join("previous")).unwrap();
+            std::fs::rename(&replacement, &active).unwrap();
+        })
+        .unwrap();
+        assert_eq!(opened.task_count(), 0);
+        assert_eq!(load(&path).unwrap().task_count(), 1);
     }
 }

@@ -302,6 +302,19 @@ Recovered Evidence keeps retained lengths but leaves historical observed counts
 and truncation unknown. The controller marks unfinished recovered output failed.
 Current synchronization cannot establish complete capture before a crash.
 
+### Schedule controls
+
+Use `reload` to activate the complete definition set at the service's startup
+path. Use `schedule_pause` or `schedule_resume` with an optional `schedule_id`.
+Omit the ID to change the global schedule pause. Dispatch pause is independent.
+
+Use `schedule_history` with `schedule_id` to read the checkpoint, pause state,
+and up to 20 occurrence decisions and 20 schedule gaps in order. Pass the last
+`due_ms` as `after_due_ms` and the last gap `id` as `after_gap_id` to read more.
+Gap bounds use an exclusive `after_ms` and inclusive `through_ms`.
+A null `after_ms` or `missed_count` indicates an unknown value.
+See the [scheduling and reload contracts](operations.md#scheduling).
+
 ### Verification
 
 Synthetic tests exercise the service through its control interface, controller

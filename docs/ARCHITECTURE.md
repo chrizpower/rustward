@@ -2,7 +2,8 @@
 
 Rustward runs generic commands for one trusted administrator. The local service
 implements manual admission, recovery, dispatch, stopping, review, and planned
-drain. Scheduling and web access are part of the target architecture.
+drain. It also evaluates UTC schedules and supports explicit configuration
+reload. Web access remains part of the target architecture.
 [Gravity](GRAVITY.md) owns the accepted constraints and principles.
 
 ## System diagram
@@ -54,7 +55,7 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Control,Inputs,Queue,Dispatch,Adapter,Capture implemented
+    class CLI,Config,Control,Cron,Inputs,Queue,Dispatch,Adapter,Capture implemented
 ```
 
 Green marks implemented components. The proxy, systemd, task processes, and

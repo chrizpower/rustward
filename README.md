@@ -2,9 +2,10 @@
 
 Rustward is a small Rust task executor for one trusted administrator. The local
 service runs generic commands through a dedicated systemd user manager.
-It supports manual admission, cancellation, recovery, review, and bounded
-output capture. Ansible is the first workload. UTC scheduling, live reload, web
-access, age-based retention, restore, and telemetry remain open.
+It supports manual admission, UTC scheduling, live configuration reload,
+cancellation, recovery, review, and bounded output capture. Ansible is the
+first workload. Web access, age-based retention, restore, and telemetry remain
+open.
 
 Validate the synthetic configuration:
 
@@ -14,7 +15,7 @@ cargo run --locked -- validate examples/rustward.toml
 
 The loader reads version 2 TOML service settings and one file per task and
 schedule. Relative paths under the definition roots supply IDs. The service
-loads the complete set at startup. See the [synthetic settings](examples/rustward.toml).
+loads the complete set at startup and supports explicit reload. See the [synthetic settings](examples/rustward.toml).
 
 ## Documentation
 

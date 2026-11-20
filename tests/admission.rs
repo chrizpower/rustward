@@ -342,7 +342,7 @@ fn rejects_unsupported_schema_and_storage_failures() {
     ));
     let path = directory.path().join("state.db");
     let connection = Connection::open(&path).unwrap();
-    connection.pragma_update(None, "user_version", 8).unwrap();
+    connection.pragma_update(None, "user_version", 9).unwrap();
     assert!(matches!(Store::open(&path), Err(Error::UnsupportedSchema)));
     let (directory, mut store) = setup();
     let connection = Connection::open(directory.path().join("state.db")).unwrap();
