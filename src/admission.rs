@@ -30,6 +30,7 @@ pub enum Error {
     InvalidInputs,
     InvalidConfiguration,
     UnknownSchedule,
+    OutputUnavailable,
     InvalidRuntime,
     TooLarge,
     PayloadConflict,

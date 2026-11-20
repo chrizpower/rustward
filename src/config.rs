@@ -233,6 +233,29 @@ impl Config {
             .collect())
     }
 
+    pub(crate) fn task_cards(&self, after: &str) -> Vec<serde_json::Value> {
+        self.tasks
+            .iter()
+            .filter(|task| task.id.as_str() > after)
+            .take(20)
+            .map(|task| serde_json::json!({"id": task.id, "label": task.label}))
+            .collect()
+    }
+
+    pub(crate) fn task_form(&self, id: &str) -> Option<serde_json::Value> {
+        let task = self.tasks.iter().find(|task| task.id == id)?;
+        let inputs: Vec<_> = task.inputs.iter().map(|input| {
+            let display = |value: &Value| match value {
+                Value::Integer(number) => serde_json::Value::String(number.to_string()),
+                _ => serde_json::json!(value),
+            };
+            serde_json::json!({"id":input.id,"type":input.kind,"required":input.required,
+                "default":input.default.as_ref().map(display),
+                "choices":input.choices.as_ref().map(|values| values.iter().map(display).collect::<Vec<_>>())})
+        }).collect();
+        Some(serde_json::json!({"id":task.id,"label":task.label,"inputs":inputs}))
+    }
+
     pub fn service(&self) -> &Service {
         &self.service
     }

@@ -93,7 +93,7 @@ class CleanupTests(unittest.TestCase):
                     if complete and harness_code:
                         (output / "A01.json").write_text('{"status":"failed"}')
                     elif complete:
-                        for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host", "daemon", "scheduler"):
+                        for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host", "daemon", "scheduler", "web"):
                             (output / f"{name}.json").write_text('{"status":"passed"}')
                         (output / "result.json").write_text(json.dumps({"status": "passed", "cases": ["A01", "A02"]}))
                         (evidence / "fixture/fixture.json").write_text(json.dumps({"runtime_id": "a" * 64, "host_id": "b" * 64, "packages": "synthetic", "source_revision": "c" * 64}))

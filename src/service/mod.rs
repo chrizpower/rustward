@@ -1,6 +1,11 @@
 //! Local service entry point and control loop.
 mod control;
+#[cfg(feature = "web-preview")]
+mod preview;
 mod schedule;
+mod web;
+#[cfg(feature = "web-preview")]
+pub use preview::web_preview;
 
 use std::{
     ffi::OsString,
@@ -38,11 +43,12 @@ pub struct Options {
     pub work_directory: PathBuf,
     pub runtime_id: String,
     pub preparation_uid: u32,
+    web: Option<web::Options>,
 }
 
 impl Options {
     pub fn parse(mut args: impl Iterator<Item = OsString>) -> Option<Self> {
-        let options = Self {
+        let mut options = Self {
             config: args.next()?.into(),
             name: args.next()?.into_string().ok()?,
             runtime_catalog: args.next()?.into(),
@@ -50,7 +56,18 @@ impl Options {
             work_directory: args.next()?.into(),
             runtime_id: args.next()?.into_string().ok()?,
             preparation_uid: args.next()?.to_str()?.parse().ok()?,
+            web: None,
         };
+        if let Some(flag) = args.next() {
+            if flag != "--web" {
+                return None;
+            }
+            options.web = Some(web::Options {
+                socket: args.next()?.into(),
+                origin: args.next()?.into_string().ok()?,
+                proxy_uid: args.next()?.to_str()?.parse().ok()?,
+            });
+        }
         args.next().is_none().then_some(options)
     }
     fn roots(&self, config: &Config, protection: runtime::Protection) -> Result<Roots, String> {
@@ -80,7 +97,7 @@ impl Options {
     }
 }
 
-pub fn serve(options: Options) -> Result<(), String> {
+fn install_stop() -> Result<Arc<AtomicBool>, String> {
     let stop = Arc::new(AtomicBool::new(false));
     for signal in [Signal::INT, Signal::TERM] {
         let stop = Arc::clone(&stop);
@@ -92,12 +109,18 @@ pub fn serve(options: Options) -> Result<(), String> {
         }
         .map_err(|error| format!("signal setup: {error}"))?;
     }
+    Ok(stop)
+}
+
+pub fn serve(mut options: Options) -> Result<(), String> {
+    let stop = install_stop()?;
     let listener =
         control::listen(&options.name).map_err(|error| format!("control listener: {error}"))?;
     let protection = runtime::Protection {
         preparation_uid: options.preparation_uid,
         execution_uid: geteuid().as_raw(),
     };
+    let web_options = options.web.take();
     let service = open(options, protection, |path, roots, limits, safety| {
         let supervisor = Systemd::new(
             UserBus::connect().map_err(|error| format!("user bus: {error:?}"))?,
@@ -107,7 +130,14 @@ pub fn serve(options: Options) -> Result<(), String> {
         Controller::open(path, roots, limits, supervisor, safety)
             .map_err(|error| format!("controller: {error:?}"))
     })?;
-    run(service, listener, &stop)
+    let web = web_options
+        .map(|options| {
+            let logs = WorkRoot::open(&service.config.service().storage.log_directory)
+                .map_err(|error| format!("web log root: {error:?}"))?;
+            web::Web::bind(options, logs)
+        })
+        .transpose()?;
+    run(service, listener, &stop, web.as_ref())
 }
 
 fn open<S: Supervisor + Clone + Send + 'static>(
@@ -138,6 +168,7 @@ fn run<S: Supervisor + Clone + Send + 'static>(
     mut service: Service<S>,
     listener: std::os::unix::net::UnixListener,
     stop: &AtomicBool,
+    web: Option<&web::Web>,
 ) -> Result<(), String> {
     loop {
         if stop.load(Ordering::Acquire) {
@@ -145,6 +176,9 @@ fn run<S: Supervisor + Clone + Send + 'static>(
         }
         if service.step()? {
             return Ok(());
+        }
+        if let Some(web) = web {
+            web.poll(&mut service);
         }
         match listener.accept() {
             Ok((mut stream, _)) => {

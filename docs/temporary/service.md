@@ -315,6 +315,12 @@ Gap bounds use an exclusive `after_ms` and inclusive `through_ms`.
 A null `after_ms` or `missed_count` indicates an unknown value.
 See the [scheduling and reload contracts](operations.md#scheduling).
 
+### Web console
+
+The optional web listener uses the service's existing queue and controls.
+See [private web access](operations.md#private-web-access) for the proxy
+contract, preview, and browser tests.
+
 ### Verification
 
 Synthetic tests exercise the service through its control interface, controller

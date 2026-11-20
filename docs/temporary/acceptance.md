@@ -171,11 +171,10 @@ fail-closed behavior is unchanged.
 
 The host runner requires three opt-in passes for child cleanup and unit
 isolation, output capture, and runtime permissions. The current runner
-also requires the daemon case. It admits through `ctl`, tests matching retries
-and log reclamation, checks recovery and protected output after a restart, and
-checks planned drain with active and queued work. The daemon decision is
-`fixture/evidence/daemon.json`. The scheduler case checks rejected reload, restart-safe pause,
-and one durable start. See `fixture/evidence/scheduler.json`.
+also requires daemon, scheduler, and HTTPS proxy passes. Their reports are
+`fixture/evidence/daemon.json`, `scheduler.json`, and `web.json`. See
+[private web access](operations.md#private-web-access) for browser tests.
+Install Nginx and OpenSSL for the web case on a prepared VM.
 
 For a direct systemd check, run `cargo test --locked --test systemd_host -- --ignored`
 on the isolated host. The

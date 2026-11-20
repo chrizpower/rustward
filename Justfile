@@ -30,3 +30,9 @@ acceptance-host root tools user="rustward":
 
 check-acceptance-fixtures:
     python3 -B -m unittest discover -s acceptance/tests -p 'test_*.py'
+
+web-preview:
+    cargo run --locked --features web-preview -- web-preview
+
+web-test:
+    python3 -B tests/web/run.py

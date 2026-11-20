@@ -20,6 +20,18 @@ chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 croner = { version = "4.0.3", default-features = false, features = ["chrono"] }
 signal-hook-registry = "1.4"
 
+hyper = { version = "1.11", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+http-body-util = "0.1.5"
+tokio = { version = "1.52", features = ["net", "rt", "sync", "time"] }
+
+[features]
+web-preview = ["dep:tempfile"]
+
+[dependencies.tempfile]
+version = "3"
+optional = true
+
 [dev-dependencies]
 tempfile = "3"
 zbus = { version = "5", features = ["p2p"] }

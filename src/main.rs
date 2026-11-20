@@ -23,6 +23,8 @@ fn main() -> ExitCode {
             .ok_or_else(usage)
             .and_then(service::serve)
             .map(|()| true),
+        #[cfg(feature = "web-preview")]
+        Some("web-preview") => service::web_preview(args).map(|()| true),
         Some("ctl") => match (args.next(), args.next()) {
             (Some(name), None) => name.to_str().ok_or_else(usage).and_then(|name| {
                 service::call(name, io::stdin().lock(), io::stdout().lock())
@@ -45,6 +47,6 @@ fn main() -> ExitCode {
 fn usage() -> String {
     "Usage:
   rustward validate <rustward.toml>
-  rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid>
+  rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid> [--web <socket> <https-origin> <proxy-uid>]
   rustward ctl <name> < request.json".into()
 }

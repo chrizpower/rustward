@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rustward</title>
+  <link rel="stylesheet" href="/console.css">
+  <script src="/console.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#tasks">Rustward</a>
+    <nav aria-label="Console">
+      <a href="#tasks" data-section="tasks">Tasks</a>
+      <a href="#runs" data-section="runs">Runs</a>
+      <a href="#schedules" data-section="schedules">Schedules</a>
+      <a href="#reviews" data-section="reviews">Review</a>
+    </nav>
+    <div id="service" aria-live="polite"></div>
+  </header>
+  <main>
+    <p id="error" role="alert" hidden></p>
+    <section id="content" aria-label="Current view"></section>
+  </main>
+</body>
+</html>

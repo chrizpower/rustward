@@ -138,6 +138,7 @@ fn startup_checks_private_state_and_prepared_runtime() {
         work_directory: base.join("work"),
         runtime_id: native.id.clone(),
         preparation_uid: uid,
+        web: None,
     };
     let protection = runtime::Protection {
         preparation_uid: uid,
@@ -189,7 +190,7 @@ fn service_loop_runs_control_requests_and_releases_the_endpoint() {
         let store = Store::open_with_safety(path, safety.clone()).unwrap();
         let controller = fixture.controller(Limits::default());
         let service = Service::new(config, "runtime-1".into(), store, controller, safety).unwrap();
-        run(service, listener, &worker_stop).unwrap();
+        run(service, listener, &worker_stop, None).unwrap();
     });
     let request = |request: Value| {
         let mut bytes = Vec::new();

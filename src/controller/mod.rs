@@ -12,6 +12,8 @@ use std::{collections::BTreeMap, path::Path, sync::Arc, thread::JoinHandle, time
 mod emergency;
 mod flow;
 mod preparation;
+#[cfg(feature = "web-preview")]
+pub(crate) mod preview;
 use emergency::{Guard, Registry};
 pub use preparation::Roots;
 use preparation::{Preparation, Prepared};

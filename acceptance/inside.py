@@ -12,6 +12,7 @@ import time
 
 from prepare import prepare
 import service_case
+import web_case
 
 
 def invoke(command, timeout=240, capture=False):
@@ -148,6 +149,8 @@ def run(root, tools, user, revision):
         service_case.run(root, tools, account, fixture, user_command)
         status["phase"] = "scheduler-acceptance"
         service_case.run_schedules(root, tools, account, fixture, user_command)
+        status["phase"] = "web-acceptance"
+        web_case.run(root, tools, account, fixture, user_command)
         status = {"status": "passed", "phase": "complete"}
     finally:
         (evidence / "host-runner.json").write_text(json.dumps(status, sort_keys=True) + "\n")
@@ -155,6 +158,7 @@ def run(root, tools, user, revision):
             stop_fixture_units(root, account)
             stop_fixture_units(root / "daemon", account)
             stop_fixture_units(root / "scheduled", account)
+            stop_fixture_units(root / "web", account)
         finally:
             checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
 

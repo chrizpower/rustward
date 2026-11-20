@@ -50,6 +50,36 @@ unchanged throughout a reload. Keep the previous directory available until any
 reload that opened it has finished. The reader rejects observed changes but
 does not provide a filesystem snapshot of in-place edits.
 
+## Private web access
+
+Append `--web /run/rustward/web.sock https://rustward.example 33` to
+`rustward serve` to enable the console. Replace the path, HTTPS origin and
+UID with the deployment values. Use a separate UID for the authenticating
+Nginx worker. Give the service ownership of the socket directory and allow
+the proxy to traverse it. Remove an old socket after a crash only after
+confirming the previous service has stopped.
+
+Nginx must authenticate every console route and preserve the browser's Host
+header. Set the backend to the Unix socket and clear the Authorization header
+before forwarding. Rustward checks the peer UID, the exact Host header, and,
+for API requests, the configured Origin and `X-Rustward-CSRF: 1` header.
+The web socket has no TCP listener. This enforces proxy access even when
+another account can connect locally. Deployment configuration stays in
+the deployment repository.
+
+The console uses embedded assets, typed task forms, and durable manual request
+keys. It polls each output stream in 16 KiB chunks and renders it as text.
+The console reconnects using the run ID and limits the displayed tail per
+stream. It shows a truncation or reclamation notice when stored evidence
+records it. Queue, run history, and schedule results use bounded pages.
+
+`just web-preview` uses a disposable database, synthetic tasks, and a fake
+supervisor on a loopback address. `just web-test` runs the real console in
+headless Chromium. It tests request retries, reconnecting, input validation,
+text rendering, cancellation, schedule controls, and review. The isolated
+Docker web case checks Nginx authentication, proxy peer enforcement, origin
+checks, and a real systemd run. It records `fixture/evidence/web.json`.
+
 ## Age-based retention
 
 Use the configured retention age for eligible completed records and logs.

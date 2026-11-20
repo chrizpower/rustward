@@ -3,7 +3,7 @@
 Rustward runs generic commands for one trusted administrator. The local service
 implements manual admission, recovery, dispatch, stopping, review, and planned
 drain. It also evaluates UTC schedules and supports explicit configuration
-reload. Web access remains part of the target architecture.
+reload. The private web console uses the same admission and execution controls.
 [Gravity](GRAVITY.md) owns the accepted constraints and principles.
 
 ## System diagram
@@ -55,13 +55,14 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Control,Cron,Inputs,Queue,Dispatch,Adapter,Capture implemented
+    class CLI,Config,Control,UI,Cron,Inputs,Queue,Dispatch,Adapter,Capture implemented
 ```
 
 Green marks implemented components. The proxy, systemd, task processes, and
 runtime preparation operate outside the service. The proxy provides private
-browser access. The local control interface uses the service account. Both
-paths use the same execution core.
+browser access and authenticates the administrator. The web listener accepts
+only the configured proxy UID on a Unix socket. The local control interface
+uses the service account. Both paths use the same execution core.
 
 ## Definitions and retained state
 

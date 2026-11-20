@@ -240,6 +240,9 @@ impl Fixture {
             safety: Safety::default(),
         }
     }
+    pub(crate) fn log_path(&self) -> &Path {
+        &self.preparation.logs
+    }
     pub(crate) fn admit(&mut self) -> (String, String) {
         let key = self.store.issue_key().unwrap();
         let config = crate::config::load("examples/rustward.toml").unwrap();

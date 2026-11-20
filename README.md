@@ -4,8 +4,9 @@ Rustward is a small Rust task executor for one trusted administrator. The local
 service runs generic commands through a dedicated systemd user manager.
 It supports manual admission, UTC scheduling, live configuration reload,
 cancellation, recovery, review, and bounded output capture. Ansible is the
-first workload. Web access, age-based retention, restore, and telemetry remain
-open.
+first workload. A private web console supports task submission, run output,
+schedule controls, and review. Age-based retention, restore, and telemetry
+remain open.
 
 Validate the synthetic configuration:
 
@@ -44,6 +45,18 @@ just hooks-install
 ```sh
 just check
 ```
+
+Use the synthetic web console on a Linux development host:
+
+```sh
+just web-preview
+just web-test
+```
+
+Open the localhost URL printed by the preview. The browser suite requires Node
+and npm. It uses rootless Podman when available. Set
+`RUSTWARD_WEB_CONTAINER=none` to use local Chromium libraries. Browser failure
+screenshots and traces go under `~/artifacts/rustward/web/`.
 
 Host acceptance runs separately from `just check` and uses synthetic
 workloads on an isolated Linux host.

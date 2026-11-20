@@ -25,7 +25,7 @@ FROM ${DEBIAN_IMAGE}
 ENV container=docker
 RUN apt-get update && apt-get install --yes --no-install-recommends \
       systemd systemd-sysv dbus dbus-user-session libpam-systemd \
-      ansible-core openssh-client python3 coreutils libc-bin util-linux mount ca-certificates && \
+      ansible-core openssh-client python3 coreutils libc-bin util-linux mount ca-certificates nginx openssl && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --uid 1000 --create-home --shell /bin/bash rustward && \
     mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/rustward && \
