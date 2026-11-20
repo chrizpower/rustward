@@ -1,5 +1,4 @@
-//! One-run administrator acknowledgement. Transport authentication and retention
-//! reclamation are service integration work; see docs/temporary/review.md.
+//! Administrator review and acknowledgement. See docs/ARCHITECTURE.md.
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 

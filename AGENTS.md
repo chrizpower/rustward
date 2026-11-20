@@ -1,28 +1,47 @@
 # Agent instructions
 
 Before work, read [README.md](README.md), [architecture](docs/ARCHITECTURE.md),
-and [Gravity](docs/GRAVITY.md). While present, also read
-[requirements](docs/temporary/requirements.md),
-[execution contracts](docs/temporary/execution.md), and the
-[implementation work list](docs/temporary/implementation.md).
-Follow accepted rules and contracts within scope; unaccepted proposals remain
-proposals. Read [the glossary](docs/GLOSSARY.md) for domain work and follow its
-maintenance instructions in this file. Use ASD-STE100 Simplified Technical English for prose
-and new names. Preserve required interfaces and established technical terms.
+and [Gravity](docs/GRAVITY.md). Read the relevant working references in
+`docs/temporary/` while they exist. Follow accepted rules and contracts.
+Read [the glossary](docs/GLOSSARY.md) for domain work and follow its
+maintenance instructions below. Use ASD-STE100 Simplified Technical English for
+prose and new names. Preserve required interfaces and established technical terms.
 
-The long-lived documentation is README.md, AGENTS.md, and the uppercase-named
-references directly in docs/. Keep supporting documents in docs/temporary/,
-including requirements, execution contracts, configuration details, work lists,
-and migration plans. Follow the [lifecycle guidance](docs/temporary/README.md).
-Before deleting a temporary file, absorb its lasting content into ARCHITECTURE.md,
-GRAVITY.md, or GLOSSARY.md, preserve useful evidence, resolve or transfer open
-work, and update inbound links. Temporary location does not weaken accepted rules
-or implemented contracts.
+## Documentation
 
-Update the document that owns the affected behavior or decision. README.md maps
-document roles. Keep its entry points and the architecture overview consistent
-when behavior, setup, structure, implementation status, or open decisions change.
-Distinguish implemented behavior, accepted future contracts, and proposals.
+Keep the permanent document set as small as possible. A permanent document
+owns information readers will need to understand Rustward or guide future
+decisions throughout the life of the project, including after development ends.
+Prefer a short addition to an existing permanent document. Keep implementation
+details, draft designs, plans, open work, and test records in `docs/temporary/`.
+
+Always ask the user before creating a new uppercase-named permanent Markdown
+document or promoting a temporary document to permanent. Explain why the
+document should exist, why the existing documents cannot cover its purpose,
+and its proposed contract. State who it serves, what information it owns,
+and where its scope ends. Wait for explicit approval before creating or
+promoting the document.
+
+Put permanent Markdown files at the repository root or directly in `docs/`.
+Use uppercase letters before the `.md` extension only for permanent documents.
+Use lowercase filenames in `docs/temporary/`. Hyphens can separate words.
+Never reference a temporary document from a permanent document. Temporary
+documents can reference permanent documents.
+
+Record each temporary document's scope, status, removal condition, and
+destination for lasting content in the document or the temporary index.
+Before removal, transfer enduring decisions to their permanent owners and
+preserve required evidence in maintained tests or retained artifacts. Complete
+or transfer open work and update affected references. Remove the temporary
+folder when it has no remaining work. Accepted rules and contracts remain
+in force while their supporting references are temporary.
+
+Update the document that owns the affected behavior or decision. Keep README.md
+and the architecture overview consistent with changes to setup, structure, or
+implementation status. Mark implemented behavior, accepted future contracts,
+and proposals explicitly.
+
+## Repository work
 
 Keep the executor generic. Use established Linux infrastructure where it reduces
 custom code. Do not add Ansible-specific behavior to the execution core. Keep

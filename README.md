@@ -1,95 +1,29 @@
 # Rustward
 
-Rustward is a small Rust task executor for one trusted administrator. It will
-run generic commands, support manual requests and UTC cron schedules, and
-provide a web UI for inputs, logs, and status. Ansible is the first workload.
+Rustward is a small Rust task executor for one trusted administrator. The local
+service runs generic commands through a dedicated systemd user manager.
+It supports manual admission, cancellation, recovery, review, and bounded
+output capture. Ansible is the first workload. UTC scheduling, live reload, web
+access, age-based retention, restore, and telemetry remain open.
 
-Status: Configuration validation, admission, dispatch, stopping, review, prepared
-runtime checks, and the [execution controller](docs/temporary/controller.md) are
-implemented as libraries. The controller connects capture, log accounting,
-manager UID binding, and pinned host dependencies. Tests use synthetic files,
-fake supervision and a private D-Bus peer. The copied Docker bundle confirms
-A01–A10, including A10's exported logs; see the
-[evidence review](docs/temporary/acceptance-review.md). The
-[local runner](docs/temporary/acceptance-runner.md) and
-[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The main binary validates TOML and runs the local service.
-`rustward-exec` supplies the pinned environment launcher. See the
-[service and control commands](docs/temporary/controller.md#local-service).
-See the [configuration schema](docs/temporary/configuration.md) and
-[synthetic example](examples/rustward.toml).
+Validate the synthetic configuration:
 
 ```sh
 cargo run --locked -- validate examples/rustward.toml
 ```
 
-The loader reads `rustward.toml`, one file per task, and one file per schedule.
-Both definition roots allow folders; relative paths without `.toml` supply IDs.
-It rejects symlinks and validates the complete set. The old single-document
-format is rejected. See the [file contract](docs/temporary/configuration.md#accepted-file-layout).
-Cron accepts numeric values, lists, ranges, and `*`. Steps are rejected, and at
-least one day field must be `*`. See the [schedule schema](docs/temporary/configuration.md#schedule-schema).
-Loading does not activate settings, reload a service, or execute schedules.
+The loader reads version 2 TOML service settings and one file per task and
+schedule. Relative paths under the definition roots supply IDs. The service
+loads the complete set at startup. See the [synthetic settings](examples/rustward.toml).
 
 ## Documentation
 
-The long-lived documentation is README.md, AGENTS.md, and the uppercase-named
-references directly in docs/:
-
 | Document | Purpose |
 | --- | --- |
-| [Agent instructions](AGENTS.md) | Repository work, documentation, and domain language maintenance rules |
-| [Architecture](docs/ARCHITECTURE.md) | System structure and implementation boundaries |
-| [Gravity](docs/GRAVITY.md) | Accepted architecture rules, authority, and exceptions |
+| [Architecture](docs/ARCHITECTURE.md) | System structure, responsibilities, and execution boundaries |
+| [Gravity](docs/GRAVITY.md) | Long-term direction, accepted constraints, and decisions |
 | [Glossary](docs/GLOSSARY.md) | Shared domain definitions |
-
-[Temporary documentation](docs/temporary/README.md) holds requirements, execution
-contracts, configuration and capture references, implementation work, and migration
-preparation. Their useful content will be absorbed into ARCHITECTURE.md,
-GRAVITY.md, and GLOSSARY.md before those temporary files are removed. Their
-current rules and contracts remain authoritative within scope until transferred.
-
-Start with architecture and the temporary execution contracts, then consult the
-implementation work list. Accepted rules and contracts take precedence over
-unaccepted proposals. Acceptance does not prove implementation or testing.
-
-Configuration uses TOML only. The earlier YAML syntax is no longer accepted.
-See [conversion and Rust API changes](docs/temporary/configuration.md#format-change-and-compatibility).
-Existing admission records and queued runs remain valid.
-
-The library exposes `config::load(path)` and `Config::arguments(task_id,
-&values)`. Values use `BTreeMap<String, toml::Value>`. See the [request
-contract](docs/temporary/configuration.md#request-inputs-and-arguments) for details.
-
-The `admission::Store` library issues manual request keys and atomically records
-queued runs in a dedicated local SQLite database. It can read retained run state
-and cancel a queued run without deleting its history or admission record. See the [admission interface
-and storage contract](docs/ARCHITECTURE.md#manual-admission-library). There is no
-submission CLI or HTTP service. The [dispatch library](docs/temporary/dispatch.md)
-records launch intent, reserves capacity, and preserves uncertain work after a
-crash. [Active stopping](docs/temporary/stopping.md) adds cancellation, timeout,
-and failure controls. Task timeouts default to one hour; cleanup grace defaults
-to 30 seconds. [Acknowledgement](docs/temporary/review.md) records one note for
-one completed run and its reviewed evidence. The controller connects these
-library protocols; A01–A10 pass the copied evidence review. [Prepared-runtime verification](docs/temporary/runtime.md)
-checks manifests and protected paths, creates separate writable run directories,
-and preserves admitted command paths. The controller also verifies pinned host
-manifests and provides the clean execution environment.
-
-The `supervision::Supervisor` interface supports replaceable adapters. The
-`systemd::Systemd` adapter targets Debian 13, systemd 257, and a dedicated user
-manager. Tests use a fake manager and a private D-Bus peer without starting
-configured tasks. A01–A10 pass the copied evidence review. See the [supervision contract](docs/ARCHITECTURE.md#supervision-interface-and-systemd-adapter).
-
-The `capture` library supplies stdout/stderr descriptors and retains separate
-raw-byte logs under one configurable per-run limit, defaulting to 10 MiB.
-It continues draining after truncation and reports storage failures separately.
-See the [capture contract](docs/temporary/capture.md). The controller connects
-dispatch log accounting and storage-failure stopping. It reclaims completed-run
-logs under capacity pressure. Age-based retention remains open.
-
-Structured service logs and a private Prometheus-compatible `/metrics` endpoint
-for the monitoring service are accepted future work. See the [telemetry contract](docs/temporary/telemetry.md).
-Task output capture does not implement service telemetry.
+| [Agent instructions](AGENTS.md) | Repository work and documentation rules |
 
 ## Development
 
@@ -110,19 +44,8 @@ just hooks-install
 just check
 ```
 
-The local acceptance suite is separate from `just check`:
-
-```sh
-just acceptance-container
-```
-
-It requires an isolated rootful Linux Docker host with cgroup v2 and uses a
-privileged systemd container. It is not a secure sandbox from that host.
-See the [runner setup, portable VM command, and evidence rules](docs/temporary/acceptance-runner.md).
-The devbox has no Docker CLI. Rootless Podman is installed, but its capability
-probe fails because systemd cannot create a child cgroup. See the
-[probe evidence and required delegation](docs/temporary/acceptance-runner.md#rootless-podman-capability-probe).
-Use the supported isolated Docker host for the complete suite.
+Host acceptance runs separately from `just check` and uses synthetic
+workloads on an isolated Linux host.
 
 No fleet access or private credentials are needed. The devbox uses
 `the build directory` for compiled output. Source, home,
@@ -161,7 +84,6 @@ test checks that inherited Git paths do not change the parent repository.
 
 Deployment configuration stays in
 [the deployment repository](deployment-repository). Do not copy fleet credentials
-or production inventory into this repository. A rootless development container
-is not proof that host systemd integration works.
+or production inventory into this repository.
 
 The project license is not selected. Select it before publishing releases.

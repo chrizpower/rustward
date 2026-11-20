@@ -1,5 +1,4 @@
-//! Execution coordination. Host acceptance and production service wiring remain
-//! gated; see docs/temporary/controller.md.
+//! Execution coordination. See docs/ARCHITECTURE.md.
 use crate::{
     admission,
     capture::{self, Capture},

@@ -1,69 +1,17 @@
-# Prepared runtime verification work
+# Prepared runtimes
 
-Status: Implemented Rust library. The user accepted content-addressed,
-separately owned runtime directories and preserved task paths on 2026-11-09.
-Tests use synthetic files and fake supervision. No real task execution or Ansible
-acceptance case is authorized or proved by these tests.
-
-Transfer stable runtime interfaces to ARCHITECTURE.md, policy decisions to
-GRAVITY.md, and agreed domain meanings to GLOSSARY.md before removal. Resolve
-or transfer open decisions and preserve acceptance evidence and inbound links.
-
-## Accepted requirements
-
-Prepare fixed code and dependencies outside execution. Retain the selected
-runtime for queued and active runs. Never fetch dependencies during execution or
-substitute another runtime when the selected runtime is missing. Give each run
-a separate writable directory outside its runtime. Runtime preparation,
-production deployment, and migration of workloads remain separate work.
-
-The Ansible acceptance specification is the early integration milestone.
-Runtime verification must precede connecting real execution to its local
-playbook and ordinary-command cases. The [local runner](acceptance-runner.md)
-and A01/A02 fixtures are implemented; no real-systemd acceptance case has passed.
-
-## Implemented pre-launch failure handling
-
-`Session::fail_before_start(permit, LaunchFailure)` consumes an unstarted permit
-from that session. It records CleaningUp/Failure, a rejected start state,
-confirmed cleanup because no process was started, and one fixed diagnostic code:
-
-- runtime_missing
-- runtime_invalid
-- runtime_changed
-- runtime_unsafe
-- runtime_command
-- work_directory
-- work_storage
-
-The caller supplies a code from `dispatch::LaunchFailure`; this method does not
-inspect runtime files or create work directories. It cannot replace an earlier
-result or use another session's permit. It never calls the supervisor or returns
-a permit for retry. A work-storage failure also sets the shared Safety gate.
-
-Capacity remains reserved until output handling finishes and `finish` commits
-completion. Existing admitted request identities and matching retries remain
-unchanged. A failed metadata write rolls back the decision, closes dispatch,
-and preserves recovery uncertainty. Local no-start knowledge prevents an
-emergency poll from attempting to stop an execution that this permit never
-started. That in-memory knowledge is not a durable cleanup record after restart.
-
-Schema version 6 adds nullable launch_failure evidence. New review evidence
-includes this field when present. Encoding 1 acknowledgement records without it
-remain valid; old records are not rewritten. A version 5 SQL fixture checks
-migration, historical runtime IDs, fingerprints, sequence order, and exact
-acknowledgement retries.
-
-Focused tests cover every failure code, no supervisor calls, capacity retention,
-queued admission identity, rollback after failed or ignored writes, conservative
-recovery, an earlier cancellation, and dispatch-owner mismatch.
+External preparation publishes fixed code and dependencies. Admission pins a
+runtime ID. Dispatch verifies that selection and uses its admitted absolute
+paths. See [Gravity P03](../GRAVITY.md#p03-prepare-fixed-runtimes-outside-execution).
+The user accepted content-addressed manifests, separate preparation ownership,
+and preserved task paths on 2026-11-09.
 
 ## Manifest, identity, and limits
 
 A catalog contains `<runtime-id>/runtime.toml` for each externally prepared
 runtime. The manifest has version 1, an optional `host` digest, a `directories`
-list, and a `files` table. The controller requires host; the low-level verifier
-keeps old manifests valid. See [host manifests](controller.md#runtime-and-host-dependencies).
+list, and a `files` table. The controller requires host. The low-level verifier
+keeps old manifests valid. See [host manifests](#host-manifest).
 
 ```toml
 version = 1
@@ -74,18 +22,18 @@ sha256 = "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
 executable = true
 ```
 
-This illustrates the schema; the hash is for the single byte `x`, not a usable
+This illustrates the schema. The hash is for the single byte `x`, not a usable
 program. Preparation must supply actual file hashes and executable content.
 Every non-root folder, including empty folders, must be listed. Each file has a
 lowercase 64-character SHA-256 and an optional executable boolean, default false.
 The manifest itself is excluded from the file list to avoid a hash cycle. Files
-must be nonempty as a set; zero-byte files are permitted. Unknown fields,
+must be nonempty as a set. Zero-byte files are permitted. Unknown fields,
 duplicate keys/folders, invalid hashes, file/folder collisions, missing parent
 folders, and entries named runtime.toml at the root are rejected.
 
 Entry paths use normal relative UTF-8 components with `/`. Empty components,
 absolute paths, dot components, backslashes, and NUL are rejected. Runtime paths
-are not task IDs; package filenames can contain uppercase letters, underscores,
+are not task IDs. Package filenames can contain uppercase letters, underscores,
 and dots. No symlinks, sockets, devices, or FIFOs are accepted.
 
 `runtime::manifest_id(source)` applies defaults, sorts directories and file keys,
@@ -99,21 +47,21 @@ manifest. Publish the manifest and tree under that ID after preparation finishes
 `runtime::Limits` bounds parsing and traversal. Defaults are 16 MiB manifest
 bytes, 100,000 entries including the manifest, 4 GiB total file content, 64 path
 components, and 4096 bytes per relative path. Hashing uses a 64 KiB buffer. The
-caller can supply other finite limits; this does not change service TOML.
+caller can supply other finite limits. This does not change service TOML.
 
 Existing stored runtime IDs, task snapshots, and fingerprints are never rewritten.
 An opaque legacy ID that is not a manifest digest fails verification explicitly.
 A missing or changed runtime never resolves to a newer runtime. Removing a
-referenced runtime violates retention; detection before launch records Failure.
+referenced runtime violates retention. Detection before launch records Failure.
 
 ## Ownership and preparation trust
 
 `Catalog::open(path, Protection, Limits)` requires an absolute normal catalog path.
 Protection names preparation and execution UIDs. They must differ, and execution
-UID 0 is rejected. Runtime files and folders belong to the preparation UID; all
+UID 0 is rejected. Runtime files and folders belong to the preparation UID. All
 ancestors belong to that UID or root and cannot be writable by other users.
 Kernel `openat2` rejects symlinks in every path component. Catalog roots are
-checked again during verification; held descriptors are compared with current
+checked again during verification. Held descriptors are compared with current
 paths to detect observed replacement.
 
 Group/other write bits, set-ID bits, sticky bits inside a runtime, and file
@@ -127,7 +75,7 @@ The manifest is checked again after traversal.
 
 The actual execution user must have no [capabilities](https://man7.org/linux/man-pages/man7/capabilities.7.html)
 that bypass filesystem ownership or access checks. Host verification must establish
-that condition; a nonzero UID alone is insufficient.
+that condition. A nonzero UID alone is insufficient.
 
 The trusted preparation user can still change owned files. It must never modify
 or replace published runtimes and must retain selections referenced by queued
@@ -140,9 +88,8 @@ stopping.
 
 The preparer must supply a complete fixed dependency selection. Manifest checks
 cannot discover arbitrary interpreters, dynamic libraries, imports, subprocesses,
-or network dependencies. The [controller](controller.md) adds pinned host manifests and a controlled
-environment. Isolated-host evidence remains required. A directory hash alone does not prove
-that an arbitrary program uses only declared files.
+or network dependencies. The [controller](service.md#execution-controller) adds pinned host manifests and a controlled
+environment.
 
 ## Task paths and writable directories
 
@@ -150,22 +97,22 @@ Both executable and working_directory keep their admitted absolute paths. The
 executable must be a listed executable file inside the selected runtime. The
 working directory must be that runtime root or a listed folder. No path is
 remapped, and no argument is changed. Selecting another runtime path requires a
-new task definition; already admitted work keeps its original snapshot and path.
+new task definition. Already admitted work keeps its original snapshot and path.
 
 `WorkRoot::open(path)` takes a separate private directory owned by the service
-user with mode 0700. Ancestors must belong to the service user or root; writable
+user with mode 0700. Ancestors must belong to the service user or root. Writable
 ancestors require the sticky bit. Kernel path resolution rejects symlinks.
 `create(&run_id)` exclusively creates a 0700 folder, synchronizes it and its
 parent, and returns WorkDirectory. Existing files, folders, and symlinks are
 never reused. `check` rejects changed ownership, permissions, or directory
 identity. Root and child replacement are detected. Setup failure can leave
-partial evidence; dropping a handle never deletes data.
+partial evidence. Dropping a handle never deletes data.
 
 A run's writable directory is outside the catalog and does not replace its
-working_directory. These directories separate run data; they are not a security
+working_directory. These directories separate run data. They are not a security
 boundary between hostile tasks running as the same user. Removal and retention
 remain future work. Work-storage errors set the shared failure gate when consumed
-by dispatch; invalid or reused paths record a definite pre-launch failure.
+by dispatch. Invalid or reused paths record a definite pre-launch failure.
 
 ## Dispatch interface
 
@@ -186,37 +133,117 @@ a supervisor call. Output handling must still finish before slot release.
 PrepareError distinguishes runtime checks from state/storage errors. Prepared
 permits cannot be cloned or recovered. Existing low-level `start` remains the
 protocol interface for tests. These low-level APIs do not select a systemd
-user or set environment variables. The [controller](controller.md) performs
+user or set environment variables. The [controller](service.md#execution-controller) performs
 verification in workers and binds actual user identity, private roots, host
 selection, manager, and environment. Secret wiring remains unimplemented.
 
-## Evidence and remaining work
+### Pre-launch failure handling
 
-Tests cover complete trees, normalization, modes, ownership policy, capability
-checks on ordinary files, symlinks and ancestors, special files, invalid paths,
-resource bounds, root relocation, command escapes, separate work directories,
-reuse/replacement, retained runtime A after selecting B, missing-runtime failure,
-revalidation before start, preserved retries, and failed failure-record writes.
-Numeric UID fixtures model another execution user without changing process UID.
-No configured task is executed.
+`Session::fail_before_start(permit, LaunchFailure)` consumes an unstarted permit
+from that session. It records CleaningUp/Failure, a rejected start state,
+confirmed cleanup because no process was started, and one fixed diagnostic code:
 
-The opt-in runtime permission test requires a protected, separately prepared
-synthetic fixture and a private service-owned work root on an isolated host:
+- runtime_missing
+- runtime_invalid
+- runtime_changed
+- runtime_unsafe
+- runtime_command
+- work_directory
+- work_storage
 
-```sh
-cargo test --locked --test runtime_host -- --ignored --exact prepared_runtime_host_permissions
+The caller supplies a code from `dispatch::LaunchFailure`. This method does not
+inspect runtime files or create work directories. It cannot replace an earlier
+result or use another session's permit. It never calls the supervisor or returns
+a permit for retry. A work-storage failure also sets the shared Safety gate.
+
+Capacity remains reserved until output handling finishes and `finish` commits
+completion. Existing admitted request identities and matching retries remain
+unchanged. A failed metadata write rolls back the decision, closes dispatch,
+and preserves recovery uncertainty. Local no-start knowledge prevents an
+emergency poll from attempting to stop an execution that this permit never
+started. That in-memory knowledge is not a durable cleanup record after restart.
+
+Schema version 6 adds nullable launch_failure evidence. New review evidence
+includes this field when present. Encoding 1 acknowledgement records without it
+remain valid. Old records are not rewritten. A version 5 SQL fixture checks
+migration, historical runtime IDs, fingerprints, sequence order, and exact
+acknowledgement retries.
+
+Focused tests cover every failure code, no supervisor calls, capacity retention,
+queued admission identity, rollback after failed or ignored writes, conservative
+recovery, an earlier cancellation, and dispatch-owner mismatch.
+
+## Host manifest
+
+Runtime version 1 manifests can include `host = "<host-id>"`. It participates in
+the runtime hash. When absent, serialization omits it, so existing runtime IDs
+stay unchanged. The low-level runtime verifier still accepts old manifests.
+The controller requires a host reference. It never chooses another runtime or
+host when verification fails. Admission snapshots and permanent request
+fingerprints are unchanged. Catalog relocation does not rewrite admitted paths
+or history. A moved command requires a new definition for future admissions.
+
+A host catalog contains `<host-id>.toml`. Example schema:
+
+```toml
+version = 1
+launcher = "/opt/rustward/rustward-exec"
+
+[files."/opt/rustward/rustward-exec"]
+sha256 = "<64 lowercase hexadecimal characters>"
+executable = true
+
+[files."/usr/lib/example/libexample.so"]
+sha256 = "<64 lowercase hexadecimal characters>"
+
+[links]
+"/lib" = "usr/lib"
 ```
 
-Supply RUSTWARD_PREPARATION_UID, RUSTWARD_RUNTIME_CATALOG, RUSTWARD_RUNTIME_ID,
-RUSTWARD_RUNTIME_PROGRAM, RUSTWARD_RUNTIME_CWD, and RUSTWARD_RUNTIME_WORK_ROOT.
-Run it as the non-root execution user. It checks native write denial and writable
-run data without executing a program. It has not been run here. This test does
-not replace systemd cleanup/capture tests or acceptance cases A01–A10.
+This is an illustrative schema, not a usable manifest. Pin actual hashes for the
+Rustward launcher, its loader and libraries, task interpreters, and every other
+host dependency used outside the runtime. The launcher must be a pinned
+executable that implements the protocol below. A file's executable flag defaults
+to false and must agree with its modes. Unknown fields are rejected.
 
-The Rust APIs take catalog/work paths and UID policy explicitly. Service TOML,
-activation, and runtime selection UI are unchanged. The controller now connects
-UID binding, host dependencies, capture, and controlled environment. Real
-execution acceptance, secret handling, systemd host verification, retention
-cleanup, scheduler execution, and reload remain unimplemented or unverified.
-The A01/A02 harness exists but has not passed real-systemd acceptance. Production migration and deployment are outside
-this slice.
+`runtime::host::manifest_id` hashes `rustward-host-v1` followed by sorted-key
+normalized JSON. All manifest fields, absolute file paths, hashes, executable
+flags, launcher path, and link targets participate. Catalog location does not.
+Limits reuse runtime::Limits: by default 16 MiB manifest, 100,000 entries including
+the manifest, 4 GiB declared content, 64 path components, and 4096 path bytes.
+
+Host file paths are normal absolute UTF-8 paths. Manifest files and catalog
+ancestors cannot use symlinks. Host dependencies can use explicitly pinned
+symlinks because Linux loader and interpreter paths commonly use them. Each
+link records its exact raw target. Resolution uses only declared links, rejects
+cycles and more than 32 links, and must lead to declared content. A directory
+alias can reach that content through another declared child link. Undeclared
+links, special files, unsafe modes, and capabilities are rejected. Declared files,
+links, and their ancestors must be protected from the execution user. Host
+files/links can belong to root or the preparation UID. Catalog files belong to
+the preparation UID. Runtime trees retain their stricter no-symlink rule.
+
+Verification hashes declared files, checks ownership and modes, rechecks links,
+checks observed file replacement/change, and rereads the manifest and catalog.
+The controller verifies runtime and host before setup and again after capture
+setup. All hashing and setup run outside the main polling and emergency paths.
+The protected log root and writable directory are also checked before use.
+
+The preparer must supply complete dependencies and the correct launcher. Hashes
+do not establish a binary's behavior or discover arbitrary imports, subprocesses,
+or network dependencies. Published runtime trees must remain fixed while queued
+or active runs reference them. Host dependencies must remain fixed while active
+runs use them. An operating-system update must wait for those runs. A queued run
+whose host selection no longer matches fails before launch. Verification is not
+an atomic snapshot against a trusted preparer that changes files concurrently.
+No preparation, freeze enforcement, deletion, or deployment tool is supplied.
+
+## Verification and open work
+
+Synthetic tests cover manifest normalization, protected paths, command paths,
+selection changes between admissions, and revalidation before launch. The
+[suite](acceptance.md) runs the opt-in runtime permission test and A08 with
+pinned A and B selections. Runtime publication, dependency completeness, and
+preserving referenced versions remain preparation responsibilities. Safe
+removal of writable run directories and prepared-runtime retirement need
+operational procedures.

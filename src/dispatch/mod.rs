@@ -1,5 +1,4 @@
-//! Durable launch protocol. Real execution requires the integration gates in
-//! docs/temporary/dispatch.md. Tests use a fake supervisor only.
+//! Durable dispatch and launch recovery. See docs/ARCHITECTURE.md.
 use std::{
     collections::BTreeMap,
     fs::File,

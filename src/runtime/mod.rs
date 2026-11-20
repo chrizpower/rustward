@@ -1,5 +1,4 @@
-//! Verification of externally prepared runtimes. This does not prepare code or
-//! prove dependency completeness; see docs/temporary/runtime.md.
+//! Prepared runtime verification. See docs/ARCHITECTURE.md.
 use std::{
     fs::File,
     path::{Component, Path, PathBuf},

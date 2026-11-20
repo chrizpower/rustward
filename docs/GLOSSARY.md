@@ -10,7 +10,7 @@ for implementation status and [Gravity](GRAVITY.md) for accepted policy. Follow
 [domain language maintenance](../AGENTS.md#domain-language-maintenance) when
 changing terms. Keep mechanisms, code mappings, and work lists outside this glossary.
 
-### Tasks and inputs
+## Tasks and inputs
 
 **Rustward**: The generic task executor being built in this repository.
 
@@ -37,8 +37,7 @@ from task and schedule definitions.
 
 These configuration meanings and path-based identities were accepted by the
 user on 2026-11-08 to separate service settings and allow grouped definitions
-without duplicate ID fields. The [file contract](temporary/configuration.md#accepted-file-layout)
-owns syntax, validation, and migration work.
+without duplicate ID fields. See [configuration ownership](GRAVITY.md#accepted-configuration-ownership-and-identity).
 
 **Configuration validation**: Checking a configuration against its schema and
 reference rules. It does not check program availability or execute a command.
@@ -79,7 +78,7 @@ validation. It performs no shell expansion, splitting, or interpolation.
 **Working directory**: The absolute directory path configured for command
 execution. Validation does not check whether it exists.
 
-### Requests and runs
+## Requests and runs
 
 **Request**: A submission asking Rustward to create a run for a task with
 specified inputs. A rejected request creates no run and receives no run ID.
@@ -137,13 +136,13 @@ stopped.
 **Timeout**: The configured execution time limit is reached, which initiates
 stopping active work. It does not prove remote work stopped. New tasks default
 to one hour from dispatch. Admissions retain their selected time limits. The user
-accepted this default on 2026-11-08; see [stopping](temporary/stopping.md).
+accepted this default on 2026-11-08.
 
 Avoid **job** as a synonym within Rustward and **attempt** as a separate entity.
 Preserve external interface names where required. Each execution retry is a new
 run; a failed launch holds its slot until local cleanup is confirmed.
 
-### Scheduling and controls
+## Scheduling and controls
 
 **Schedule**: A rule that selects a task, fixed inputs, and UTC times at which
 to request runs.
@@ -182,7 +181,7 @@ An outage can produce a gap with known skipped occurrences. Queue rejection can
 produce a skipped occurrence without a gap. Pause controls are independent and
 can be combined; other safety blocks still apply.
 
-### External work and review
+## External work and review
 
 **Local cleanup**: Confirming that all local processes belonging to a run have
 ended, including child processes. It does not remove logs, runtime files, or
@@ -210,13 +209,13 @@ reviewed evidence, and time. One administrator note states the checks, remaining
 uncertainty, and reason to resume. It can accept remaining risk; it does not assert remote completion or change an interrupted result to
 success. Other dispatch blocks still apply. One-note records and local completion
 before acknowledgement were accepted by the user on 2026-11-09; see
-[the review contract](temporary/review.md).
+[the review contract](ARCHITECTURE.md#administrator-review-and-acknowledgement).
 
 Stopping a local SSH client does not prove a remote backup stopped. A
 persistent, known file change is an external effect, but persistence alone is
 not uncertainty.
 
-### Runtimes and revisions
+## Runtimes and revisions
 
 **Prepared runtime**: Fixed code and dependencies prepared outside task
 execution. Accepted work retains its selected runtime.
@@ -228,14 +227,13 @@ dependency revisions before execution.
 dependencies. Changing that selection creates a different identity. New verified
 runtimes use the SHA-256 of a normalized manifest; stored older identities are
 not rewritten. The user accepted this rule on 2026-11-09; see
-[the runtime contract](temporary/runtime.md).
+[prepared runtimes](ARCHITECTURE.md#prepared-runtimes).
 
 **Host manifest**: A fixed selection of dependencies outside the prepared
 runtime, including the environment launcher. A runtime manifest references its
 content hash. The controller checks the selected files before launch. The user
-accepted this dependency relationship on 2026-11-09; see
-[the controller contract](temporary/controller.md). It does not replace the
-retained runtime identity or rewrite historical selections.
+accepted this dependency relationship on 2026-11-09. The runtime selection
+retains the reference to that host manifest.
 
 **Runtime retention**: Keeping prepared runtimes while accepted runs still
 reference them.
@@ -243,7 +241,7 @@ reference them.
 **Writable run directory**: A separate writable directory for one run outside its
 prepared runtime. It does not replace the task's configured working directory.
 The Rust interface calls it runtime::WorkDirectory. The user accepted this
-relationship on 2026-11-09; see [runtime verification](temporary/runtime.md).
+relationship on 2026-11-09.
 
 **Task definition revision**: Identifies one version of a task definition's
 normalized content, including its ID. A change to that content, including its
@@ -261,7 +259,7 @@ Comments, whitespace, and TOML key order do not change definition revisions.
 Argument order does. Request comparison instead uses submitted values before
 defaults; see [request identity](ARCHITECTURE.md#request-identity).
 
-### Logs and retention
+## Logs and retention
 
 **Retention**: The policy that determines how long completed-run records and
 output remain available.

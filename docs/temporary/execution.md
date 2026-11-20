@@ -1,215 +1,256 @@
-# Execution contracts
+# Durable execution
 
-Status: Temporary reference for contracts accepted on 2026-11-08. Manual
-admission, queued cancellation, and the durable dispatch protocol are implemented
-as libraries, with [active stopping](stopping.md) and
-[administrator acknowledgement](review.md). Tests use a fake supervisor.
-The [local service](controller.md#local-service) runs manual work.
-Scheduling and restore remain unimplemented.
-A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
-is tested with synthetic manager responses. The [controller](controller.md)
-connects dispatch, log accounting, capture, and storage-failure stopping.
-A01–A10 Docker evidence is reviewed. The controller reclaims log capacity.
-Age-based retention remains future work. Absorb
-lasting behavior into ARCHITECTURE.md, policies and exceptions into
-GRAVITY.md, and domain terms into GLOSSARY.md before removing this file. Preserve
-all contracts, open decisions, and implementation status, then update inbound
-links. See [folder guidance](README.md).
+The dispatch library owns state transitions, launch permission, stopping, and
+capacity accounting. The [controller](service.md#execution-controller) connects
+it to the local service, prepared runtimes, systemd, and capture.
+See [Gravity](../GRAVITY.md) for P02, P03, P06, and P07.
 
-Follow [Gravity](../GRAVITY.md) for architecture policy and [the glossary](../GLOSSARY.md)
-for terms. [Configuration](configuration.md) describes the implemented schema
-and the implemented version 2 file layout.
-[Requirements](requirements.md) preserves requirement IDs and unaccepted proposals.
-Remaining engineering work is tracked in the [temporary implementation handoff](implementation.md).
+The user accepted FIFO selection, cancellation race handling, conservative
+recovery, and the default timeout on 2026-11-08.
 
-## Admission contract decisions
-
-Manual request keys are unique across one Rustward installation. Repeating an
-admitted key with the same task and submitted inputs returns the existing run
-ID. Reusing that key with a different task or submitted inputs is rejected. A
-fresh execution uses a fresh key. Scheduled occurrence identity is separate.
-
-Manual request keys do not expire. Keep a compact admission record indefinitely
-for each admitted key, including its request fingerprint and original run ID.
-There is no fixed storage ceiling for these records. This is a user-authorized
-exception to P07 metadata bounds, accepted on 2026-11-08. It replaces the
-earlier bounded retry-window decision. Other metadata remains subject to bounds.
-Storage failure still invokes P06; permanent records do not permit execution
-without durable state. Monitor storage growth.
-
-Rustward is the issuer of manual request keys. Issuing a key does not create a
-run or reserve queue capacity. The implemented key format and handling of issued but unadmitted keys are
-specified in [the admission library contract](../ARCHITECTURE.md#manual-admission-library).
-Issuance creates no permanent record.
-
-After run history is deleted, a matching retry returns the original run ID and
-an explicit already-admitted/history-removed response. It does not recreate the
-run or imply success. Do not retain a final-result summary solely for retries.
-
-Compare the original task ID and typed submitted input values before defaults.
-Omitted values differ from explicitly supplied defaults. A matching admitted
-retry returns the original run ID without validating the current task
-definition, even if the task changed or was removed. Bind a key permanently only
-at admission. A rejected request can be corrected or retried with the same key
-and is evaluated again. Once admitted, its payload cannot change. Keep rejection
-diagnostics bounded and separate from permanent admission records.
-
-Canonical request encoding and issued-key verification are implemented; see the
-admission library contract. Restore
-behavior is defined in the application-state restore contract below. Permanent
-key records do not by themselves prevent duplicate execution after restoring a
-backup that lacks newer admissions.
-
-## Run lifecycle contract decisions
-
-Store phase and result separately. The implemented queued cancellation
-transition stores `Completed` and `Cancellation` atomically, preserves the
-admission record, and releases queue capacity. No process cleanup is needed
-because the run has not dispatched. Repeated cancellation does not change the
-record. See the [library and migration contract](../ARCHITECTURE.md#queued-cancellation-library).
-The [dispatch contract](dispatch.md) specifies implemented launch, observation,
-completion, and recovery transactions. Active cancellation, timeout, and failure controls are implemented in the
-[stopping library](stopping.md). The accepted phases are:
-
+## Run lifecycle
 
 | Phase | Meaning |
 | --- | --- |
 | Queued | Waiting for dispatch |
-| Launching | Slot reserved; program start not yet confirmed |
-| Running | Program start confirmed; exit not yet observed |
-| Cleaning up | Launch or execution has ended, or stopping has begun; local cleanup is not yet confirmed |
+| Launching | Holds a slot while it waits for program start confirmation |
+| Running | Program start is confirmed. Exit evidence is pending |
+| Cleaning up | Launch or execution has ended, or stopping has begun. Local cleanup is pending |
 | Completed | Cleanup confirmed and final result recorded |
 
 Results distinguish success, failure, cancellation, timeout, and interruption.
-Record stop reasons separately while cleanup is pending. Dispatch retains the
-first decided result and exit evidence. Active cancellation/timeout transactions and stop reasons are stored. Output
-failure changes a recorded Success to Interruption and requires review; other
-prior results remain unchanged. The user accepted this rule on 2026-11-08.
+Use exit code 0 for success. Nonzero exit codes and unexpected signals mean
+failure unless a prior stop decision applies. Use a task wrapper for a different
+exit convention. The [systemd adapter](execution-internals.md#supervision-interface-and-systemd-adapter)
+owns the local process boundary. Tasks must leave no local daemons.
 
-The execution timeout starts at dispatch and includes launch and execution, not
-queue waiting. New task definitions default to one hour, with positive
-`timeout_seconds`; `cleanup_grace_seconds` defaults to 30. Admissions retain
-both settings. Legacy snapshots without timing keep no timeout and 30 seconds.
-Stopping uses a separate cleanup grace period; the slot remains
-held until local cleanup is confirmed.
+## Boundary and prerequisites
 
-For competing normal exit, cancellation, and timeout, the first durably recorded
-decision determines the result. A later exit code 0 does not replace an earlier
-recorded cancellation or timeout. A stop request after a recorded exit reports
-that execution already ended. Recovery uncertainty and P06 still apply; event
-ordering cannot justify an unsupported durable result.
+A dispatch session holds an exclusive nonblocking OS lock on the database inode.
+Other admission connections can continue. A second dispatch session cannot open.
+Keep the protected database in place: replacing or restoring it while sessions
+exist is unsupported. A launch permit retains the lock until consumed or dropped.
+This prevents a new owner recovering while an old permit could still start work.
 
-Program exit code 0 means success. Nonzero exit codes and unexpected signals
-mean failure unless an earlier recorded stop reason applies. Tasks with other
-exit conventions use an explicit wrapper; version 1 does not need configurable
-success-code lists.
+## Transactions and launch permission
 
-Use a separate systemd service and cgroup as each run's local process boundary.
-After the main program exits, stop remaining children. Confirm cleanup only when
-the unit has ended and its cgroup has no remaining processes. A missing main PID
-alone is insufficient evidence. Tasks must not leave local daemons behind.
-Integration tests must verify detached children, unit disappearance, and
-concurrent-run isolation on the selected systemd host.
+New databases start with dispatch paused. Admission closure and dispatch pause
+remain independent. An immediate SQLite transaction selects the oldest queued
+run, checks pause, review blocks, execution capacity, and log accounting capacity,
+and changes Queued to Launching. The same transaction records launch intent and
+the full per-run log allowance. Commit before exposing a launch permit.
 
-Use a configurable 30-second default cleanup grace period before force-killing
-remaining local processes. Grace expiry is not proof of cleanup; retain the slot
-until cleanup is confirmed.
+The permit contains the retained executable, working directory, generated
+arguments, runtime identity, and original run ID. It is not cloneable or
+reconstructed on reopen. Consume it for at most one supervisor start call. No
+transaction stays open during the call. The permit is valid only in its owning
+session. A failed intent commit produces no permit and no supervisor call. If a review
+block appears after a permit was granted, `start` returns `Closed` without calling
+the supervisor. The consumed permit is not reissued. Recovery preserves its intent.
+Dispatch pause prevents further claims. An already dispatched permit belongs to
+active work. Review and storage failures still prevent its start.
 
-## Scheduling contract decisions
+Log accounting is a conservative prerequisite for this library: reserve each
+run's full allowance against one aggregate limit. Keep reservations through
+uncertainty and cleanup. On completion replace the allowance with the declared
+synchronized retained byte count. The controller uses the internal claim path
+that reclaims completed-run logs. The public `Session::claim_next` uses accounting
+only. Limits come from the caller.
 
-Schedule definitions come only from TOML files under the accepted
-[file contract](configuration.md#accepted-file-layout). The database retains
-runtime state, not editable schedule definitions. A schedule ID is its path
-relative to the schedule root without `.toml`. A rename or move within the root
-removes one identity and adds another. Do not transfer old pause state or
-occurrence history automatically. Preserve accepted runs and old records; apply
-first-installation behavior to the new schedule without replaying missed work.
-Initial pause and checkpoint mechanisms remain open.
+Cancellation and dispatch share the SQLite write lock. Cancellation first means
+Completed/Cancellation and no launch permit. Dispatch first means `NotQueued`
+from `cancel_queued`. Active stopping uses `Session::cancel_active` and `poll`. FIFO never bypasses a block.
+Reducing capacity does not evict active runs or alter admitted snapshots.
 
-At an unchanged path, the schedule ID stays stable. Occurrence identity is
-schedule ID plus UTC due time; record the schedule-definition revision separately. Editing a schedule
-does not make an already handled due time eligible again. Updated definitions
-apply to future occurrences.
+## Log reclamation
 
-Use the strict five-field UTC cron subset in the
-[configuration contract](configuration.md#schedule-schema). Allow numeric values,
-lists, ranges, and standalone `*`; reject steps and extensions. Day of month or
-day of week must be exactly `*`. The user accepted this restriction in the cron
-review on 2026-11-08, replacing the earlier acceptance of combined day fields
-with OR matching. Use an established parser/evaluator for accepted expressions.
+The controller reclaims logs when the next queued run needs capacity. It removes
+eligible completed-run logs in completion order, with admission sequence as the
+tie breaker. It preserves output needed for unresolved review and charges for
+active runs. If eligible logs cannot free enough space for the full reservation,
+the controller leaves the run queued.
 
-Subset validation and library matching tests are implemented with `croner`.
-Scheduler execution, durable occurrence decisions, and clock-change handling
-remain future work.
+The controller removes the capture files and synchronizes their directories
+before it releases the charge. The charge update and new reservation commit
+together. After an interruption, already absent files can be handled again
+without releasing capacity twice. A removal failure invokes P06. Run history,
+admission records, and historical capture evidence stay available. The current
+log charge can be zero even when historical evidence records captured bytes.
+Age-based cleanup remains open. See [retention](operations.md#age-based-retention).
 
-Allow at most one queued run per schedule. Further due occurrences are recorded
-as skipped while that queued run remains. An active run may have one queued
-successor. The shared queue limit still applies.
+## State and evidence
 
-## Retention contract decisions
+| Evidence | Recorded effect |
+| --- | --- |
+| Committed claim | Record Launching, start intent, and slot and log reservations |
+| Supervisor accepts start request | Record Accepted. Remain Launching until observed Running |
+| Definite supervisor rejection | Record Cleaning up and Failure with no process start |
+| Conflict, lost reply, or supervisor error | Cleaning up/Interruption unless a result was already decided. Require review |
+| Matching Running observation | Running, only if no result was already decided |
+| Matching exit observation | Record Cleaning up. The first result is Success for code 0 and Failure for other exits |
+| Missing or uncertain observation, or changed execution identity | Preserve original identity and prior result. Otherwise Interruption. Require review |
+| Confirmed local cleanup | Retain cleanup evidence. Never infer it from a missing unit |
+| Cleanup and synchronized output confirmed | Completed with the retained result. Release execution slot, retain log accounting and review block |
 
-Protect retained output needed for unresolved external review until
-acknowledgement. This protects captured evidence; it does not remove per-run
-truncation limits. Protected output can prevent further execution when the
-aggregate log allowance is exhausted.
+Store the first observed exit code or signal as evidence. A conflicting later
+exit requires review without replacing that evidence or the first result.
+Store execution invocation ID and cgroup path before further observation,
+stop, or release can rely on them. A start acceptance is not process-start
+proof. A definite rejection proves no process was started by that call. Conflict
+and transport failure do not. Do not claim completion before output has been
+synchronized. A low-level caller supplies output confirmation, polls the manager,
+and releases the unit reference. The controller coordinates these steps.
 
-Remove eligible completed-run logs oldest completion first when reclaiming
-capacity, including before normal retention age if needed. Before dispatch,
-reserve the run's full per-run allowance within the aggregate log limit. If
-protected logs and existing reservations leave insufficient capacity, keep the
-run queued and report the block. The reservation is accounting, not a guarantee
-against filesystem failure; P06 remains applicable.
+## Recovery and failure
 
-## Administrator acknowledgement
+On a new dispatch session, recover all unfinished dispatched runs in one
+transaction. Preserve a durably decided result. Otherwise record Interruption.
+Move them to Cleaning up and require review. Preserve accepted queued work,
+original identities, arguments, runtimes, and resource reservations. Never
+reconstruct a permit or call start for recovered work, including a crash after
+intent commit but before the original start call.
 
-The user accepted one note for one run on 2026-11-09, with local completion before
-acknowledgement. Rustward retains the run ID, exact reviewed evidence, and time.
-The note covers checks, remaining uncertainty, and reason to resume. A changed
-review requires a fresh read. Acknowledgement preserves results and other gates.
-See [review.md](review.md) for the implemented interface and failure checks.
+A review block survives later observations, cleanup, completion, and reopen.
+[Acknowledgement](execution-internals.md#administrator-review-and-acknowledgement) records one note for one completed run and its
+reviewed evidence, then clears that run’s block. Pausing
+or resuming dispatch cannot clear review. Absence of a systemd unit alone does
+not release a slot. Recovery polling stops uncertain local work. The service must obtain cleanup
+evidence under the accepted contracts.
 
-## Application-state restore contract
+A storage error closes the affected library handle. A busy error while saving
+a start reply or observation also closes dispatch: the external evidence has
+not been retained. No later claim or start is allowed on that handle. Do not return durable
+success after a failed reply/evidence commit. The intent remains available for
+recovery. `safety::Safety` supplies a shared process-local failure gate. Open all
+service admission and dispatch connections with `open_with_safety` and clones of
+the same gate. Storage errors and failed dispatch evidence writes set it without
+another database write. New admissions, claims, and already granted starts are
+blocked. Matching admitted retries retain their original identities on healthy
+connections. The gate cannot be cleared. Reopening with the same gate keeps the
+block. Default `open` calls each create a separate gate and do not connect a
+service's failure controls. Polling can stop active work without another write.
+See [active stopping](#active-stopping) for failure handling.
 
-These decisions concern backups of Rustward's own application state, not backup
-tasks executed by Rustward. The user accepted the behavior on 2026-11-08; backup
-tooling and production deployment remain separate work.
+## Rust interface
 
-Restore starts with admission and dispatch closed. Review restored queued and
-active runs before any can execute: they may have completed after the backup. Do
-not automatically replay them. Create a new manual-key issuer generation. Known
-old keys identify their restored admission records; unknown keys from older
-generations are rejected. Fresh requests use the new generation.
+`Session::open` takes a database path and `dispatch::Limits`. Counts are `u32`.
+Log limits must fit a nonnegative SQLite `i64`. `set_paused` changes only dispatch
+pause. `claim_next` returns `Claim::Ready(Permit)` or a fixed `Block` reason.
+`start` consumes a permit, a mutable supervisor, and borrowed output descriptors.
+The caller owns descriptor closure and capture synchronization. A supervisor error
+is recorded as an uncertain outcome. `observe` records supplied evidence. It
+does not poll the manager. `record` exposes retained launch/exit/cleanup/review
+evidence, and `run_state` exposes phase/result. `finish` accepts the synchronized
+retained-byte count and never clears review. `Store::acknowledge` requires local
+completion and unchanged evidence. It does not alter run results or other gates. Repeated finish is an invalid
+transition. Cross-session permits are rejected. No transport API is provided.
 
-Restore must be an explicit procedure; arbitrary rollback of a database cannot
-be assumed safe. Define backup consistency, generation verification, and the
-per-run review record before implementing restore. Normal restarts do not by
-themselves require a new generation. No separate admission ledger is required by
-this decision.
+`fail_before_start` consumes an unstarted permit and records Failure with a fixed
+launch-failure code and confirmed no-start cleanup. Output handling must still
+finish before slot release. [Runtime verification](runtime.md) supplies
+`prepare_runtime` and `start_prepared`. The [controller](service.md#execution-controller) connects
+worker preparation, host checks, and capture. Isolated-host acceptance remains gated.
 
-## Prepared runtime contract decisions
+`fail_capture_setup` records one of exists/storage/resources before a process
+starts. Storage sets Safety. `finish_evidence` accepts final per-stream retained
+and observed counts, truncation, synchronization, and recovery status. It rejects
+invalid counters and successful completion claims from failed or recovered
+output. Evidence, log accounting, and completion commit together. Nullable new
+fields are omitted when absent in review encoding 1. Historical review records,
+snapshots, revision bytes, fingerprints, and matching retries remain unchanged.
 
-Keep prepared code and dependencies immutable. Give each run a separate writable
-work directory outside its runtime for run-local temporary and working data.
-Runtime updates affect new admissions only; queued and active runs retain their
-accepted selection. A missing selected runtime causes an explicit failure; never
-substitute the latest runtime. This does not prevent a task's intended external
-effects on its workload data.
+## Active stopping
 
-The user accepted content-addressed manifests, separate preparation ownership,
-and preserved absolute task paths on 2026-11-09. [Runtime verification](runtime.md)
-is implemented with separate writable run directories. Environment, dependency
-policy and UID/manager binding are implemented in the controller. Directory
-removal remains open. A01–A10 Docker acceptance is verified.
+### Task settings and retained data
 
-## Definition revision contract
+Version 2 task files accept `timeout_seconds` (default 3600) and
+`cleanup_grace_seconds` (default 30). Both are whole seconds from 1 through
+4294967295. Zero and disabled timeouts are not supported for new definitions.
+New admissions retain both values in normalized task snapshots. Explicit defaults
+and omitted defaults have equal revisions. Timing edits affect new admissions.
+Stored task IDs, snapshots, revisions, fingerprints, and matching retries remain
+unchanged. Legacy snapshots without these fields retain no timeout and a
+30-second cleanup grace. No history is rewritten.
 
-Normalize validated definitions after applying schema defaults. An omitted field
-and an explicit equivalent schema default have the same revision. Ignore
-comments, formatting, and object-key order; preserve meaningful ordered lists
-and typed values. Labels, argument order, and actual default-value changes
-affect revisions. This refines the glossary's parsed-content definition.
+The timeout starts at dispatch and includes launch. A monotonic `Instant` measures
+execution and cleanup time. UTC wall-clock changes do not change deadlines.
+`Session::poll(supervisor, now)` requires explicit calls with monotonic time.
+The low-level session has no background timer. The caller must poll promptly,
+including after failures. Polling delay can delay stopping. Recovery never resets a timeout
+or starts recovered work: it retains a decided result or records Interruption,
+requires review, and begins cleanup.
 
-Request comparison is different: compare submitted inputs before defaults so
-that retries remain independent of later configuration changes. The admission library implements versioned SHA-256 request fingerprints and
-normalized definition revisions; see [the encoding contract](../ARCHITECTURE.md#request-identity).
-Future schema changes must preserve stored revision meanings.
+### Decisions and stopping
+
+`cancel_active` records Cancellation for an unfinished dispatched run unless a
+result already exists. It returns Recorded, AlreadyEnded, or NotActive. Queued
+cancellation remains `Store::cancel_queued`. Timeout, exit, and cancellation use
+SQLite transactions. The first durable decision wins. Later exit evidence is
+retained without replacing Cancellation or Timeout. Stop reasons are separate
+from results. Cancelling before the start call revokes the permit and confirms
+that no process was launched by that session.
+
+Polling stops remaining local processes after cancellation, timeout, main-process
+exit, or recovery. It requests graceful stopping, then force stopping after the
+retained cleanup grace. Stop acceptance, force calls, and missing units do not
+prove cleanup. Uncertain stop replies require review. Slots and log reservations
+remain held until cleanup and output handling finish. Cancellation and timeout
+of launched work conservatively require review of possible external work.
+
+Stops use the retained invocation and cgroup identity. Discovery by immutable run
+ID supplies identity when none was retained. A changed identity is never adopted.
+No SQLite transaction remains open across a supervisor call. Stops can repeat.
+Starts cannot. This library does not release supervisor unit references. The
+service must record cleanup, release the reference, then finish output capture.
+
+### Output and storage failures
+
+Output capture collects stdout/stderr into retained files. `output_failure`
+consumes its early failure signal. Log size truncation is not a failure. A
+non-storage output failure stops that run, records output failure separately,
+and requires review. An earlier Success becomes Interruption. Cancellation,
+Timeout, Failure, and Interruption remain unchanged. An undecided run becomes
+Interruption. A later successful exit cannot clear the output failure.
+
+A storage failure sets the shared irreversible `safety::Safety` gate. Connect
+all admission and dispatch handles with `open_with_safety` and clones of the
+same gate. New admissions and starts close without another successful write.
+Matching admitted retries on healthy connections retain their identity. A
+failed dispatch evidence write also sets the gate. `storage_failure` handles
+external storage faults such as capture setup failure. It needs no database
+write. Polling stops all retained active runs even when the store is closed.
+The gate does not clear on pause, resume, or reopening with the same gate.
+
+After a failed write, in-memory observations do not establish durable results or
+cleanup. Restart recovery requires review and never repeats a start. A service
+must preserve available failure evidence and inspect output before claiming
+completion. This library cannot reconstruct a failure whose write was lost.
+The local service wires each store to the same gate.
+
+`finish` requires confirmed cleanup and successful synchronized output.
+`finish_failed_output` instead requires a recorded output failure and the caller's
+confirmation that output workers have ended and partial evidence was handled.
+It cannot claim synchronized lost bytes or Success. Both retain the review block,
+check retained bytes against the reservation, and release the slot only on commit.
+[Administrator acknowledgement](execution-internals.md#administrator-review-and-acknowledgement) can then clear that run’s review
+block with one note and the unchanged reviewed evidence.
+A storage-closed handle cannot complete a run.
+
+### Timestamps and compatibility
+
+Schema version 4 introduced active Cancellation and Timeout, stop reason, output-failure
+state, and nullable UTC millisecond dispatch/completion timestamps. `times` reads
+them. Completion time is the commit of cleanup and output handling, including
+queued cancellation. It is not program exit time. Clock adjustments can make
+wall-clock timestamps non-increasing. Never use them for timeout decisions.
+Migration leaves historical timestamps unknown and preserves sequence high-water
+marks, permanent admissions, and all stored identity and revision bytes.
+
+## Verification
+
+Synthetic tests cover exclusive ownership, FIFO and capacity, cancellation races,
+crashes on both sides of launch intent and supervisor acceptance, rollback,
+uncertain replies and identity, timeout boundaries, graceful and force stopping,
+and restart without a second start. They also cover log reclamation under
+capacity pressure, partial deletion, and database rollback. Review
+[isolated-host evidence](acceptance-evidence.md) separately.

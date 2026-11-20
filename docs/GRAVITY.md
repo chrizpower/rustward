@@ -1,16 +1,19 @@
 # Rustward constraints and principles
 
-Scope: Application architecture for the first version of Rustward. Status:
-Mixed. Accepted decisions and proposals are marked below. Decision source: User
-interviews on 2026-11-07 and 2026-11-08. Parent guidance:
-[AGENTS.md](../AGENTS.md). Design context: [Requirements](temporary/requirements.md).
+Scope covers product direction and accepted architecture rules for Rustward.
+The original decisions came from the user interviews on 2026-11-07 and
+2026-11-08. Follow the [repository instructions](../AGENTS.md).
 
 ## Intent and use
 
 Build a small task executor for one trusted administrator. Support generic
 commands, manual requests, UTC cron schedules, and a web UI. Keep task and
 schedule definitions in Git-managed TOML. Skip missed schedules and report gaps.
-These product requirements were confirmed before this interview.
+The target web UI accepts declared inputs, shows live output and retained
+history, and supports operational controls. It leaves definition editing in
+Git. Product requirements call for alerts on failure, timeout, interruption,
+and schedule gaps. Keep workload credentials out of definitions, stored
+inputs, and diagnostic data.
 
 The main drivers are safe recovery, bounded resource use, fixed execution
 inputs, and a small operational boundary. The administrator operates the service
@@ -62,17 +65,15 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 
 ### P02: Preserve accepted work and stop on uncertainty
 
-- **Type and status:** Accepted. Admission, dispatch, stopping, and
-  [acknowledgement](temporary/review.md) pass A01–A10 on Docker.
-  The [local service](temporary/controller.md#local-service) implements drain.
+- **Type and status:** Accepted principle.
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof
   that external work stopped. For planned restart or upgrade, pause new starts
   and wait for active runs to finish before restart. Unexpected shutdown uses
   recovery and review. A forced maintenance stop must not silently bypass this
-  policy. Acknowledgement records the affected runs, evidence, remaining
-  uncertainty, and reason to resume. The administrator can explicitly accept
+  policy. Each acknowledgement records one completed run, its reviewed evidence,
+  remaining uncertainty, and reason to resume. The administrator can explicitly accept
   remaining risk; acknowledgement does not prove external completion or change
   a run's result. Other dispatch blocks still apply.
 - **Reason and cost:** Avoid unsafe overlap and repeated external changes.
@@ -95,8 +96,8 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   failures from task startup. Updates need a separate preparation step and
   retained runtimes need storage management.
 - **Check:** Update the selected runtime while work is queued and active.
-  Confirm both retain their selection. Follow [runtime verification](temporary/runtime.md),
-  accepted by the user on 2026-11-09; Docker acceptance passes.
+  Confirm both retain their selection and dispatch fails if it cannot verify
+  the selected runtime.
 - **Revisit:** Automatic preparation or mutable code requires a new decision.
 
 ### P06: Stop on state or log storage failure
@@ -121,9 +122,10 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
   limit per run, a 1 GiB aggregate retained-log limit, and 30-day retention.
   Retention cleanup must preserve queued and active run records and records
   needed for unresolved external review. Completed history can expire. Protect
-  retained review output until
-  acknowledgement; reserve log allowance before dispatch. Follow the accepted
-  [retention contract](temporary/execution.md#retention-contract-decisions).
+  retained review output until acknowledgement. Reserve the full per-run log
+  allowance before dispatch. Reclaim eligible completed logs in completion
+  order to make room. Keep the run queued if protected output and existing
+  reservations leave too little capacity.
   Make these limits configurable and enforce them. Metadata and transient
   buffers also need bounds; their values remain open. Exception accepted by the
   user on 2026-11-08: compact records for admitted manual request keys remain
@@ -135,14 +137,11 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 - **Check:** Exercise queue saturation, output flooding, and retention under
   load. Measure rather than infer memory and response-time behavior.
 - **Revisit:** Change defaults using workload evidence. The plan's 64 MiB idle
-  RSS and latency figures remain proposed measurement targets, not accepted
-  guarantees or measured results.
+  RSS and latency figures remain proposed measurement targets.
 
 ## Accepted configuration ownership and identity
 
-Source: User configuration discussion on 2026-11-08. Status: Accepted
-contract; version 2 loading and complete-set validation are now implemented.
-Activation and runtime schedule behavior remain future work.
+The user accepted these rules on 2026-11-08.
 
 Use separate service configuration, one TOML file per task, and one TOML file per
 schedule. TOML is the sole source of definitions; SQLite retains runtime state.
@@ -162,17 +161,15 @@ folder grouping without duplicate names for identity. Folder reorganization
 changes IDs and requires reference updates. Review file and folder moves as
 identity changes, not cosmetic edits. Check nested equal basenames, invalid
 references, symlinks, rejected updates, and preservation of admitted work.
-The [file contract](temporary/configuration.md#accepted-file-layout) owns the
-detailed rules and open schema, compatibility, and loading decisions. A change
-to definition ownership or identity requires a new user decision.
+A change to definition ownership or identity requires a new user decision.
 
 ## Accepted telemetry scope
 
 On 2026-11-08, the user accepted structured service logs and private
-Prometheus-compatible `/metrics` for the monitoring service. The [telemetry contract](temporary/telemetry.md)
-owns events, measurements, data exclusion, bounds, and open decisions. This is
-unimplemented. P06 still governs state and task-log failures; service-log failure
-handling remains open. Production collection stays in the deployment repository.
+Prometheus-compatible `/metrics` for the monitoring service. Keep task output and sensitive
+data out of service logs. Use bounded metric labels and keep the endpoint
+private and read-only. P06 governs state and task-log failures. Production
+collection belongs in the deployment repository.
 
 ## Accepted operational controls
 
@@ -185,11 +182,33 @@ The user accepted these effects in the glossary interview on 2026-11-08:
 - Admission closed rejects requests from all triggers. By itself, it does not stop
   queued runs from dispatching or stop active runs.
 
-The controls can be combined; other safety blocks still apply. These decisions
-accept only the pause meanings from the plan's P04 area. Reload, checkpoint, and
-restore mechanisms remain open. Accepted restore behavior is specified in [the
-execution contracts](temporary/execution.md#application-state-restore-contract).
+The controls can be combined. Other safety blocks still apply.
 See [the glossary](GLOSSARY.md).
+
+## Admission and scheduling
+
+Bind a manual request key at successful admission. Compare retries with the
+original task ID and submitted inputs before defaults. A matching retry
+returns the original run ID, including after history removal. Report removed
+history explicitly. Reject changes to an admitted payload. A rejected request
+can be corrected and evaluated again with the same key.
+
+Use five-field UTC cron with numbers, lists, ascending ranges, and standalone
+`*`. Reject steps and extensions. Require one day field to be `*`. Use an
+established parser and evaluator. Each occurrence belongs to one schedule ID
+and UTC due time. Track the schedule revision separately. Schedule edits
+do not reopen handled occurrences. Skip missed work and report periods without
+reliable evaluation as gaps. Keep at most one queued run per schedule within
+the shared queue limit. Record further due occurrences as skipped while it
+remains queued.
+
+## Application-state restore
+
+Restore begins with admission and dispatch closed. Review restored queued and
+active work before any can execute. It may have completed after the backup.
+Never replay restored work automatically. Start a new manual-key issuer
+generation. Known old keys identify restored admissions. Reject unknown keys
+from old generations. Normal restart preserves the issuer generation.
 
 ## Scenario checks
 
@@ -208,25 +227,7 @@ See [the glossary](GLOSSARY.md).
 | Retention contract: Protected logs fill allowance | Dispatch; a queued run cannot reserve its full log limit | Keep the run queued, report the block, and preserve protected output |
 | Confirmed scope: Service misses cron times | Scheduler restarts after downtime | Execute no missed occurrence; report the gap and select a future occurrence |
 
-These scenarios expose sensitive decisions: systemd permissions, the launch and
-recording crash window, storage-independent stopping, runtime retention, and the
-distinction between local cleanup and external completion. The implemented
-controller passes A01–A10 on Docker. Service integration remains future work.
-
-## Coverage and open decisions
-
-Policy is settled for purpose, ownership, recovery, fixed runtimes, storage
-failure, resource defaults, operational controls, and restore review. Detailed
-contracts are recorded in [execution.md](temporary/execution.md); they are
-accepted future behavior, not implementation evidence.
-
-[Remaining specifications and
-evidence](temporary/implementation.md#remaining-specifications-and-evidence) cover
-launch transactions, admission service integration, systemd integration, schedule checkpoints, record
-formats, runtime layout, and retention/restore mechanisms. Performance
-measurements, other metadata and buffer limits, host resource controls, and the
-private access mechanism remain open. Library choices are made per component;
-the configuration and admission dependencies are already selected.
+## Release and production boundaries
 
 License selection is a release gate. Workload compatibility, production access,
 and migration require separate evidence and authorization. Distributed execution
@@ -269,7 +270,7 @@ adapted to software terminology.
 P02 replaces the original stop-on-planned-shutdown proposal with draining. Add
 standalone glossary maintenance guidance at the user's request.
 
-2026-11-08: Accept the glossary and execution contracts, now maintained in execution.md.
+2026-11-08: Accept the glossary and execution contracts.
 Clarify P02 risk acknowledgement and accept separate operational controls,
 restore review, lifecycle, scheduling, runtime, and retention behavior. P07
 gains an explicit exception for permanent admitted manual-key records without a
@@ -290,32 +291,26 @@ formats, including Ansible inventory, remain owned by those workloads.
 adapter for synthetic tests. Isolated-host execution evidence stays
 required; transient-unit settings cannot weaken P02, P06, or P07.
 
-2026-11-09: Bind service, manager, runtime policy, and private roots to one
-non-root UID, with no new privileges or capabilities. Pin host dependencies and
-use a clean environment. Preserve history. See [controller](temporary/controller.md).
-
 2026-11-08: Accept separate service, task, and schedule files, TOML-only
 definition ownership, nested folders, and relative-path IDs without duplicate
 ID fields. Accept lowercase letter/digit/hyphen components, no symlinks, and
 whole-set validation before activation. Preserve accepted work; a rename changes
 identity. The later schema decision below supplies compatibility and loading rules.
 
-2026-11-08: In the configuration implementation discussion, accept service schema
-version 2, removal of the old parser API and single-document format, strict
-bounded discovery, two reads with a caller-enforced unchanged-files condition,
-and a separate configuration revision encoding that excludes service settings.
-Preserve stored revisions and request identity.
-Later reviews supersede initial cron and timing defaults.
-
-2026-11-08: The user accepts five UTC fields with numbers, lists, ascending ranges,
-and standalone `*`. Reject steps and extensions; require one day field to be `*`.
-Use an established parser/evaluator after subset checks. Preserve stored revisions
-and admitted work. See the configuration contract.
+2026-11-08: Accept normalized configuration revisions that exclude service
+settings. Preserve stored revisions and request identity across schema changes.
+Accept the five-field UTC cron subset in [admission and scheduling](#admission-and-scheduling).
 
 2026-11-08: Accept FIFO, `NotQueued` cancellation races, and conservative recovery.
-Require review and cleanup evidence. See [dispatch](temporary/dispatch.md).
+Require review and cleanup evidence.
 
-2026-11-08: Timing and output-failure rules: [stopping](temporary/stopping.md).
+2026-11-08: Start the execution timeout at dispatch. Use separate cleanup
+grace. The first durable result wins, except that incomplete output changes
+Success to Interruption and requires review.
 
 2026-11-09: Accept one note for one completed run, with unchanged reviewed evidence.
-See [review](temporary/review.md).
+See [review](ARCHITECTURE.md#administrator-review-and-acknowledgement).
+
+2026-11-09: Bind service, manager, runtime policy, and private roots to one
+non-root UID, with no new privileges or capabilities. Pin host dependencies and
+use a clean environment. Preserve history.

@@ -1,70 +1,27 @@
-# Rustward requirements
+# Product requirements
 
-Status: Temporary reference. Preserve requirement IDs, acceptance criteria,
-accepted scope, and unresolved proposals in ARCHITECTURE.md or GRAVITY.md before
-removing this file. Update inbound links after transfer. See [folder guidance](README.md).
+Rustward is a generic Rust task executor for one trusted administrator.
+The confirmed scope includes manual requests, UTC cron schedules, Git-managed
+TOML definitions, a web UI, and gap reporting without replay of missed occurrences.
+Ansible is the first workload. Rustward will replace Semaphore after separate
+workload review, production preparation, and operator approval.
 
-This reference preserves product requirement IDs and acceptance scenarios from
-the original executor plan. Partial acceptance does not accept the rest of a
-requirement. Unaccepted clauses and proposed performance targets remain proposals.
-Use [Gravity](../GRAVITY.md) for accepted architecture rules,
-[execution.md](execution.md) for accepted execution contracts, and
-[configuration.md](configuration.md) for implemented schema behavior and the
-implemented version 2 file layout.
-
-## Purpose and authority
-
-Replace Semaphore with Rustward, a small generic task executor written in Rust.
-Ansible is the first workload. Confirmed scope is Rust, manual requests, UTC
-cron, Git-managed TOML definitions, a web UI, one trusted administrator, and
-skipping missed occurrences while reporting gaps. Application code belongs in
-`chrizpower/rustward`; deployment belongs in `the deployment repository`.
-
-Configuration validation, argument generation, durable manual admission, and
-queued cancellation and the durable dispatch protocol are implemented as libraries. A separate supervision adapter targets
-Debian 13 and the dedicated systemd user manager; its tests use synthetic manager
-responses and a private D-Bus peer. Per-run capture supplies bounded stdout/stderr
-retention and failure reporting. Dispatch has conservative log accounting. Capture integration, retention, and real execution,
-scheduling, and service control integration remain unimplemented. This reference does not
-authorize live execution, production deployment, or schedule migration.
-
-## Status and authority
-
-| Area | Current authority |
-| --- | --- |
-| C01, P01, P02, P03 | Accepted constraints and principles in Gravity; detailed execution contracts in execution.md |
-| P02 planned shutdown | Drain active runs before planned restart; do not apply the original stop-on-shutdown proposal |
-| F02 and P02 request keys | Manual admission library implemented; web UI and service integration remain future work. Rustward-issued permanent manual keys have a narrow P07 metadata exception |
-| F06–F08 scheduling | Accepted occurrence identity, strict cron subset, and one queued run per schedule in execution.md |
-| P04 controls | Accepted independent pause/admission controls and whole-set configuration activation; reload trigger and checkpoint mechanisms remain open |
-| P05 restore | Accepted blocked restore and new key generation; backup and restore mechanisms remain open |
-| N05 limits and storage failures | Accepted P06/P07 defaults, permanent-key exception, and retention contract |
-| F11 queued cancellation | Implemented in the library with separate phase and result; active cancellation and timeouts remain future work |
-| F01/F03/F04/F15 configuration and inputs | Implemented version 2 contract in configuration.md; remaining execution/UI portions are not implied |
-| F15 telemetry | Accepted structured service logs and private Prometheus-compatible `/metrics` for the monitoring service in telemetry.md; not implemented |
-| N02/N03 performance | Proposed targets only; no measurements or guarantees |
-
-Use requirement and rule IDs in reviews. Read current contracts before using a
-requirement below; partial acceptance does not accept the rest of a requirement.
-
-The configuration discussion on 2026-11-08 accepts separate service, task, and
-schedule TOML files, nested task and schedule folders, relative-path IDs,
-lowercase component rules, and no symlinks. TOML alone controls definitions;
-SQLite retains runtime state. Loading and validation are implemented under the
-[file contract](configuration.md#accepted-file-layout); activation and scheduler
-execution remain future work. The web UI does not create or edit definitions.
+Use these IDs in reviews. [Gravity](../GRAVITY.md) owns accepted architecture
+policy. [Architecture](../ARCHITECTURE.md) records implementation status. The tables
+preserve the original requirements and acceptance conditions. Where acceptance
+was partial, the remaining mechanisms and targets are proposals.
 
 ## Functional requirements
 
 | ID | Requirement | Acceptance condition |
 | --- | --- | --- |
 | F01 | Load versioned TOML task and schedule definitions. Each task has a path-derived ID, label, executable, argument list, working directory, and input schema under the accepted file layout. | Reject duplicate IDs, unknown keys, invalid references, and invalid schedules before activation. A failed reload leaves the previous valid configuration active. |
-| F02 | Run a defined task from the web UI with optional inputs. | Accept a Rustward-issued manual request key and return the same durable run ID for retries with the same payload; reject reuse with a different payload. Refreshing or closing the page does not stop the run. Show a clear error when the request is rejected. |
+| F02 | Run a defined task from the web UI with optional inputs. | Accept a Rustward-issued manual request key and return the same durable run ID for retries with the same payload. Reject reuse with a different payload. Refreshing or closing the page does not stop the run. Show a clear error when the request is rejected. |
 | F03 | Support required inputs, defaults, strings, integers, booleans, and explicit choice lists. | Validate on the server for both manual and scheduled requests. Reject undeclared inputs and values outside the schema. |
 | F04 | Execute a program with separate arguments and a controlled environment. | Inputs remain data. Never insert them into a shell command string. Scripts use an explicit interpreter or executable. |
 | F05 | Run Ansible through ordinary task definitions and an optional small wrapper. | A synthetic playbook receives the selected inventory, limit, and extra variables correctly. A second task runs a non-Ansible command through the same execution path. |
 | F06 | Support the accepted strict subset of five-field cron in UTC. Schedules reference a task and fixed, validated inputs. | Show enabled state, last occurrence, next occurrence, and related runs. Test month boundaries and day-of-month/day-of-week semantics. Document the selected cron semantics. |
-| F07 | Skip missed occurrences and report schedule gaps. | Restart after downtime creates no catch-up runs. Retain the affected schedule, interval, and missed count when known; mark uncertain intervals explicitly. |
+| F07 | Skip missed occurrences and report schedule gaps. | Restart after downtime creates no catch-up runs. Retain the affected schedule, interval, and missed count when known. Mark uncertain intervals explicitly. |
 | F08 | Use one shared queue for manual and scheduled requests, with a configurable execution limit. | Default to one active run globally. Bound the queue and report rejected requests. Coalesce further occurrences while the same schedule already has a queued request, and report them as skipped. |
 | F09 | Preserve run state and execution identity. | Store task/configuration identity, validated non-secret inputs, trigger, scheduled time if present, timestamps, exit status, and reason for failure or interruption. |
 | F10 | Show live output and retained history. | Display stdout and stderr, the accepted run phases and results, and a clear truncation notice. Reconnect to a run without restarting it. Do not promise a total order between separate output streams. |
@@ -72,20 +29,20 @@ execution remain future work. The web UI does not create or edit definitions.
 | F12 | Recover conservatively after process or host failure. | Mark uncertain active runs interrupted. Cancellation, timeout, and shutdown also block dispatch when external work remains uncertain. Do not rerun automatically. Block further execution until the administrator acknowledges uncertain external work. Preserve accepted queued requests under Gravity P02. |
 | F13 | Send failure alerts through the established mail relay. | Alert on failure, timeout, interruption, and schedule gaps. Record notification failure separately from task failure. Batch gap reports after restart. |
 | F14 | Support an operational pause for schedules. | A global schedule pause stops new scheduled requests and reports the paused interval. Accepted queued requests can still start, and manual requests remain available. A separate dispatch pause prevents all queued work from starting without stopping active runs. Resume does not replay skipped occurrences. Task and schedule editing remains in Git. |
-| F15 | Provide configuration validation and service diagnostics. | A CLI validation command needs no live hosts or production secrets. Health, readiness, and bounded metrics expose scheduler/storage failures without secrets. The accepted [telemetry contract](telemetry.md) requires structured service logs and private `/metrics` collection by the monitoring service. |
+| F15 | Provide configuration validation and service diagnostics. | A CLI validation command needs no live hosts or production secrets. Health, readiness, and bounded metrics expose scheduler/storage failures without secrets. The accepted [telemetry contract](operations.md#telemetry) requires structured service logs and private `/metrics` collection by the monitoring service. |
 
 ## Non-functional requirements
 
 | ID | Requirement | Proposed measure or verification |
 | --- | --- | --- |
-| N01 | Small deployment | One native Rust service with embedded web assets and local SQLite storage. No external database, broker, custom worker service, or frontend server. Existing systemd infrastructure manages per-run units; this does not require a separate application daemon. Ansible and other task programs are separate runtime dependencies. |
+| N01 | Small deployment | One native Rust service with embedded web assets and local SQLite storage. No external database, broker, custom worker service, or frontend server. Existing systemd infrastructure manages per-run units. This does not require a separate application daemon. Ansible and other task programs are separate runtime dependencies. |
 | N02 | Low overhead | Target idle RSS at or below 64 MiB on the selected Linux host with 100 tasks, 100 schedules, and 10,000 retained run records. Exclude child processes and filesystem cache. Record actual results before acceptance. |
-| N03 | Responsive control path | Target p95 request acceptance below 250 ms and local process start below 1 second when a slot is free. Target visible output delay below 1 second. Measure on a stated host under the agreed workload; exclude task setup and execution time. |
+| N03 | Responsive control path | Target p95 request acceptance below 250 ms and local process start below 1 second when a slot is free. Target visible output delay below 1 second. Measure on a stated host under the agreed workload. Exclude task setup and execution time. |
 | N04 | Durable state | Acknowledge a request only after durable storage. A storage error prevents new execution and changes readiness. Test forced termination around acceptance, dispatch, and completion. |
-| N05 | Bounded resource use | Propose queue limit 100, log limit 10 MiB per run, retention 30 days, and aggregate retained-log limit 1 GiB. Make limits configurable. Keep draining output after truncation; do not block a child on a full log. Bound metadata and transient buffers too. Configure per-run memory, process-count, and CPU controls through systemd, and preserve host capacity for the control service. Define log-storage failure behavior before implementation; stop new admission and dispatch, report incomplete output, and apply the task’s interruption policy to active work. |
+| N05 | Bounded resource use | Propose queue limit 100, log limit 10 MiB per run, retention 30 days, and aggregate retained-log limit 1 GiB. Make limits configurable. Keep draining output after truncation. Do not block a child on a full log. Bound metadata and transient buffers too. Configure per-run memory, process-count, and CPU controls through systemd, and preserve host capacity for the control service. Define log-storage failure behavior before implementation. Stop new admission and dispatch, report incomplete output, and apply the task’s interruption policy to active work. |
 | N06 | Restricted service access | Run as a dedicated unprivileged account, bind to loopback, and use private HTTPS through Nginx. Require one administrator access check at the proxy. No user database, roles, or public registration. |
 | N07 | Protected browser actions | Authenticate UI, API, output streams, and diagnostics as appropriate. Protect state-changing requests against CSRF, reject cross-origin access, and escape task output before display. |
-| N08 | Secret handling | Use protected references to the established secret store. Keep secrets out of task definitions, stored inputs, URLs, diagnostics, and command previews. Test with synthetic secrets. Task programs remain responsible for safe output, including Ansible no_log; generic log filtering cannot guarantee secret removal. |
+| N08 | Secret handling | Use protected references to the established secret store. Keep secrets out of task definitions, stored inputs, URLs, diagnostics, and command previews. Test with synthetic secrets. Task programs remain responsible for safe output, including Ansible no_log. Generic log filtering cannot guarantee secret removal. |
 | N09 | Reproducible runs | Record the application version, task definition revision/hash, prepared repository revision, and runtime identity. A queued run uses its accepted definition and prepared runtime, or fails explicitly if they are unavailable. |
 | N10 | Recoverable operations | Document persistent paths, backup, isolated restore, release rollback, schema compatibility, and shutdown behavior. Prove restore with synthetic history and definitions before migration. |
 | N11 | Maintainable implementation | Use stable Rust, a committed lockfile, a small dependency set, format/lint checks, and focused tests for execution, scheduling, recovery, and HTTP access. Prefer established libraries over custom parsers or cryptography. |
@@ -118,31 +75,53 @@ evidence, not test results.
 
 | Source / trigger | Conditions and component | Expected response and measure |
 | --- | --- | --- |
-| User requirement: run a playbook now | No run is active; a prepared Ansible runtime exists | Accept the request durably, start within N03, stream output, and retain the result and revision. |
+| User requirement: run a playbook now | No run is active. A prepared Ansible runtime exists | Accept the request durably, start within N03, stream output, and retain the result and revision. |
 | Generic scope: run a script | No Ansible configuration is present | Execute through the same core with no Ansible dependency in the service. |
-| User decision: offline during a scheduled backup | Restart after multiple cron occurrences | Start no missed work; report the gap and show the next future occurrence. |
-| Backup runbook: overlapping maintenance requests | Global execution limit is one | Queue within the configured bound; never overlap local executions. Keep remote workload locks. |
+| User decision: offline during a scheduled backup | Restart after multiple cron occurrences | Start no missed work. Report the gap and show the next future occurrence. |
+| Backup runbook: overlapping maintenance requests | Global execution limit is one | Queue within the configured bound. Never overlap local executions. Keep remote workload locks. |
 | Operational failure: service dies during maintenance | Local completion and remote state are uncertain | Mark interrupted, clean local children, alert, and block dispatch until acknowledgement. Never automatically rerun. |
-| Security requirement: input contains shell syntax | Administrator submits a string through the form | Pass it as data or reject it by schema; execute no extra command. |
+| Security requirement: input contains shell syntax | Administrator submits a string through the form | Pass it as data or reject it by schema. Execute no extra command. |
 | Resource requirement: command writes unlimited output | Log limit is reached while the task runs | Mark truncation, continue draining, and keep memory/storage within configured limits. |
-| Recovery requirement: host is rebuilt | Configuration, credentials, and supported state backup are available | Restore with execution disabled; reconcile restored queued/active work, report the outage gap, validate runtime, and enable only one scheduler after explicit release. |
+| Recovery requirement: host is rebuilt | Configuration, credentials, and supported state backup are available | Restore with execution disabled. Reconcile restored queued/active work, report the outage gap, validate runtime, and enable only one scheduler after explicit release. |
 
 Cancellation cannot prove that a remote operation stopped or restored a service.
 The UI and runbook must state this limit. For backup cancellation, confirm the
 affected service and remote lock state before acknowledging interruption.
 
-## Implementation and migration
+## Retained mechanism proposals
 
-Implementation sequencing and unresolved mechanism proposals are tracked in
-[temporary implementation work](implementation.md). One-time workload
-inventory, operational context, migration safeguards, and cutover evidence are
-tracked in [migration preparation](migration.md). They do not authorize
-production changes.
+These proposals require review before implementation. The accepted rules in
+Gravity and the operational contracts govern overlapping behavior.
 
-## Maintenance
+- **P01:** Evaluate one internal scheduler or systemd timers against the
+  accepted occurrence, admission, and missed-work rules. Consider server-sent
+  events or bounded polling for web output.
+- **P02:** Consider showing queued runs before resuming. Any task-specific
+  waiver of uncertainty blocking needs explicit review against P02.
+- **P03:** Consider showing the selected runtime revision. Define checks for
+  dependency updates, failed preparation, and safe retirement.
+- **P04:** Consider a local command to trigger reload. Specify durable
+  checkpoint and pause storage. Report the lack of a checkpoint on first
+  installation and test clock changes without replay.
+- **P05:** Evaluate a supported SQLite backup with consistent logs and runtime
+  references. Report missing logs. Test per-run restore decisions, exclusion of
+  a second executor or schedule owner, and schema rollback compatibility.
+- **Web and operations:** Test invalid inputs, output escaping, access checks,
+  CSRF, reconnects, and notification failures. Measure resource and latency
+  targets before acceptance.
 
-Keep requirement IDs stable and record acceptance explicitly. Follow Gravity's
-change and review guidance. Do not infer implementation from acceptance scenarios;
-keep current implementation status in the architecture and interface references.
-The 2026-11-08 consolidation removed duplicate architecture rules and superseded
-sequencing without accepting additional proposals or changing requirements.
+## Release and workload gates
+
+Schedule cutover keeps one active owner per schedule. A compatibility review
+must check representative manual tasks, typed workload inputs, pinned
+dependencies, production secret and SSH handling, delivery of alerts, and
+independent backup freshness monitoring. Verify isolated restore and a usable
+rollback before cutover.
+
+Review a sanitized Semaphore workload export before claiming workload
+compatibility. Select a license and verify the supported CPU architecture and
+Linux baseline before release. Specify private web access, secret references,
+task environment and resource controls, metadata bounds, and backup and restore
+mechanisms. Production access, schedule migration, and deployment require
+separate authorization. Deployment configuration belongs in
+`the deployment repository`.
