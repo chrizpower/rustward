@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import begin, save, check_privileges
 
 mode = sys.argv[1]
-if mode not in ("complete", "hold"):
+if mode not in ("complete", "hold", "drain"):
     raise ValueError("invalid fixture mode")
 work, values = begin(sys.argv[2:])
 runtime = Path(sys.executable).parent.parent
@@ -34,3 +34,9 @@ save(work / "ready.json", {"mode": mode})
 if mode == "hold":
     while True:
         time.sleep(0.1)
+if mode == "drain":
+    deadline = time.monotonic() + 30
+    while not (work / "finish").exists():
+        if time.monotonic() >= deadline:
+            raise RuntimeError("drain synchronization deadline")
+        time.sleep(0.02)

@@ -4,7 +4,7 @@ Rustward will run generic command tasks for one trusted administrator. Version 2
 configuration validation, request input validation, argument generation, and
 manual admission, dispatch, stopping, review, and the [execution controller](temporary/controller.md)
 are implemented as libraries. Copied Docker evidence confirms A01–A10.
-The service loop is absent. Green marks implemented parts.
+Green marks implemented parts.
 
 Follow [Gravity](GRAVITY.md). Unaccepted mechanisms in [requirements](temporary/requirements.md)
 remain proposals. This diagram does not authorize execution, migration, or deployment.
@@ -20,7 +20,8 @@ flowchart TB
     Admin["Administrator"]
     Proxy["Private HTTPS proxy<br/>Authentication"]
 
-    subgraph Service["Planned Rustward service"]
+    subgraph Service["Rustward service"]
+        Control["Local control"]
         UI["Web UI and API"]
         Cron["UTC scheduler<br/>Skip missed runs"]
         Inputs["Input validation and argument mapping<br/>Implemented library"]
@@ -41,6 +42,7 @@ flowchart TB
     Config --> Inputs
 
     Admin --> Proxy --> UI
+    Admin --> Control --> Inputs
     UI --> Inputs
     Cron --> Inputs
     Inputs --> Queue --> Dispatch
@@ -55,13 +57,12 @@ flowchart TB
     DB --> UI
 
     classDef implemented fill:#d9ead3,stroke:#38761d,stroke-width:2px
-    class CLI,Config,Inputs,Queue,Dispatch,Adapter,Capture implemented
+    class CLI,Config,Control,Inputs,Queue,Dispatch,Adapter,Capture implemented
 ```
 
-The service boundary shows the planned single Rust service. The proxy, systemd,
-task processes, and runtime preparation are outside that service. The local
-SQLite database and log files store retained state and output. Per-run output
-capture supplies descriptors through the controller; the service loop remains future work.
+The proxy, systemd, task processes, and runtime preparation operate outside
+the service. SQLite and log files store retained state and output. The
+[local service](temporary/controller.md#local-service) drives the controller.
 
 ## Current implementation
 
@@ -78,7 +79,7 @@ unchanged files; two matching reads are not an atomic snapshot.
 arguments. Values use `BTreeMap<String, toml::Value>`. Accessors expose read-only
 settings, task IDs, and schedules. Runtime setting integration remains deferred.
 
-Activation, reload, scheduling, and the service execution loop remain unimplemented. TOML owns
+The service activates configuration at startup. Reload and scheduling remain open. TOML owns
 definitions; SQLite owns runtime state. Definition moves change IDs; root moves
 do not. Admitted runs retain their snapshots and IDs.
 
@@ -149,7 +150,7 @@ See [compatibility](temporary/configuration.md#format-change-and-compatibility).
 
 Storage errors close the affected store handle. The service must close all
 admission and dispatch paths on such an error under P06. The controller connects
-the shared Safety gate and emergency stopping; a service loop remains future work. Lock contention returns a separate
+the shared Safety gate and emergency stopping. Lock contention returns a separate
 busy response after a five-second wait. Reopening a failed handle is an explicit
 caller action, not automatic recovery. Use a protected database directory: issuer
 secrets and non-secret submitted inputs are stored there. No rejection history

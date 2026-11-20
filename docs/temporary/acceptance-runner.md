@@ -141,12 +141,13 @@ Dockerfile's privilege settings to that dedicated user-manager unit as well. Do 
 administrator's ordinary user manager. The runner starts and stops the dedicated
 manager, including after test failure.
 
-Build and place these four executables in a protected tools directory:
+Build and place these five executables in a protected tools directory:
 
-- `cargo build --locked --release --bin rustward-exec --example acceptance`
+- `cargo build --locked --release --bin rustward --bin rustward-exec --example acceptance`
 - `cargo test --locked --release --no-run --test systemd_host --test runtime_host`
-- Copy the example, launcher, and the two test executables into the tools folder
-  as `acceptance`, `rustward-exec`, `systemd_host`, and `runtime_host`.
+- Copy the example, service, launcher, and test executables into the tools
+  folder as `acceptance`, `rustward`, `rustward-exec`, `systemd_host`, and
+  `runtime_host`.
 
 Use a new fixture root on persistent storage, with protected ancestors. Then run
 this explicit root setup command from the checkout:

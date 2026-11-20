@@ -64,7 +64,7 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 
 - **Type and status:** Accepted. Admission, dispatch, stopping, and
   [acknowledgement](temporary/review.md) pass A01–A10 on Docker.
-  Service integration is future work; see [execution.md](temporary/execution.md).
+  The [local service](temporary/controller.md#local-service) implements drain.
 - **Rule:** If external work is uncertain, preserve queued runs and block new
   starts until the administrator reviews and acknowledges it. Do not
   automatically retry interrupted runs. Local process cleanup is not proof

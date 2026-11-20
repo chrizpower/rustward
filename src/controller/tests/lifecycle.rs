@@ -325,3 +325,40 @@ fn rolled_back_claim_retries_after_durable_file_removal() {
     complete_for_retention(&f, &mut c, &queued);
     assert_eq!(c.record(&old).unwrap().unwrap().log_bytes, 0);
 }
+
+#[test]
+fn insufficient_reclaimable_output_leaves_existing_logs_intact() {
+    let mut f = Fixture::new();
+    let (_, complete) = f.admit();
+    let (_, active) = f.admit();
+    let (_, queued) = f.admit();
+    let mut c = f.controller(Limits {
+        active_runs: 2,
+        log_bytes_per_run: 40,
+        retained_log_bytes: 75,
+    });
+    c.set_paused(false).unwrap();
+    complete_for_retention(&f, &mut c, &complete);
+    assert!(matches!(c.start_next().unwrap(), Start::Preparing(id) if id.as_str() == active));
+    assert!(matches!(
+        c.start_next().unwrap(),
+        Start::Blocked(Block::LogCapacity)
+    ));
+    assert_eq!(
+        c.run_state(&queued).unwrap().unwrap().phase,
+        RunPhase::Queued
+    );
+    assert!(
+        f.preparation
+            .logs
+            .join(&complete)
+            .join("stdout.log")
+            .is_file()
+    );
+    until(|| {
+        c.tick(Instant::now()).unwrap();
+        f.fake.0.lock().unwrap().writers.contains_key(&active)
+    });
+    f.ended(&active);
+    completed(&mut c, &active);
+}

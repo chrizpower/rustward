@@ -427,6 +427,18 @@ impl Store {
         submitted_values: &BTreeMap<String, Value>,
         runtime_id: &str,
     ) -> Result<Admission, Error> {
+        self.admit_with_gate(key, config, task_id, submitted_values, runtime_id, false)
+    }
+
+    pub(crate) fn admit_with_gate(
+        &mut self,
+        key: &str,
+        config: &Config,
+        task_id: &str,
+        submitted_values: &BTreeMap<String, Value>,
+        runtime_id: &str,
+        closed_for_request: bool,
+    ) -> Result<Admission, Error> {
         let safety = self.safety.clone();
         self.perform(|connection| {
             let key_bytes = decode_key(key)?;
@@ -462,7 +474,7 @@ impl Store {
             let mut mac = KeyMac::new_from_slice(&secret).unwrap();
             mac.update(&key_bytes[..65]);
             mac.verify_slice(&key_bytes[65..]).map_err(|_| Error::InvalidKey)?;
-            if closed || safety.failed() {
+            if closed || closed_for_request || safety.failed() {
                 return Err(Error::Closed);
             }
             if runtime_id.is_empty() || runtime_id.len() > 1024 {

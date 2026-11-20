@@ -12,8 +12,9 @@ fake supervision and a private D-Bus peer. The copied Docker bundle confirms
 A01–A10, including A10's exported logs; see the
 [evidence review](docs/temporary/acceptance-review.md). The
 [local runner](docs/temporary/acceptance-runner.md) and
-[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The main binary validates TOML files;
-`rustward-exec` supplies the pinned environment launcher. There is no service loop.
+[SSH cases](docs/temporary/ssh-acceptance.md) are implemented. The main binary validates TOML and runs the local service.
+`rustward-exec` supplies the pinned environment launcher. See the
+[service and control commands](docs/temporary/controller.md#local-service).
 See the [configuration schema](docs/temporary/configuration.md) and
 [synthetic example](examples/rustward.toml).
 

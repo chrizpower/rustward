@@ -56,3 +56,32 @@ fn rejects_unsupported_cli_arguments() {
         assert!(String::from_utf8(output.stderr).unwrap().contains("Usage:"));
     }
 }
+
+#[test]
+fn service_reports_startup_and_control_errors() {
+    let binary = env!("CARGO_BIN_EXE_rustward");
+    let output = Command::new(binary)
+        .args([
+            "serve",
+            "examples/missing.toml",
+            "validation",
+            "/runtimes",
+            "/hosts",
+            "/work",
+            "missing",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("service file must be named rustward.toml")
+    );
+    let output = Command::new(binary)
+        .args(["ctl", "validation"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Control request"));
+}

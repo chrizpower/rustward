@@ -4,16 +4,16 @@ use sha2::{Digest, Sha256};
 fn mode(path: &Path, bits: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(bits)).unwrap();
 }
-struct Native {
+pub(crate) struct Native {
     _outer: tempfile::TempDir,
-    roots: Roots,
+    pub(crate) roots: Roots,
     path: PathBuf,
-    id: String,
+    pub(crate) id: String,
     source: String,
     db: PathBuf,
 }
 impl Native {
-    fn new(host_ref: bool) -> Self {
+    pub(crate) fn new(host_ref: bool) -> Self {
         let outer = tempfile::Builder::new()
             .prefix(".runtime-fixture-controller-")
             .tempdir_in(env!("CARGO_MANIFEST_DIR"))
@@ -221,4 +221,28 @@ fn replaced_private_log_root_is_rejected_in_setup_and_recovery() {
     ));
     assert!(prepared.capture.is_none());
     assert!(n.roots.recover(&id, 31).is_err());
+}
+
+#[test]
+fn removal_checks_the_pinned_root_and_retries_absent_output() {
+    let fixture = Native::new(true);
+    let id = RunId::new(&"a".repeat(64)).unwrap();
+    let (capture, writers) = Capture::create(
+        fixture.roots.logs.path(),
+        &id,
+        capture::Options { retained_bytes: 16 },
+    )
+    .unwrap();
+    drop(writers);
+    drop(capture);
+    fixture.roots.remove_logs(&id).unwrap();
+    fixture.roots.remove_logs(&id).unwrap();
+    let logs = fixture.roots.logs.path();
+    fs::rename(logs, logs.with_extension("old")).unwrap();
+    fs::create_dir(logs).unwrap();
+    mode(logs, 0o700);
+    assert_eq!(
+        fixture.roots.remove_logs(&id),
+        Err(admission::Error::Storage)
+    );
 }

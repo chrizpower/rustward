@@ -21,7 +21,7 @@ use std::{
 mod emergency;
 mod failures;
 mod lifecycle;
-mod native;
+pub(crate) mod native;
 
 #[derive(Default)]
 struct State {
@@ -39,7 +39,7 @@ struct State {
     panic_stop: bool,
 }
 #[derive(Clone, Default)]
-struct Fake(Arc<Mutex<State>>);
+pub(crate) struct Fake(Arc<Mutex<State>>);
 fn identity() -> ExecutionIdentity {
     ExecutionIdentity {
         invocation: [1; 16],
@@ -209,16 +209,16 @@ impl Preparation for Prepare {
         capture::recover(&self.logs, id, limit)
     }
 }
-struct Fixture {
+pub(crate) struct Fixture {
     _root: tempfile::TempDir,
-    path: PathBuf,
+    pub(crate) path: PathBuf,
     store: Store,
     preparation: Arc<Prepare>,
     fake: Fake,
-    safety: Safety,
+    pub(crate) safety: Safety,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("state.db");
         let store = Store::open(&path).unwrap();
@@ -240,7 +240,7 @@ impl Fixture {
             safety: Safety::default(),
         }
     }
-    fn admit(&mut self) -> (String, String) {
+    pub(crate) fn admit(&mut self) -> (String, String) {
         let key = self.store.issue_key().unwrap();
         let config = crate::config::load("examples/rustward.toml").unwrap();
         let Admission::Admitted { run_id } = self
@@ -258,17 +258,20 @@ impl Fixture {
         };
         (key, run_id)
     }
-    fn controller(&self, limits: Limits) -> Controller<Fake> {
-        let session = Session::open_with_safety(&self.path, limits, self.safety.clone()).unwrap();
-        Controller::from_parts(
-            session,
-            self.fake.clone(),
-            self.preparation.clone(),
-            self.safety.clone(),
-        )
-        .unwrap()
+    pub(crate) fn controller(&self, limits: Limits) -> Controller<Fake> {
+        self.controller_at(&self.path, limits, self.safety.clone())
     }
-    fn ended(&self, id: &str) {
+    pub(crate) fn controller_at(
+        &self,
+        path: &Path,
+        limits: Limits,
+        safety: Safety,
+    ) -> Controller<Fake> {
+        let session = Session::open_with_safety(path, limits, safety.clone()).unwrap();
+        Controller::from_parts(session, self.fake.clone(), self.preparation.clone(), safety)
+            .unwrap()
+    }
+    pub(crate) fn ended(&self, id: &str) {
         self.fake
             .0
             .lock()
@@ -284,7 +287,7 @@ fn until(mut condition: impl FnMut() -> bool) {
         std::thread::sleep(Duration::from_millis(2));
     }
 }
-fn started(controller: &mut Controller<Fake>, fixture: &Fixture) {
+pub(crate) fn started(controller: &mut Controller<Fake>, fixture: &Fixture) {
     until(|| {
         controller.tick(Instant::now()).unwrap();
         !fixture.fake.0.lock().unwrap().launches.is_empty()

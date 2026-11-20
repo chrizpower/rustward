@@ -82,8 +82,11 @@ class Docker:
         return result.returncode, prefix.with_suffix(".stdout").read_text()
 
 
-def validate_bundle(fixture):
-    for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host"):
+def validate_bundle(fixture, require_daemon=False):
+    reports = ["A01", "A02", "local-recovery", "host-runner", "legacy-host"]
+    if require_daemon:
+        reports.append("daemon")
+    for name in reports:
         value = json.loads((fixture / "evidence" / f"{name}.json").read_text())
         if value.get("status") != "passed":
             raise RuntimeError(f"missing pass evidence: {name}")
@@ -190,7 +193,7 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
                         elif (evidence / "fixture/evidence" / f"{case}-admission.json").exists():
                             result["cases"][case] = "incomplete"
                     if result["status"] == "passed":
-                        validate_bundle(evidence / "fixture")
+                        validate_bundle(evidence / "fixture", require_daemon=True)
                 if remote and ssh.fixture_started:
                     from ssh_runner import FIXTURE as SSH_FIXTURE, validate, a04_status
                     code, _ = docker.call(["cp", f"{name}:{SSH_FIXTURE}/.", evidence / "ssh-fixture"], checked=False)

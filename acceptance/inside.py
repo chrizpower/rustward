@@ -11,6 +11,7 @@ import sys
 import time
 
 from prepare import prepare
+import service_case
 
 
 def invoke(command, timeout=240, capture=False):
@@ -143,11 +144,14 @@ def run(root, tools, user, revision):
         result = json.loads((evidence / "result.json").read_text())
         if result.get("status") != "passed" or result.get("cases") != ["A01", "A02"]:
             raise RuntimeError("controller acceptance did not produce its pass evidence")
+        status["phase"] = "daemon-acceptance"
+        service_case.run(root, tools, account, fixture, user_command)
         status = {"status": "passed", "phase": "complete"}
     finally:
         (evidence / "host-runner.json").write_text(json.dumps(status, sort_keys=True) + "\n")
         try:
             stop_fixture_units(root, account)
+            stop_fixture_units(root / "daemon", account)
         finally:
             checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
 

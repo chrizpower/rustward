@@ -5,7 +5,7 @@ review, runtime verification, and the [execution controller](controller.md) are
 implemented as libraries. The controller connects the systemd adapter, pinned
 host dependencies, capture, and log accounting. The copied Docker review
 confirms A01–A10. The controller reclaims log capacity. Age-based retention
-and the service loop remain open.
+remains open. The local service connects manual admission and the controller.
 Accepted behavior is currently recorded in [execution.md](execution.md) until
 absorbed into the uppercase documents; this file tracks the work.
 Follow [Gravity](../GRAVITY.md) and [requirements](requirements.md).
@@ -22,8 +22,8 @@ requirements or acceptance evidence. See [folder guidance](README.md).
 ## Next implementation work
 
 1. Specify remaining task resource controls, custom environment/secret references,
-   and metadata/buffer bounds. Connect the controller to the future service and
-   implement age-based retention. Keep scheduler and UI integration separate.
+   and global metadata bounds. Implement age-based retention. Keep scheduler
+   and UI integration separate.
 2. Review a sanitized Semaphore export before claiming workload compatibility.
    Select the license before release. Access, migration, and deployment remain
    separate gates, not prerequisites for synthetic configuration tests.
@@ -51,9 +51,9 @@ admission identity. Task snapshots keep their existing encoding; new complete-se
 revisions include schedules with a separate version prefix. Stored revisions,
 request fingerprints, and admitted runs are not rewritten.
 
-Remaining work: activation and its consistent-read mechanism, reload trigger,
-scheduler execution, occurrence history, pause-state handling, first-installation
-checkpoints, and service-setting integration. A renamed schedule must not inherit
+Remaining work: reload and its consistent-read mechanism, reload trigger,
+scheduler execution, occurrence history, pause-state handling, and
+first-installation checkpoints. A renamed schedule must not inherit
 pause state or replay missed occurrences. Editing a schedule must not make a
 handled occurrence eligible again. Loader tests do not prove these runtime rules.
 Production migration and deployment remain outside repository implementation.
@@ -96,10 +96,8 @@ of collection from the monitoring service belong in separately authorized deploy
 The policy interview is complete for these contract groups. The following work
 must translate accepted behavior into testable mechanisms, not reopen it:
 
-- Integrate the implemented manual admission library with service safety controls
-  and verified prepared runtime selection. Preserve the [admission contract](../ARCHITECTURE.md#manual-admission-library).
-  Define restore tooling and monitoring of permanent-record growth. Transport
-  parsing and global metadata/buffer bounds remain open.
+- Verify local service integration on the isolated host. Define restore tooling
+  and monitoring of permanent-record growth. Global metadata bounds remain open.
 - Integrate the implemented durable launch and stopping protocols with review.
   Preserve the implemented [queued cancellation transition](../ARCHITECTURE.md#queued-cancellation-library).
   Integrate recorded recovery decisions with real systemd cleanup. Keep the

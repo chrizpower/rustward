@@ -135,9 +135,9 @@ incorrect CLI arguments return exit code 1. Validation does not run commands,
 inspect program availability, contact hosts, or load credentials.
 
 This implements the configuration and input portions of F01, F03, F04, F06,
-and F15. Activation, reload, occurrence evaluation, scheduler execution, and
-the service execution loop remain unimplemented. Settings are not connected to
-admission, capture, retention, or other runtime components.
+and F15. The [local service](controller.md#local-service) activates validated
+configuration at startup and applies queue, execution, and log limits. Reload,
+occurrence evaluation, scheduler execution, and age-based retention remain open.
 
 ## Format change and compatibility
 

@@ -5,10 +5,10 @@ WORKDIR /source
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY examples/acceptance ./examples/acceptance
-RUN cargo build --locked --release --bin rustward-exec --example acceptance
+RUN cargo build --locked --release --bin rustward --bin rustward-exec --example acceptance
 COPY tests ./tests
 RUN cargo test --locked --release --no-run --test systemd_host --test runtime_host --message-format=json > /test-artifacts.json
-RUN mkdir /bundle && cp target/release/rustward-exec target/release/examples/acceptance /bundle/ && \
+RUN mkdir /bundle && cp target/release/rustward target/release/rustward-exec target/release/examples/acceptance /bundle/ && \
     python3 -c 'import json,shutil; records=[json.loads(line) for line in open("/test-artifacts.json")]; [shutil.copyfile(record["executable"],"/bundle/"+record["target"]["name"]) for record in records if record.get("executable")];' && \
     chmod 755 /bundle/*
 

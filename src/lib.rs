@@ -6,6 +6,7 @@ pub mod dispatch;
 pub mod review;
 pub mod runtime;
 pub mod safety;
+pub mod service;
 
 pub mod supervision;
 pub mod systemd;

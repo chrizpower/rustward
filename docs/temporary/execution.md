@@ -4,7 +4,8 @@ Status: Temporary reference for contracts accepted on 2026-11-08. Manual
 admission, queued cancellation, and the durable dispatch protocol are implemented
 as libraries, with [active stopping](stopping.md) and
 [administrator acknowledgement](review.md). Tests use a fake supervisor.
-Scheduling, restore, and the service loop remain unimplemented.
+The [local service](controller.md#local-service) runs manual work.
+Scheduling and restore remain unimplemented.
 A separate [supervision adapter](../ARCHITECTURE.md#supervision-interface-and-systemd-adapter)
 is tested with synthetic manager responses. The [controller](controller.md)
 connects dispatch, log accounting, capture, and storage-failure stopping.

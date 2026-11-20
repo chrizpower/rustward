@@ -141,6 +141,13 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
     pub fn active_runs(&self) -> usize {
         self.runs.len()
     }
+    pub(crate) fn local_cleanup_pending(&self) -> bool {
+        self.registry
+            .snapshots()
+            .iter()
+            .any(|entry| entry.called && !entry.cleaned)
+    }
+
     pub fn failed(&self) -> bool {
         self.registry.safety.failed()
     }
@@ -289,4 +296,4 @@ impl<S: Supervisor> Supervisor for Bound<'_, S> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

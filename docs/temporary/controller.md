@@ -197,7 +197,7 @@ Storage-closed handles cannot assert durable cleanup or completion.
 Drop requests emergency stopping but does not prove cleanup or drain an active
 run to completion. It can wait on capture I/O. Planned service shutdown must stop
 new dispatch and continue the controller until active runs finish, as required
-by the existing contract. There is no daemon shutdown integration in this slice.
+by the existing contract. The local service drives this drain.
 
 ## Evidence and remaining work
 
@@ -214,7 +214,61 @@ local recovery, and the three legacy host tests. A10's saved output matches its
 record and export hashes. The earlier export gap is closed by the later run.
 Docker is absent from the devbox; review used the copied bundle.
 
-The service execution loop, HTTP/UI/API, scheduler execution and occurrence
-checkpoints, live reload, runtime selection UI, age-based retention,
+HTTP/UI/API, scheduler execution and occurrence checkpoints, live reload,
+runtime selection UI, age-based retention,
 work-directory removal, restore tooling, custom environment/secrets, telemetry,
 production migration, and deployment remain outside this implementation.
+
+
+## Local service
+
+Run as the dedicated non-root execution user with access to its authenticated
+systemd user bus. Supply absolute catalog and work paths. Provision the state
+database's parent, log root, and work root as private directories owned by
+the execution user. Use separate prepared runtime and host catalogs. Select the
+runtime ID and preparation UID explicitly at startup.
+
+```sh
+rustward serve rustward.toml main /path/to/runtimes /path/to/hosts /path/to/work "$runtime_id" "$preparation_uid"
+printf '%s\n' '{"command":"service_status"}' | rustward ctl main
+printf '%s\n' '{"command":"resume"}' | rustward ctl main
+```
+
+The service validates the complete configuration once and verifies the selected
+runtime and its pinned host manifest. It applies the configured queue,
+execution, and log limits. It acquires dispatch ownership, recovers unfinished
+runs, and starts paused on each invocation. Admission accepts new requests once
+startup succeeds. Review still blocks dispatch after an explicit resume.
+Each run retains its admitted runtime ID, which the controller verifies again
+before launch.
+
+`ctl` reads one JSON request from standard input and prints one JSON response.
+The Linux abstract Unix socket is scoped to the service name and effective UID.
+Both ends check peer credentials. Use the same execution UID and network
+namespace for the service and client. Names use 1–64 ASCII letters, digits,
+hyphens, or underscores. Requests and responses are limited to 128 KiB.
+The service allows 250 ms per socket read or write phase.
+
+| Command | Additional fields |
+| --- | --- |
+| `issue_key` | None |
+| `submit` | `key`, `task_id`, and optional `inputs` object |
+| `status`, `cancel` | `run_id` |
+| `service_status`, `pause`, `resume`, `shutdown` | None |
+| `reviews` | Optional `after` run ID. Returns up to ten reviews in run ID order. |
+| `acknowledge` | `acknowledgement_id`, exact `review` object, and `note` |
+
+A response contains `ok` with the result or `error` with an error name. A request
+failure returns a nonzero exit status. Retain the key and inputs to retry a
+submission whose response is lost. The service reports dispatch blocks through
+`service_status`.
+
+SIGTERM, SIGINT, and the `shutdown` command stop new admission and dispatch.
+The service continues polling active runs to durable completion. A storage
+failure activates the shared safety gate and emergency stopping. An abrupt
+process exit uses the existing recovery and review protocol on restart.
+
+The Docker host runner includes a daemon case that submits through `ctl`,
+checks matching retries and log reclamation, kills and restarts the daemon,
+checks review and protected output, and checks planned shutdown with active
+and queued work. It writes `evidence/daemon.json` after its assertions pass.
