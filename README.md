@@ -119,7 +119,10 @@ just acceptance-container
 It requires an isolated rootful Linux Docker host with cgroup v2 and uses a
 privileged systemd container. It is not a secure sandbox from that host.
 See the [runner setup, portable VM command, and evidence rules](docs/temporary/acceptance-runner.md).
-The devbox has no Docker; run these checks on the isolated Docker host.
+The devbox has no Docker CLI. Rootless Podman is installed, but its capability
+probe fails because systemd cannot create a child cgroup. See the
+[probe evidence and required delegation](docs/temporary/acceptance-runner.md#rootless-podman-capability-probe).
+Use the supported isolated Docker host for the complete suite.
 
 No fleet access or private credentials are needed. The devbox uses
 `the build directory` for compiled output. Source, home,

@@ -110,6 +110,42 @@ The runner starts that image ID with pulling disabled and never updates packages
 while a run is active. Source content hashes identify the exact build context,
 including uncommitted changes, rather than claiming it equals HEAD.
 
+## Rootless Podman capability probe
+
+On 2026-11-15, the user authorized a capability probe before adapting the
+harness for rootless Podman, with all existing assertions retained. Podman
+5.4.2 reports rootless mode and cgroup v2 in this devbox. Ordinary rootless
+containers start. The complete capability probe is blocked at systemd startup.
+
+The probe builds a separate Debian 13 image from the same pinned base digest,
+with systemd 257.13, D-Bus, a dedicated UID 1000 account, and the existing
+user-manager privilege restrictions. It runs with no network or host mounts,
+`--systemd=always`, `--cgroups=enabled`, and `--cgroupns=private`.
+
+Systemd mode provides a writable cgroup mount, but its tree appears as UID/GID
+65534 inside the rootless container. Creating a child cgroup fails with
+Permission denied. Systemd exits with code 255 after it cannot create
+`/init.scope` or allocate its manager. A separate rootless `--privileged`
+attempt fails at OCI startup because mounting sysfs is not permitted. This
+attempt does not grant privileges beyond the invoking user's namespace.
+
+The dedicated user manager, transient services, cleanup/isolation, runtime
+ownership, tmpfs exhaustion, and A01–A10 were not reached. The harness and its
+assertions remain unchanged. All probe containers were removed; the image and
+its declared build inputs can be reused.
+
+Diagnostics, commands, the image ID, and `result.json` are retained under
+`$HOME/artifacts/rustward/rootless-probe-20261115-680e326f/`.
+Provision a dedicated writable cgroup v2 subtree for rootless Podman through
+the devbox's managed setup, then repeat the probe. A writable mount alone does
+not prove delegation. Do not change ownership of the whole host hierarchy or
+weaken cleanup assertions to make the probe pass. Rootless feasibility in a
+correctly delegated environment remains unverified by this attempt.
+
+`just check` passes: 214 Rust tests, 65 Python tests, and 95.74% Rust line
+coverage. Three opt-in host tests were skipped in normal checks. The log is in
+the probe artifact directory above.
+
 ## Preparation and dependencies
 
 Fixture preparation happens as root before controller execution. It requires a
