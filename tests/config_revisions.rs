@@ -8,7 +8,7 @@ const SERVICE: &str = include_str!("../examples/rustward.toml");
 
 #[test]
 fn complete_revisions_ignore_discovery_order_and_defaults_but_include_schedules() {
-    let root = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
     let database = root.path().join("state.db");
     let mut store = Store::open(&database).unwrap();
     let db = Connection::open(&database).unwrap();

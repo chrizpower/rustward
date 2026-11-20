@@ -32,6 +32,7 @@ impl Schedule {
         &self.inputs
     }
 
+    #[cfg(any(target_os = "linux", test))]
     pub(crate) fn matcher(&self) -> Cron {
         parse_cron(&self.cron).expect("schedule was validated")
     }

@@ -92,12 +92,11 @@ loading does not open the database, create log folders, or inspect executables.
 Paths must be nonempty and contain no NUL.
 
 Reject all non-TOML entries, invalid folder names, special files, and non-UTF-8
-names or file content. This includes hidden files and editor backups. Any invalid entry rejects the complete set. Use Linux `openat2` with `RESOLVE_NO_SYMLINKS` for every
-opened path. Reject symlinks in service and definition paths, including roots
-and ancestors. Open discovered children relative to held directory descriptors.
-Do not use canonicalization to follow a symlink first. This requires Linux with
-`openat2` support (available on the selected Debian 13 target). No weaker fallback
-is used. Storage paths are configuration values, not loaded files.
+names or file content. This includes hidden files and editor backups. Any invalid entry rejects the complete set. The Linux loader uses `openat2` with
+`RESOLVE_NO_SYMLINKS`. The macOS validator uses `openat` with
+`O_NOFOLLOW_ANY`. Both reject symlinks in service and definition paths,
+including roots and ancestors. Open discovered children relative to held
+directory descriptors. Storage paths are configuration values.
 
 Bounds are 1 MiB per file, 16 MiB total file content including the service file,
 10,000 discovered entries across both roots, and 32 nested folders below each

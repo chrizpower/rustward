@@ -8,7 +8,7 @@ pub fn validate(source: &str) -> Result<Config, String> {
 }
 
 pub fn validate_set(tasks: &[(&str, &str)]) -> Result<Config, String> {
-    let root = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
     fs::create_dir(root.path().join("tasks")).unwrap();
     fs::create_dir(root.path().join("schedules")).unwrap();
     fs::write(root.path().join("rustward.toml"), SERVICE).unwrap();

@@ -1,19 +1,32 @@
 //! Opt-in synthetic host acceptance. This is not a service CLI.
+#[cfg(target_os = "linux")]
 mod context;
+#[cfg(target_os = "linux")]
 mod execution;
+#[cfg(target_os = "linux")]
 mod failure;
+#[cfg(target_os = "linux")]
 mod flood;
+#[cfg(target_os = "linux")]
 mod proof;
+#[cfg(target_os = "linux")]
 mod recovery;
+#[cfg(target_os = "linux")]
 mod remote_recovery;
+#[cfg(target_os = "linux")]
 mod runtime_selection;
+#[cfg(target_os = "linux")]
 mod stopping;
+#[cfg(target_os = "linux")]
 mod storage_fault;
-#[cfg(test)]
+#[cfg(all(target_os = "linux", test))]
 mod tests;
 
+#[cfg(target_os = "linux")]
 use std::{env, path::Path, process::ExitCode};
+#[cfg(target_os = "linux")]
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[cfg(target_os = "linux")]
 fn require(condition: bool, message: &str) -> Result<()> {
     if condition {
         Ok(())
@@ -21,6 +34,7 @@ fn require(condition: bool, message: &str) -> Result<()> {
         Err(message.into())
     }
 }
+#[cfg(target_os = "linux")]
 fn main() -> ExitCode {
     match command(&env::args().skip(1).collect::<Vec<_>>()) {
         Ok(()) => ExitCode::SUCCESS,
@@ -30,6 +44,7 @@ fn main() -> ExitCode {
         }
     }
 }
+#[cfg(target_os = "linux")]
 fn command(args: &[String]) -> Result<()> {
     match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["id", kind, path] => {
@@ -57,4 +72,10 @@ fn command(args: &[String]) -> Result<()> {
         ["recovery-child",root,id]=>recovery::child(Path::new(root),id),
         _=>Err("usage: acceptance id <runtime|host> <file>, probe-manager, run <root>, run-ssh <root>, run-failure <root> <task|unreachable>, run-stop <root> <cancel|timeout>, or recovery-child <root> <run-id>".into()),
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() -> std::process::ExitCode {
+    eprintln!("Host acceptance requires Linux and systemd.");
+    std::process::ExitCode::FAILURE
 }

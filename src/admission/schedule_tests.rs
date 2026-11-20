@@ -14,7 +14,7 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let root = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         for name in ["tasks", "schedules"] {
             fs::create_dir(root.path().join(name)).unwrap();
         }
@@ -201,6 +201,7 @@ fn failed_occurrence_write_rolls_back_all_runs_and_checkpoints() {
     assert_eq!(f.history("second")["occurrences"][0]["due_ms"], 2 * MINUTE);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn active_scheduled_run_can_have_one_queued_successor() {
     let mut f = Fixture::new();

@@ -138,6 +138,6 @@ test('completed output shows when capture was truncated', async ({ page, console
   await task(page, consoleUrl, 'Truncated task');
   await page.getByRole('button', {name: 'Run task'}).click();
   await expect(page.getByText('Completed · Success')).toBeVisible();
-  await expect(page.getByText('Output truncated')).toBeVisible();
+  await expect(page.getByLabel('stdout').locator('..').getByText('Output truncated')).toBeVisible();
   await expect(page.getByLabel('stdout')).toContainText('Task started');
 });

@@ -57,6 +57,7 @@ fn rejects_unsupported_cli_arguments() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn service_reports_startup_and_control_errors() {
     let binary = env!("CARGO_BIN_EXE_rustward");

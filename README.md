@@ -46,14 +46,29 @@ just hooks-install
 just check
 ```
 
-Use the synthetic web console on a Linux development host:
+Rustward runs tasks on Linux with systemd on x86-64 and ARM64. On macOS,
+build and test the shared code with Rust and Apple’s Command Line Tools:
+
+```sh
+cargo build --locked --all-targets --all-features
+cargo test --locked --all-targets --all-features
+```
+
+The macOS build includes `rustward validate`. Linux service, task execution,
+and host acceptance tests require Linux.
+
+Start the synthetic web console:
 
 ```sh
 just web-preview
-just web-test
 ```
 
-Open the localhost URL printed by the preview. The browser suite requires Node
+On Linux this builds and runs the preview directly. On macOS start Docker
+Desktop first. The command builds the Linux preview in a container and
+publishes it at `http://127.0.0.1:4173`. To use another port, run
+`just web-preview-container 4174`. Press Ctrl+C to stop the preview.
+
+Run the automated browser tests on Linux with `just web-test`. The browser suite requires Node
 and npm. It uses rootless Podman when available. Set
 `RUSTWARD_WEB_CONTAINER=none` to use local Chromium libraries. Browser failure
 screenshots and traces go under `~/artifacts/rustward/web/`.

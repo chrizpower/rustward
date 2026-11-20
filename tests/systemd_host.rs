@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use rustward::{
     supervision::*,
     systemd::{CgroupFs, Manager, Systemd, UserBus},

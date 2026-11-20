@@ -173,8 +173,8 @@ impl Web {
     #[cfg(any(test, feature = "web-preview"))]
     pub(super) fn preview(listener: TcpListener, logs: WorkRoot) -> Result<Self, String> {
         let origin = format!(
-            "http://{}",
-            listener.local_addr().map_err(|err| err.to_string())?
+            "http://127.0.0.1:{}",
+            listener.local_addr().map_err(|err| err.to_string())?.port()
         );
         let site = http::Site::new(&origin, "http")?;
         Self::start(Listener::Preview(listener), site, logs, None)

@@ -46,7 +46,7 @@ was partial, the remaining mechanisms and targets are proposals.
 | N09 | Reproducible runs | Record the application version, task definition revision/hash, prepared repository revision, and runtime identity. A queued run uses its accepted definition and prepared runtime, or fails explicitly if they are unavailable. |
 | N10 | Recoverable operations | Document persistent paths, backup, isolated restore, release rollback, schema compatibility, and shutdown behavior. Prove restore with synthetic history and definitions before migration. |
 | N11 | Maintainable implementation | Use stable Rust, a committed lockfile, a small dependency set, format/lint checks, and focused tests for execution, scheduling, recovery, and HTTP access. Prefer established libraries over custom parsers or cryptography. |
-| N12 | Supported platform | Support Linux with systemd first. Validate the production CPU architecture and Linux baseline before release. Development tests must not need fleet access or private Vault credentials. |
+| N12 | Supported platform | Run on Linux x86-64 and ARM64 with systemd. Build shared code and run shared unit tests on macOS. Validate the production baseline before release. Development tests must not need fleet access or private Vault credentials. |
 
 P07 accepts the queue and log defaults listed under N05, with the permanent-key
 exception. N02/N03 performance figures remain proposed measurement targets. None

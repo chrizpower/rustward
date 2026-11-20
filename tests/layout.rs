@@ -1,9 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    fs,
-    os::unix::{ffi::OsStringExt, fs::symlink},
-    path::Path,
-};
+use std::{collections::BTreeMap, fs, os::unix::fs::symlink, path::Path};
 
 use rusqlite::Connection;
 use rustward::{
@@ -21,7 +16,7 @@ fn write(root: &Path, path: &str, source: impl AsRef<[u8]>) {
     fs::write(path, source).unwrap();
 }
 fn setup() -> TempDir {
-    let root = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
     fs::create_dir(root.path().join("tasks")).unwrap();
     fs::create_dir(root.path().join("schedules")).unwrap();
     write(root.path(), "rustward.toml", SERVICE);
@@ -94,14 +89,18 @@ fn rejects_invalid_files_folders_and_input_names() {
     fs::create_dir(root.path().join("tasks/Invalid")).unwrap();
     assert!(read(root.path()).is_err());
     fs::remove_dir(root.path().join("tasks/Invalid")).unwrap();
-    fs::write(
-        root.path()
-            .join("tasks")
-            .join(std::ffi::OsString::from_vec(vec![255])),
-        TASK,
-    )
-    .unwrap();
-    assert!(read(root.path()).is_err());
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        fs::write(
+            root.path()
+                .join("tasks")
+                .join(std::ffi::OsString::from_vec(vec![255])),
+            TASK,
+        )
+        .unwrap();
+        assert!(read(root.path()).is_err());
+    }
     for source in [
         TASK.replace("id = \"name\"", "id = 'group/name'"),
         format!("id = 'duplicate'\n{TASK}"),
@@ -140,7 +139,7 @@ fn rejects_symlinks_at_every_loaded_path_level() {
     .unwrap();
     symlink("real.toml", root.path().join("rustward.toml")).unwrap();
     assert!(read(root.path()).is_err());
-    let outer = tempfile::tempdir().unwrap();
+    let outer = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
     let root = setup();
     symlink(root.path(), outer.path().join("alias")).unwrap();
     assert!(read(&outer.path().join("alias")).is_err());
@@ -162,16 +161,19 @@ fn rejects_special_files_and_invalid_utf8() {
         std::os::unix::net::UnixListener::bind(root.path().join("tasks/socket.toml")).unwrap();
     assert!(read(root.path()).is_err());
     fs::remove_file(root.path().join("tasks/socket.toml")).unwrap();
-    rustix::fs::mknodat(
-        rustix::fs::CWD,
-        root.path().join("tasks/pipe.toml"),
-        rustix::fs::FileType::Fifo,
-        rustix::fs::Mode::RUSR,
-        0,
-    )
-    .unwrap();
-    assert!(read(root.path()).is_err());
-    fs::remove_file(root.path().join("tasks/pipe.toml")).unwrap();
+    #[cfg(target_os = "linux")]
+    {
+        rustix::fs::mknodat(
+            rustix::fs::CWD,
+            root.path().join("tasks/pipe.toml"),
+            rustix::fs::FileType::Fifo,
+            rustix::fs::Mode::RUSR,
+            0,
+        )
+        .unwrap();
+        assert!(read(root.path()).is_err());
+        fs::remove_file(root.path().join("tasks/pipe.toml")).unwrap();
+    }
     write(root.path(), "tasks/report.toml", [255]);
     assert!(read(root.path()).is_err());
 }

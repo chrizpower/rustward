@@ -1,5 +1,17 @@
 ARG RUST_IMAGE=rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07
 ARG DEBIAN_IMAGE=debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
+FROM ${RUST_IMAGE} AS preview-build
+WORKDIR /source
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY examples/acceptance ./examples/acceptance
+RUN cargo build --locked --release --features web-preview --bin rustward
+
+FROM ${DEBIAN_IMAGE} AS web-preview
+COPY --from=preview-build /source/target/release/rustward /usr/local/bin/rustward
+USER 65534:65534
+ENTRYPOINT ["rustward", "web-preview", "--container"]
+
 FROM ${RUST_IMAGE} AS build
 WORKDIR /source
 COPY Cargo.toml Cargo.lock ./

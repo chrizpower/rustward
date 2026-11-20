@@ -207,8 +207,7 @@ pub(super) fn start(
                         }
                         #[cfg(any(test, feature = "web-preview"))]
                         Listener::Preview(listener) => {
-                            if let Ok((stream, peer)) = listener.accept()
-                                && peer.ip().is_loopback()
+                            if let Ok((stream, _)) = listener.accept()
                                 && stream.set_nonblocking(true).is_ok()
                                 && let Ok(stream) = tokio::net::TcpStream::from_std(stream)
                             {

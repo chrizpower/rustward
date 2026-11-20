@@ -3,19 +3,20 @@ use std::{ffi::OsString, fs, net::TcpListener, os::unix::fs::PermissionsExt};
 use super::*;
 
 pub fn web_preview(mut args: impl Iterator<Item = OsString>) -> Result<(), String> {
-    let port = args
-        .next()
+    let first = args.next();
+    let container = first.as_deref() == Some(std::ffi::OsStr::new("--container"));
+    let port = if container { args.next() } else { first }
         .map(|value| value.to_str().unwrap_or("").parse::<u16>())
         .transpose()
         .map_err(|_| "Invalid preview port")?
         .unwrap_or(0);
     if args.next().is_some() {
-        return Err("Usage: rustward web-preview [port]".into());
+        return Err("Usage: rustward web-preview [--container] [port]".into());
     }
-    run_preview(port).map_err(|error| error.to_string())
+    run_preview(port, container).map_err(|error| error.to_string())
 }
 
-fn run_preview(port: u16) -> Result<(), Box<dyn std::error::Error>> {
+fn run_preview(port: u16, container: bool) -> Result<(), Box<dyn std::error::Error>> {
     let stop = install_stop()?;
     let root = tempfile::tempdir()?;
     let path = root.path();
@@ -57,11 +58,12 @@ fn run_preview(port: u16) -> Result<(), Box<dyn std::error::Error>> {
         .handle(Request::SchedulePause { schedule_id: None })
         .map_err(state_error)?;
     service.handle(Request::Resume).map_err(state_error)?;
-    let listener = TcpListener::bind(("127.0.0.1", port))?;
-    let address = listener.local_addr()?;
+    let host = if container { "0.0.0.0" } else { "127.0.0.1" };
+    let listener = TcpListener::bind((host, port))?;
+    let port = listener.local_addr()?.port();
     let web = web::Web::preview(listener, logs)?;
     let control = control::listen(&format!("preview-{}", std::process::id()))?;
-    println!("Rustward preview: http://{address}");
+    println!("Rustward preview: http://127.0.0.1:{port}");
     run(service, control, &stop, Some(&web))?;
     Ok(())
 }

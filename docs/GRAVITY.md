@@ -63,6 +63,11 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 - **Revisit:** A requirement for another platform, multiple administrators, or
   host failure tolerance changes this boundary.
 
+Linux execution targets include x86-64 and ARM64. On macOS, build the shared
+Rust code and run its unit tests. Keep systemd and Linux-specific interfaces
+behind the Linux execution boundary. This scope follows the user's platform
+decision on 2026-11-20.
+
 ### P02: Preserve accepted work and stop on uncertainty
 
 - **Type and status:** Accepted principle.

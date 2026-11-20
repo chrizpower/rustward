@@ -1,6 +1,8 @@
 use std::{collections::BTreeMap, fs::File, io::Read, os::fd::AsFd, path::Path};
 
-use rustix::fs::{CWD, Dir, Mode, OFlags, ResolveFlags, openat2};
+use rustix::fs::{CWD, Dir, Mode, OFlags};
+#[cfg(target_os = "linux")]
+use rustix::fs::{ResolveFlags, openat2};
 
 use super::{Config, Schedule, Service, TaskDefinition, valid_id, validate_tasks};
 
@@ -70,17 +72,20 @@ fn load_checked(path: &Path, between_reads: impl FnOnce()) -> Result<Config, Str
 }
 
 fn open(parent: impl AsFd, path: &Path) -> Result<File, String> {
-    // Kernel path resolution rejects symlinks in all components, including
-    // ancestors, even if a path changes between discovery and opening.
-    openat2(
+    // Reject symlinks in every path component during the open.
+    let flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NONBLOCK;
+    #[cfg(target_os = "linux")]
+    let file = openat2(
         parent,
         path,
-        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NONBLOCK,
+        flags,
         Mode::empty(),
         ResolveFlags::NO_SYMLINKS,
-    )
-    .map(File::from)
-    .map_err(|e| format!("cannot open {} without symlinks: {e}", path.display()))
+    );
+    #[cfg(target_os = "macos")]
+    let file = rustix::fs::openat(parent, path, flags | OFlags::NOFOLLOW_ANY, Mode::empty());
+    file.map(File::from)
+        .map_err(|e| format!("cannot open {} without symlinks: {e}", path.display()))
 }
 
 fn read(file: File, label: &str, total: &mut usize) -> Result<String, String> {
@@ -198,7 +203,7 @@ mod tests {
 
     #[test]
     fn rejects_observed_edits_and_keeps_previous_config() {
-        let root = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         std::fs::create_dir(root.path().join("tasks")).unwrap();
         std::fs::create_dir(root.path().join("schedules")).unwrap();
         let path = root.path().join("rustward.toml");
@@ -214,7 +219,7 @@ mod tests {
 
     #[test]
     fn keeps_one_configuration_directory_during_publication() {
-        let root = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let active = root.path().join("active");
         let replacement = root.path().join("replacement");
         for generation in [&active, &replacement] {

@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 #[path = "runtime/common.rs"]
 mod common;
 #[path = "runtime/host.rs"]

@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use rustward::{supervision::*, systemd::*};
 use std::{fs::File, os::fd::AsFd, path::Path, time::Duration};
 use zbus::zvariant::Value;

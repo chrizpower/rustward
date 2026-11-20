@@ -32,7 +32,10 @@ check-acceptance-fixtures:
     python3 -B -m unittest discover -s acceptance/tests -p 'test_*.py'
 
 web-preview:
-    cargo run --locked --features web-preview -- web-preview
+    case "$(uname -s)" in Linux) cargo run --locked --features web-preview -- web-preview ;; *) python3 -I -B tests/web/preview_container.py ;; esac
+
+web-preview-container port="4173":
+    python3 -I -B tests/web/preview_container.py {{quote(port)}}
 
 web-test:
     python3 -B tests/web/run.py

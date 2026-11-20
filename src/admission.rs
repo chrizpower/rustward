@@ -206,6 +206,7 @@ fn decode_key(key: &str) -> Result<Vec<u8>, Error> {
 }
 
 impl Store {
+    #[cfg(target_os = "linux")]
     pub(crate) fn close(&mut self) {
         self.failed = true;
     }

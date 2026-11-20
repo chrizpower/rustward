@@ -100,6 +100,10 @@ Output handling must finish before the service records completion. A storage
 fault initiates local stopping without a successful database write.
 See [Gravity](GRAVITY.md#rules).
 
+The Linux service and acceptance suite build for x86-64 and ARM64. On macOS,
+the configuration validator and shared admission, scheduling, and
+configuration tests build without the Linux service.
+
 ## Prepared runtimes
 
 External preparation publishes immutable code and dependencies. The service

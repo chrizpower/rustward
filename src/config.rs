@@ -233,6 +233,7 @@ impl Config {
             .collect())
     }
 
+    #[cfg(target_os = "linux")]
     pub(crate) fn task_cards(&self, after: &str) -> Vec<serde_json::Value> {
         self.tasks
             .iter()
@@ -242,6 +243,7 @@ impl Config {
             .collect()
     }
 
+    #[cfg(target_os = "linux")]
     pub(crate) fn task_form(&self, id: &str) -> Option<serde_json::Value> {
         let task = self.tasks.iter().find(|task| task.id == id)?;
         let inputs: Vec<_> = task.inputs.iter().map(|input| {

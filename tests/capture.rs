@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use rustward::{capture::*, supervision::*};
 use std::{
     fs,

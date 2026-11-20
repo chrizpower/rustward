@@ -1,9 +1,17 @@
+#[cfg(any(target_os = "linux", test))]
 use chrono::{DateTime, Utc};
+#[cfg(any(target_os = "linux", test))]
 use croner::Cron;
-use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::Transaction;
+#[cfg(any(target_os = "linux", test))]
+use rusqlite::{OptionalExtension, TransactionBehavior, params};
+#[cfg(any(target_os = "linux", test))]
 use serde::Serialize;
 
-use super::{Error, Store, fingerprint, insert_run, revision, storage};
+use super::{Error, storage};
+#[cfg(any(target_os = "linux", test))]
+use super::{Store, fingerprint, insert_run, revision};
+#[cfg(any(target_os = "linux", test))]
 use crate::config::Config;
 
 pub(super) fn migrate(transaction: &Transaction<'_>) -> Result<(), Error> {
@@ -30,6 +38,7 @@ pub(super) fn migrate(transaction: &Transaction<'_>) -> Result<(), Error> {
     ).map_err(storage)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn gap(
     transaction: &Transaction<'_>,
     id: &str,
@@ -46,6 +55,7 @@ fn gap(
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn missed(matcher: &Cron, after: i64, through: i64) -> Result<Option<u32>, Error> {
     // Keep outage evaluation bounded even after long downtime.
     if through - after > 24 * 60 * 60_000 {
@@ -63,6 +73,7 @@ fn missed(matcher: &Cron, after: i64, through: i64) -> Result<Option<u32>, Error
     Ok(Some(count))
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[derive(Serialize)]
 pub(crate) struct Occurrence {
     due_ms: i64,
@@ -71,6 +82,7 @@ pub(crate) struct Occurrence {
     run_id: Option<String>,
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[derive(Serialize)]
 pub(crate) struct Gap {
     id: i64,
@@ -80,6 +92,7 @@ pub(crate) struct Gap {
     missed_count: Option<u32>,
 }
 
+#[cfg(any(target_os = "linux", test))]
 impl Store {
     pub(crate) fn activate_schedules(
         &mut self,
@@ -265,6 +278,7 @@ impl Store {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn matchers(config: &Config) -> Vec<(Cron, Vec<u8>)> {
     config
         .schedules()

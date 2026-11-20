@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use std::{fs, process::Command};
 #[test]
 fn launcher_replaces_its_process_with_exact_arguments_and_clean_environment() {

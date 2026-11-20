@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 //! Use only a separately prepared synthetic fixture. No program is executed.
 use rustward::{
     runtime::{Catalog, Limits, Protection, WorkRoot},
