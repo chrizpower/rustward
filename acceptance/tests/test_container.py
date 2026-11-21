@@ -16,18 +16,25 @@ class RunnerTests(unittest.TestCase):
             root = Path(directory)
             repository = root / "repository"
             repository.mkdir()
-            for name in ("Cargo.toml", "Cargo.lock"):
+            for name in ("Cargo.toml", "Cargo.lock", "build.rs"):
                 (repository / name).write_text("synthetic")
-            for name in ("src", "acceptance", "examples/acceptance", "tests"):
+            for name in ("src", "acceptance", "examples/acceptance", "tests", "web/src", "web/node_modules", "web/dist"):
                 (repository / name).mkdir(parents=True)
             (repository / "src/lib.rs").write_text("synthetic")
+            for name in ("package.json", "package-lock.json", "vite.config.ts", "tsconfig.json", "index.html",
+                         "src/App.svelte",
+                         "node_modules/dependency.js", "dist/console.js"):
+                (repository / "web" / name).write_text("synthetic")
             (repository / "outside").write_text("synthetic unrelated data")
             for name in ("systemd_host.rs", "runtime_host.rs"):
                 (repository / "tests" / name).write_text("synthetic test")
             source = container.snapshot(repository, root / "context")
             self.assertFalse((root / "context/outside").exists())
             self.assertEqual(len(source["revision"]), 64)
-            self.assertEqual(len(source["files"]), 5)
+            self.assertFalse((root / "context/web/node_modules").exists())
+            self.assertFalse((root / "context/web/dist").exists())
+            self.assertIn("web/src/App.svelte", {entry["path"] for entry in source["files"]})
+            self.assertIn("web/package-lock.json", {entry["path"] for entry in source["files"]})
             self.assertTrue(container.excluded(Path("__pycache__")))
             self.assertTrue(container.excluded(Path("AI.md")))
             (repository / "src/alias").symlink_to("lib.rs")

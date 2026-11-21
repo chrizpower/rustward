@@ -59,8 +59,9 @@ fn serves_assets_and_bounded_operations_with_origin_checks() {
         )
     };
     for (path, marker) in [
-        ("/", "Rustward"),
-        ("/console.js", "function"),
+        ("/", "type=\"module\" crossorigin src=\"/console.js\""),
+        ("/", "href=\"/console.css\""),
+        ("/console.js", "Run details"),
         ("/console.css", ":root"),
     ] {
         let (status, body) = get(path, &host);

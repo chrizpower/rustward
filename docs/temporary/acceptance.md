@@ -13,8 +13,8 @@ Run on an isolated Linux Docker host, preferably a disposable VM:
 just acceptance-container
 ```
 
-The host needs Python 3, rootful Docker, and cgroup v2. Building needs registry,
-Cargo, and Debian repository access. No credentials or production inventory are
+The host needs Python 3, rootful Docker, and cgroup v2. Building needs container registry,
+Cargo, npm, and Debian repository access. No credentials or production inventory are
 required. Docker Desktop requires the same cgroup checks. The runner requires rootful Docker.
 
 The test container is **privileged** so systemd can manage its cgroup hierarchy.
@@ -26,7 +26,7 @@ and [systemd container requirements](https://systemd.io/CONTAINER_INTERFACE/).
 The runner supplies no host mounts or host sockets. Local mode has no network.
 Remote mode creates an internal network before controller startup and joins
 targets after the local cases. The dedicated manager and executor use restricted
-privileges. The build context contains only Cargo inputs, source, fixtures, the
+privileges. The build context contains Cargo and Vite build inputs, source, fixtures, the
 acceptance example, and required host-test sources. Source symlinks are rejected.
 
 Run A01–A10 with disposable SSH targets:
@@ -35,7 +35,7 @@ Run A01–A10 with disposable SSH targets:
 just acceptance-ssh
 ```
 
-Rust and Debian image references are pinned by digest. Optional explicit image
+Rust, Node.js, and Debian image references are pinned by digest. Optional explicit image
 references can be supplied for a controlled update:
 
 ```sh

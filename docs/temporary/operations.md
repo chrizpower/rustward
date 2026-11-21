@@ -75,11 +75,12 @@ records it. Queue, run history, and schedule results use bounded pages.
 
 `just web-preview` uses a disposable database, synthetic tasks, and a fake
 supervisor. On macOS the preview uses a Linux container and publishes its
-port on host loopback. `just web-test` runs the real console in headless
-Chromium. It tests request retries, reconnecting, input validation,
-text rendering, cancellation, schedule controls, and review. The isolated
-Docker web case checks Nginx authentication, proxy peer enforcement, origin
-checks, and a real systemd run. It records `fixture/evidence/web.json`.
+port on host loopback. Run `just web-test` on Linux to test the embedded
+production assets in headless Chromium. It tests request retries, reconnecting,
+input validation, text rendering, cancellation, schedule controls, and review.
+Run `just acceptance-container` on the isolated Docker host for the web case.
+It checks Nginx authentication, proxy peer enforcement, origin checks, and a real
+systemd run. It records `fixture/evidence/web.json`.
 
 ## Age-based retention
 

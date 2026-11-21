@@ -113,6 +113,10 @@ http {{
                 wait_for(ready, "Nginx did not require authentication")
                 code, page = request("/")
                 require(code == 200 and b"Rustward" in page, "authenticated page was not served")
+                for path, marker in (("/console.js", b"Run details"), ("/console.css", b":root")):
+                    require(path.encode() in page, f"console page did not reference {path}")
+                    status, asset = request(path)
+                    require(status == 200 and marker in asset, f"embedded asset {path} was not served")
                 malicious = {"operation": "control", "request": {"command": "resume"}}
                 require(request("/api", malicious, request_origin="https://other.invalid")[0] == 403,
                         "cross-origin request reached control")

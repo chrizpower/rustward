@@ -83,17 +83,17 @@ async fn route(
         (&Method::GET, "/") => response(
             StatusCode::OK,
             "text/html; charset=utf-8",
-            include_str!("assets/index.html"),
+            include_str!(concat!(env!("OUT_DIR"), "/console/dist/index.html")),
         ),
         (&Method::GET, "/console.js") => response(
             StatusCode::OK,
             "text/javascript; charset=utf-8",
-            include_str!("assets/console.js"),
+            include_str!(concat!(env!("OUT_DIR"), "/console/dist/console.js")),
         ),
         (&Method::GET, "/console.css") => response(
             StatusCode::OK,
             "text/css; charset=utf-8",
-            include_str!("assets/console.css"),
+            include_str!(concat!(env!("OUT_DIR"), "/console/dist/console.css")),
         ),
         (&Method::POST, "/api") => {
             if headers.get(ORIGIN).and_then(|value| value.to_str().ok())

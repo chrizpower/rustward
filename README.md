@@ -57,6 +57,11 @@ cargo test --locked --all-targets --all-features
 The macOS build includes `rustward validate`. Linux service, task execution,
 and host acceptance tests require Linux.
 
+Linux builds also require Node.js 20.19+ in the 20.x series, or 22.12+, and npm.
+Cargo installs the locked frontend dependencies and embeds the Vite production
+build. The Linux service runs with Rust alone. Native macOS Cargo builds do
+not build the console.
+
 Start the synthetic web console:
 
 ```sh
@@ -68,13 +73,40 @@ Desktop first. The command builds the Linux preview in a container and
 publishes it at `http://127.0.0.1:4173`. To use another port, run
 `just web-preview-container 4174`. Press Ctrl+C to stop the preview.
 
-Run the automated browser tests on Linux with `just web-test`. The browser suite requires Node
-and npm. It uses rootless Podman when available. Set
-`RUSTWARD_WEB_CONTAINER=none` to use local Chromium libraries. Browser failure
-screenshots and traces go under `~/artifacts/rustward/web/`.
+For Vite development, start the synthetic preview on port 4173. On Linux run
+`cargo run --locked --features web-preview -- web-preview 4173`. On macOS run
+`just web-preview-container 4173`. In a second terminal run:
 
-Host acceptance runs separately from `just check` and uses synthetic
-workloads on an isolated Linux host.
+```sh
+npm --prefix web ci --include=dev
+npm --prefix web run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite updates the UI as you edit it and forwards
+API calls to the synthetic preview on loopback.
+
+Run the browser tests on Linux:
+
+```sh
+just web-test
+```
+
+Playwright tests the production assets embedded in the Rust binary. It uses
+rootless Podman when available. Run `RUSTWARD_WEB_CONTAINER=none just web-test`
+to use local Chromium libraries. Browser failure screenshots and traces go
+under `~/artifacts/rustward/web/`. `just check` also runs the frontend source
+and TypeScript checks. To run those checks alone, use `just web-check`.
+
+Run the Docker integration suite from the checkout on your laptop with Docker
+Desktop running in Linux container mode, or on an isolated Linux Docker host:
+
+```sh
+just acceptance-container
+```
+
+The Docker suite requires rootful Docker and cgroup v2. It runs synthetic host
+tests and checks proxy authentication and a systemd run. It runs separately
+from `just check` and `just web-test`.
 
 No fleet access or private credentials are needed. The devbox uses
 `the build directory` for compiled output. Source, home,

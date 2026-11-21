@@ -42,8 +42,11 @@ def snapshot(repository, destination):
         else:
             raise ValueError("build context source contains a special file")
 
-    for name in ("Cargo.toml", "Cargo.lock", "src", "acceptance"):
+    for name in ("Cargo.toml", "Cargo.lock", "build.rs", "src", "acceptance"):
         copy(repository / name, Path(name))
+    (destination / "web").mkdir()
+    for name in ("package.json", "package-lock.json", "vite.config.ts", "tsconfig.json", "index.html", "src"):
+        copy(repository / "web" / name, Path("web") / name)
     (destination / "examples").mkdir()
     copy(repository / "examples/acceptance", Path("examples/acceptance"))
     (destination / "tests").mkdir()

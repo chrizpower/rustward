@@ -1,1 +1,2 @@
 Cargo.lock -token-limit
+web/package-lock.json -token-limit

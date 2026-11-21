@@ -1,4 +1,4 @@
-check: check-commit
+check: check-commit web-check
     just check-acceptance-fixtures
     bash tests/file-size.sh
     bash tests/file-size-isolation.sh
@@ -36,6 +36,11 @@ web-preview:
 
 web-preview-container port="4173":
     python3 -I -B tests/web/preview_container.py {{quote(port)}}
+
+web-check:
+    python3 -I -B tests/web/check_source.py
+    npm --prefix web ci --include=dev
+    npm --prefix web run check
 
 web-test:
     python3 -B tests/web/run.py

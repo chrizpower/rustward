@@ -4,6 +4,8 @@ Rustward runs generic commands for one trusted administrator. The local service
 implements manual admission, recovery, dispatch, stopping, review, and planned
 drain. It also evaluates UTC schedules and supports explicit configuration
 reload. The private web console uses the same admission and execution controls.
+Vite builds the Svelte console during the Linux Rust build. The Rust service
+embeds and serves these assets in the same process.
 [Gravity](GRAVITY.md) owns the accepted constraints and principles.
 
 ## System diagram
