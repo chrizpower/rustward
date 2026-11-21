@@ -15,8 +15,6 @@ def copy_directory(source, destination, files, relative=Path()):
         raise RuntimeError("storage evidence source is not a directory")
     destination.mkdir(mode=0o700)
     for entry in sorted(source.iterdir()):
-        if entry.name == "AI.md":
-            raise RuntimeError("unexpected excluded file in storage evidence")
         mode = entry.lstat().st_mode
         path = relative / entry.name
         target = destination / entry.name

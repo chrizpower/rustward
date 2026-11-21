@@ -54,5 +54,5 @@ with tempfile.TemporaryDirectory(prefix="rustward-browser-") as scratch:
     for name in ("package.json", "package-lock.json", "playwright.config.ts", "tsconfig.json"):
         shutil.copyfile(web / name, project / name)
     for name in ("src", "tests"):
-        shutil.copytree(web / name, project / name, ignore=shutil.ignore_patterns("AI.md"))
+        shutil.copytree(web / name, project / name)
     run_browser_tests(project)

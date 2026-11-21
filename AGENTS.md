@@ -48,8 +48,8 @@ custom code. Do not add Ansible-specific behavior to the execution core. Keep
 production deployment in the deployment repository. Implementation does not authorize
 live tasks, schedule migration, or production deployment.
 
-Use synthetic inputs and credentials. Never read, write, search, or ingest
-AI.md. Do not copy secrets into code, tests, logs, or documentation.
+Use synthetic inputs and credentials. Do not copy secrets into code, tests,
+logs, or documentation.
 
 Keep source and useful artifacts on persistent storage. Put worktrees under
 $HOME/worktrees/rustward and reports under $HOME/artifacts/rustward. Use /tmp

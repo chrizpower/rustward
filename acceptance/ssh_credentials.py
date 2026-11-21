@@ -40,7 +40,7 @@ def scan(roots, marker):
     findings = []
     checked = 0
     for root in map(Path, roots):
-        if root.is_symlink() or root.name == "AI.md":
+        if root.is_symlink():
             findings.append({"file": "<root>", "reason": "unsafe export root"})
             continue
         if not root.exists():
@@ -51,7 +51,7 @@ def scan(roots, marker):
                 relative = str(path.relative_to(root))
                 label = "<redacted path>" if marker in relative.encode() else relative
                 metadata = path.lstat()
-                if name == "AI.md" or stat.S_ISLNK(metadata.st_mode) or not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+                if stat.S_ISLNK(metadata.st_mode) or not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
                     if name in folders:
                         folders.remove(name)
                     findings.append({"file": label, "reason": "unsafe export entry"})

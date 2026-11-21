@@ -36,7 +36,6 @@ class RunnerTests(unittest.TestCase):
             self.assertIn("web/src/App.svelte", {entry["path"] for entry in source["files"]})
             self.assertIn("web/package-lock.json", {entry["path"] for entry in source["files"]})
             self.assertTrue(container.excluded(Path("__pycache__")))
-            self.assertTrue(container.excluded(Path("AI.md")))
             (repository / "src/alias").symlink_to("lib.rs")
             with self.assertRaises(ValueError):
                 container.snapshot(repository, root / "other-context")

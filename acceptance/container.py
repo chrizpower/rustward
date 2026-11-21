@@ -18,7 +18,7 @@ FIXTURE = "/opt/rustward-acceptance"
 
 
 def excluded(path):
-    return path.name == "AI.md" or path.name == "__pycache__" or path.suffix == ".pyc"
+    return path.name == "__pycache__" or path.suffix == ".pyc"
 
 
 def snapshot(repository, destination):

@@ -122,7 +122,7 @@ def prepare(root, tools, user, revision, remote=False):
         shutil.copyfile(Path("/usr/bin") / name, stage / "bin" / name)
         (stage / "bin" / name).chmod(0o755)
     for path in sorted((Path(__file__).parent / "fixtures").iterdir()):
-        if path.name == "AI.md" or path.is_dir():
+        if path.is_dir():
             continue
         shutil.copyfile(path, stage / path.name)
         (stage / path.name).chmod(0o644)

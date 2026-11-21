@@ -8,9 +8,6 @@ git diff --cached --name-only --diff-filter=ACMRT -z > "$paths"
 
 failed=0
 while IFS= read -r -d '' path; do
-    case "$path" in
-        AI.md|*/AI.md) continue ;;
-    esac
     attribute=$(git check-attr --cached token-limit -- "$path")
     case "$attribute" in
         *': token-limit: unset') continue ;;

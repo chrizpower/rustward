@@ -23,7 +23,7 @@ def copy_tree(source, target, ancestors=()):
         raise ValueError("source directory link cycle")
     target.mkdir(mode=0o755)
     for entry in sorted(source.iterdir()):
-        if entry.name in ("AI.md", "__pycache__") or entry.suffix == ".pyc":
+        if entry.name == "__pycache__" or entry.suffix == ".pyc":
             continue
         output = target / entry.name
         if entry.is_dir():
@@ -44,8 +44,6 @@ def tree_manifest(root):
                 raise ValueError("runtime directory is a symlink")
             directories.append(path.relative_to(root).as_posix())
         for name in sorted(names):
-            if name == "AI.md":
-                raise ValueError("unexpected excluded file")
             path = Path(directory) / name
             if path.is_symlink() or not path.is_file():
                 raise ValueError("runtime entry is not a regular file")

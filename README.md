@@ -132,8 +132,7 @@ to `.githooks`. GitHub Actions workflows are currently disabled.
 The file size check reads only added, copied, modified, renamed, or type-changed
 files in the Git index. Each file must be at most 5,000 tokens, where tokens equal
 bytes divided by four (20,000 bytes). Unstaged content does not affect this check.
-Deleted files and submodules are skipped. Files named `AI.md` are not inspected,
-as required by the repository rules.
+Deleted files and submodules are skipped.
 
 `Cargo.lock` is excluded through `-token-limit` in `.gitattributes`. For other
 machine-generated files, add an exact path with `-token-limit` and stage the rule.

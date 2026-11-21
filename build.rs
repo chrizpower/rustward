@@ -13,9 +13,6 @@ fn copy_source(source: &Path, target: &Path) -> io::Result<()> {
     fs::create_dir_all(target)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
-        if entry.file_name() == "AI.md" {
-            continue;
-        }
         let destination = target.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_source(&entry.path(), &destination)?;
