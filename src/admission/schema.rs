@@ -116,3 +116,22 @@ pub(super) fn migrate_controller(transaction: &Transaction<'_>) -> Result<(), Er
     END;
     PRAGMA user_version=7;").map_err(storage)
 }
+
+pub(super) fn migrate_maintenance(transaction: &Transaction<'_>) -> Result<(), Error> {
+    transaction
+        .execute_batch(
+            "CREATE INDEX runs_completed ON runs(completed_at, sequence) WHERE phase='completed';
+         CREATE TABLE restore_control (
+             id INTEGER PRIMARY KEY CHECK(id=1),
+             phase TEXT NOT NULL CHECK(phase IN ('backup','review','released'))
+         );
+         CREATE TABLE restore_reviews (
+             generation BLOB NOT NULL, run_id TEXT NOT NULL,
+             original_phase TEXT NOT NULL, original_result TEXT,
+             decision TEXT, note TEXT, reviewed_at INTEGER,
+             PRIMARY KEY(generation, run_id)
+         );
+         PRAGMA user_version=9;",
+        )
+        .map_err(storage)
+}

@@ -261,7 +261,8 @@ impl Store {
             let (active, paused, checkpoint_ms) = state.ok_or(Error::UnknownSchedule)?;
             let global: bool = connection.query_row("SELECT paused FROM schedule_control WHERE id=1", [], |row| row.get(0)).map_err(storage)?;
             let mut occurrences = connection.prepare(
-                "SELECT due_ms,revision,decision,run_id FROM occurrences WHERE schedule_id=?1 AND due_ms>?2 ORDER BY due_ms LIMIT 20"
+                "SELECT due_ms,revision,decision,runs.run_id FROM occurrences
+                 LEFT JOIN runs USING(run_id) WHERE schedule_id=?1 AND due_ms>?2 ORDER BY due_ms LIMIT 20"
             ).map_err(storage)?;
             let occurrences = occurrences.query_map(params![id, after_due.unwrap_or(-1)], |row| Ok(Occurrence {
                 due_ms: row.get(0)?, revision: hex::encode(row.get::<_, Vec<u8>>(1)?), decision: row.get(2)?, run_id: row.get(3)?,

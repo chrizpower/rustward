@@ -48,7 +48,8 @@ def snapshot(repository, destination):
     for name in ("package.json", "package-lock.json", "vite.config.ts", "tsconfig.json", "index.html", "src"):
         copy(repository / "web" / name, Path("web") / name)
     (destination / "examples").mkdir()
-    copy(repository / "examples/acceptance", Path("examples/acceptance"))
+    for name in ("acceptance", "rustward.toml", "tasks"):
+        copy(repository / "examples" / name, Path("examples") / name)
     (destination / "tests").mkdir()
     for name in ("systemd_host.rs", "runtime_host.rs"):
         copy(repository / "tests" / name, Path("tests") / name)

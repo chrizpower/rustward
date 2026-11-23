@@ -127,6 +127,16 @@ impl Session {
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(storage)?;
+            let held: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM restore_control WHERE phase!='released')",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(storage)?;
+            if held {
+                return Err(Error::Closed);
+            }
             transaction
                 .execute_batch(
                     "UPDATE launches SET review_required=1 WHERE run_id IN

@@ -130,6 +130,10 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
             emergency,
         })
     }
+    pub(crate) fn remove_retained_logs(&self, id: &RunId) -> Result<(), admission::Error> {
+        self.preparation.remove_logs(id)
+    }
+
     pub fn set_paused(&mut self, paused: bool) -> Result<(), Error> {
         self.session.set_paused(paused).map_err(Error::State)
     }

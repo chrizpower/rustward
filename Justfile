@@ -44,3 +44,6 @@ web-check:
 
 web-test:
     python3 -B tests/web/run.py
+
+recovery-test:
+    cargo test --locked --lib service::maintenance::tests

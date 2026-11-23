@@ -1,5 +1,7 @@
 //! Local service entry point and control loop.
 mod control;
+mod maintenance;
+pub use maintenance::command as state_command;
 #[cfg(feature = "web-preview")]
 mod preview;
 mod schedule;
@@ -16,7 +18,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use rustix::process::{Signal, geteuid};
@@ -221,6 +223,7 @@ struct Service<S: Supervisor + Clone + Send + 'static> {
     config_path: Option<PathBuf>,
     matchers: Vec<(croner::Cron, Vec<u8>)>,
     clock: schedule::Clock,
+    next_retention: Instant,
     runtime_id: String,
     store: Store,
     controller: Controller<S>,
@@ -253,6 +256,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             config_path: None,
             matchers,
             clock: schedule::Clock::new(now),
+            next_retention: Instant::now(),
             runtime_id,
             store,
             controller,
@@ -301,6 +305,11 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 };
             }
         } else {
+            if let Err(error) = self.expire_history() {
+                self.safety.fail();
+                eprintln!("Expire history: {error:?}");
+                return Ok(false);
+            }
             if let Err(error) = self.evaluate_schedules()
                 && error != admission::Error::Busy
             {
@@ -322,6 +331,25 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             }
         }
         Ok(false)
+    }
+
+    fn expire_history(&mut self) -> Result<(), admission::Error> {
+        let now = Instant::now();
+        if now < self.next_retention {
+            return Ok(());
+        }
+        let age_ms = i64::from(self.config.service().retention.days) * 86_400_000;
+        let cutoff = admission::utc_ms()? - age_ms;
+        let delay = match self
+            .store
+            .expire(cutoff, |id| self.controller.remove_retained_logs(id))
+        {
+            Ok(0) => 60,
+            Ok(_) | Err(admission::Error::Busy) => 1,
+            Err(error) => return Err(error),
+        };
+        self.next_retention = now + Duration::from_secs(delay);
+        Ok(())
     }
 
     fn evaluate_schedules(&mut self) -> Result<(), admission::Error> {

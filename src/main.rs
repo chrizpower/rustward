@@ -31,6 +31,8 @@ fn main() -> ExitCode {
         #[cfg(all(target_os = "linux", feature = "web-preview"))]
         Some("web-preview") => service::web_preview(args).map(|()| true),
         #[cfg(target_os = "linux")]
+        Some("state") => service::state_command(args).map(|()| true),
+        #[cfg(target_os = "linux")]
         Some("ctl") => match (args.next(), args.next()) {
             (Some(name), None) => name.to_str().ok_or_else(usage).and_then(|name| {
                 service::call(name, io::stdin().lock(), io::stdout().lock())
@@ -39,7 +41,7 @@ fn main() -> ExitCode {
             _ => Err(usage()),
         },
         #[cfg(target_os = "macos")]
-        Some("serve" | "ctl" | "web-preview") => Err(
+        Some("serve" | "ctl" | "state" | "web-preview") => Err(
             "This command requires Linux. For the synthetic console, run just web-preview.".into(),
         ),
         _ => Err(usage()),
@@ -59,6 +61,7 @@ fn usage() -> String {
     "Usage:
   rustward validate <rustward.toml>
   rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid> [--web <socket> <https-origin> <proxy-uid>]
+  rustward state <backup|restore|reviews|decide|release> ...
   rustward ctl <name> < request.json".into()
 }
 

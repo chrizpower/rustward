@@ -5,8 +5,8 @@ service runs generic commands through a dedicated systemd user manager.
 It supports manual admission, UTC scheduling, live configuration reload,
 cancellation, recovery, review, and bounded output capture. Ansible is the
 first workload. A private web console supports task submission, run output,
-schedule controls, and review. Age-based retention, restore, and telemetry
-remain open.
+schedule controls, and review. Rustward expires eligible history by age and
+supports offline application-state backup and restore. Telemetry remains open.
 
 Validate the synthetic configuration:
 
@@ -96,6 +96,15 @@ rootless Podman when available. Run `RUSTWARD_WEB_CONTAINER=none just web-test`
 to use local Chromium libraries. Browser failure screenshots and traces go
 under `~/artifacts/rustward/web/`. `just check` also runs the frontend source
 and TypeScript checks. To run those checks alone, use `just web-check`.
+
+Run the synthetic retention and restore tests on Linux:
+
+```sh
+just recovery-test
+```
+
+The Docker integration build also runs these tests, including on a Mac with
+Docker Desktop.
 
 Run the Docker integration suite from the checkout on your laptop with Docker
 Desktop running in Linux container mode, or on an isolated Linux Docker host:

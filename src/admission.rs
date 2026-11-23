@@ -11,6 +11,8 @@ use toml::Value;
 
 use crate::config::Config;
 
+#[cfg(target_os = "linux")]
+pub(crate) mod maintenance;
 pub(crate) mod schedule;
 mod schema;
 
@@ -270,7 +272,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=8).contains(&version) {
+        } else if !(1..=9).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -321,6 +323,9 @@ impl Store {
         }
         if version < 8 {
             schedule::migrate(&transaction)?;
+        }
+        if version < 9 {
+            schema::migrate_maintenance(&transaction)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {

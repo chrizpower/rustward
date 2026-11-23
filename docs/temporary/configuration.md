@@ -125,8 +125,8 @@ inspect program availability, contact hosts, or load credentials.
 This implements the configuration and input portions of F01, F03, F04, F06,
 and F15. The [local service](service.md#local-service) activates validated
 configuration at startup and applies queue, execution, and log limits. Explicit
-reload activates new definitions and retains those service settings. Age-based
-retention remains open.
+reload activates new definitions and retains those service settings. The service
+uses the configured age to expire eligible completed history.
 
 ## Format change and compatibility
 
@@ -176,9 +176,8 @@ days = 30
 
 Limits and retention are nonnegative integers. Run counts and days fit `u32`.
 Byte limits fit `u64` but must also fit TOML's signed 64-bit integer syntax.
-Zero is accepted as a configuration value. The loader does not apply limits or
-retention, or infer an execution timeout from these settings. Runtime wiring
-must preserve the accepted resource and retention contracts. Task files contain
+A retention age of zero makes eligible runs expire as soon as they complete.
+The loader validates settings and the service applies them. Task files contain
 no service settings, environment/secret policy, or prepared runtime selection.
 
 ## Task schema

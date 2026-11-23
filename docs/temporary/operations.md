@@ -1,7 +1,7 @@
 # Operational contracts
 
-Scheduling and explicit reload are implemented. Age-based retention, restore,
-and telemetry are accepted future work. See the [service interface](service.md).
+Scheduling, explicit reload, age-based retention, and offline backup and
+restore are implemented. Telemetry is accepted future work. See the [service interface](service.md).
 
 ## Scheduling
 
@@ -84,35 +84,71 @@ systemd run. It records `fixture/evidence/web.json`.
 
 ## Age-based retention
 
-Use the configured retention age for eligible completed records and logs.
-Preserve queued and active records, unresolved review records and their
-retained output, and permanent admission records. Capacity-based log
-reclamation is implemented separately. See
-[log reclamation](execution.md#log-reclamation) and [Gravity P07](../GRAVITY.md#p07-enforce-configurable-resource-bounds).
-Define age calculation and deletion behavior, including unknown historical
-timestamps. Verify against storage faults. Global metadata bounds and
-monitoring of permanent-record growth remain open.
+The service uses the recorded UTC completion time and the configured number of
+24-hour days. An eligible run expires at the cutoff or earlier. Unknown or
+negative completion times remain in history. A batch removes up to 32 runs.
+The service checks again after one second if it removed history or the database
+was busy, and after one minute if there was no eligible history.
 
-## Application-state restore contract
+Queued runs, active runs, unresolved reviews and their output, and permanent
+admission records are preserved. Schedule occurrence decisions and review
+acknowledgements also remain. An expired run no longer has a link in schedule
+history. A matching manual request retry returns `history_removed` with the
+original run ID. Log files are removed before history is committed. A storage
+failure closes the service under [Gravity P06](../GRAVITY.md); after repair and
+restart, retention can retry a file removal that already succeeded. Capacity
+based log reclamation continues to run before dispatch as needed. Global
+metadata bounds and monitoring of permanent-record growth remain open.
 
-These decisions concern backups of Rustward's own application state, not backup
-tasks executed by Rustward. The user accepted the behavior on 2026-11-08. Backup
-tooling and production deployment remain separate work.
+## Offline application-state backup and restore
 
-Restore starts with admission and dispatch closed. Review restored queued and
-active runs before any can execute: they may have completed after the backup. Do
-not automatically replay them. Create a new manual-key issuer generation. Known
-old keys identify their restored admission records. Unknown keys from older
-generations are rejected. Fresh requests use the new generation.
+Run these commands as the service account on Linux. Stop the Rustward service
+and its local writers before backup. Backup uses the database's dispatch lock
+and fails while the service owns the database. The destination must be a new
+directory inside a private directory owned by the service account.
 
-Restore must be an explicit procedure. Arbitrary rollback of a database cannot
-be assumed safe. Define backup consistency, generation verification, and the
-per-run review record before implementing restore. Normal restarts do not by
-themselves require a new generation. No separate admission ledger is required by
-this decision.
+```sh
+install -d -m 700 /path/to/private-state
+rustward state backup /path/to/rustward.toml /path/to/private-state/backup
+rustward state restore /path/to/private-state/backup /path/to/private-state/restored
+rustward state reviews /path/to/private-state/restored
+```
 
-Test isolated restore with synthetic history. Verify that unknown old-generation
-keys cannot admit work and that restored queued runs stay blocked until review.
+The backup contains a SQLite snapshot, a copy of retained log files, and a
+manifest of file sizes and SHA-256 hashes. Backup detects incomplete retained
+output with a known nonzero size for unresolved completed reviews. Restore
+checks the manifest and SQLite integrity before it publishes the new directory.
+Backups contain submitted values and retained task output. Store them with the
+same access controls as live state. Keep definitions, prepared runtime and host
+catalogs, and deployment credentials with their existing owners. Provide them
+separately on the restored host.
+
+Restore rotates the manual-key issuer and closes admission and dispatch before
+the new database is published. A known old key still identifies its previous
+admission. An unknown old key is rejected. The service can open the restored
+database only after explicit release. It cannot adopt an old local process.
+For each run listed by `state reviews`, record one decision and a short note
+without credentials or sensitive output:
+
+```sh
+rustward state decide /path/to/private-state/restored RUN_ID cancel 'Checked the external effects and discarded the queued run'
+rustward state release /path/to/private-state/restored
+```
+
+Use `cancel` for queued work that must be discarded. Use `keep` only after
+checking that the queued run can execute safely. For an active run, use
+`interrupt` only after confirming that its original local processes are gone.
+This records an interruption. The run still requires the normal external
+review and acknowledgement before dispatch resumes.
+
+Disable the original instance before bringing up restored state. Point the new
+configuration at the restored `state.db` and `logs`. Use a fresh work directory.
+Start the service. Dispatch starts paused and requires an explicit resume.
+Use the supported restore command for every backup. A raw rollback of a live
+database has no restore review or new issuer generation.
+
+Run `just recovery-test` on Linux for the synthetic rehearsal. The Docker
+acceptance image build runs the same tests before running the isolated host suite.
 
 ## Telemetry
 

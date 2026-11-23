@@ -18,9 +18,10 @@ class RunnerTests(unittest.TestCase):
             repository.mkdir()
             for name in ("Cargo.toml", "Cargo.lock", "build.rs"):
                 (repository / name).write_text("synthetic")
-            for name in ("src", "acceptance", "examples/acceptance", "tests", "web/src", "web/node_modules", "web/dist"):
+            for name in ("src", "acceptance", "examples/acceptance", "examples/tasks", "tests", "web/src", "web/node_modules", "web/dist"):
                 (repository / name).mkdir(parents=True)
             (repository / "src/lib.rs").write_text("synthetic")
+            (repository / "examples/rustward.toml").write_text("synthetic")
             for name in ("package.json", "package-lock.json", "vite.config.ts", "tsconfig.json", "index.html",
                          "src/App.svelte",
                          "node_modules/dependency.js", "dist/console.js"):

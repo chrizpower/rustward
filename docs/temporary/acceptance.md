@@ -13,6 +13,7 @@ Run on an isolated Linux Docker host, preferably a disposable VM:
 just acceptance-container
 ```
 
+The build runs the synthetic retention and restore tests before host acceptance.
 The host needs Python 3, rootful Docker, and cgroup v2. Building needs container registry,
 Cargo, npm, and Debian repository access. No credentials or production inventory are
 required. Docker Desktop requires the same cgroup checks. The runner requires rootful Docker.

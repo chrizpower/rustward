@@ -9,7 +9,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 WORKDIR /source
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src ./src
-COPY examples/acceptance ./examples/acceptance
+COPY examples ./examples
 COPY web ./web
 
 FROM source AS preview-build
@@ -20,7 +20,10 @@ COPY --from=preview-build /source/target/release/rustward /usr/local/bin/rustwar
 USER 65534:65534
 ENTRYPOINT ["rustward", "web-preview", "--container"]
 
-FROM source AS build
+FROM source AS recovery-test
+RUN cargo test --locked --release --lib service::maintenance::tests
+
+FROM recovery-test AS build
 RUN cargo build --locked --release --bin rustward --bin rustward-exec --example acceptance
 COPY tests ./tests
 RUN cargo test --locked --release --no-run --test systemd_host --test runtime_host --message-format=json > /test-artifacts.json
