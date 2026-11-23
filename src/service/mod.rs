@@ -4,6 +4,7 @@ mod maintenance;
 pub use maintenance::command as state_command;
 #[cfg(feature = "web-preview")]
 mod preview;
+mod requests;
 mod schedule;
 mod web;
 #[cfg(feature = "web-preview")]
@@ -25,14 +26,15 @@ use rustix::process::{Signal, geteuid};
 use serde_json::{Value, json};
 
 use crate::{
-    admission::{self, Admission, Cancellation, Store},
+    admission::{self, Store},
     config::{self, Config},
     controller::{self, Controller, Roots, Start},
     dispatch::{Block, Limits},
     runtime::{self, Catalog, WorkRoot},
     safety::Safety,
-    supervision::{RunId, Supervisor},
+    supervision::Supervisor,
     systemd::{CgroupFs, Systemd, UserBus},
+    telemetry::{Counter, Event, State, Telemetry, rejection},
 };
 pub use control::call;
 use control::{Request, Response};
@@ -114,7 +116,7 @@ fn install_stop() -> Result<Arc<AtomicBool>, String> {
     Ok(stop)
 }
 
-pub fn serve(mut options: Options) -> Result<(), String> {
+pub fn serve(options: Options) -> Result<(), String> {
     let stop = install_stop()?;
     let listener =
         control::listen(&options.name).map_err(|error| format!("control listener: {error}"))?;
@@ -122,7 +124,7 @@ pub fn serve(mut options: Options) -> Result<(), String> {
         preparation_uid: options.preparation_uid,
         execution_uid: geteuid().as_raw(),
     };
-    let web_options = options.web.take();
+    let web_options = options.web.clone();
     let service = open(options, protection, |path, roots, limits, safety| {
         let supervisor = Systemd::new(
             UserBus::connect().map_err(|error| format!("user bus: {error:?}"))?,
@@ -136,10 +138,29 @@ pub fn serve(mut options: Options) -> Result<(), String> {
         .map(|options| {
             let logs = WorkRoot::open(&service.config.service().storage.log_directory)
                 .map_err(|error| format!("web log root: {error:?}"))?;
-            web::Web::bind(options, logs)
+            let metrics = service
+                .config
+                .service()
+                .telemetry
+                .metrics
+                .then(|| service.safety.telemetry().cloned())
+                .flatten();
+            web::Web::bind(options, logs, metrics)
         })
         .transpose()?;
-    run(service, listener, &stop, web.as_ref())
+    let observations = service.safety.telemetry().cloned();
+    let result = run(service, listener, &stop, web.as_ref());
+    if let Some(telemetry) = observations {
+        telemetry.log(
+            Event::new("service_stopped", "service").reason(if result.is_ok() {
+                "drained"
+            } else {
+                "failed"
+            }),
+        );
+        telemetry.flush();
+    }
+    result
 }
 
 fn open<S: Supervisor + Clone + Send + 'static>(
@@ -147,8 +168,25 @@ fn open<S: Supervisor + Clone + Send + 'static>(
     protection: runtime::Protection,
     open_controller: impl FnOnce(&Path, Roots, Limits, Safety) -> Result<Controller<S>, String>,
 ) -> Result<Service<S>, String> {
-    let config = config::load(&options.config).map_err(|error| error.to_string())?;
+    let telemetry = Telemetry::stderr().map_err(|error| format!("Service log worker: {error}"))?;
+    let config = config::load(&options.config).map_err(|error| {
+        telemetry.log(
+            Event::new("configuration_rejected", "configuration")
+                .reason("invalid")
+                .error(),
+        );
+        telemetry.flush();
+        if error == config::SERVICE_FILENAME_ERROR {
+            error
+        } else {
+            "Invalid service configuration".to_owned()
+        }
+    })?;
+    telemetry.log(Event::new("configuration_accepted", "configuration"));
     let settings = config.service();
+    if settings.telemetry.metrics && options.web.is_none() {
+        return Err("Metrics require a private web proxy".to_owned());
+    }
     let path = &settings.storage.state_database;
     check_database(path)?;
     let roots = options.roots(&config, protection)?;
@@ -157,12 +195,13 @@ fn open<S: Supervisor + Clone + Send + 'static>(
         log_bytes_per_run: settings.limits.log_bytes_per_run,
         retained_log_bytes: settings.limits.retained_log_bytes,
     };
-    let safety = Safety::default();
+    let safety = Safety::observed(telemetry.clone());
     let controller = open_controller(path, roots, limits, safety.clone())?;
     let store = Store::open_with_safety(path, safety.clone()).map_err(state_error)?;
     let mut service =
         Service::new(config, options.runtime_id, store, controller, safety).map_err(state_error)?;
     service.config_path = Some(options.config);
+    telemetry.log(Event::new("service_started", "service"));
     Ok(service)
 }
 
@@ -176,7 +215,9 @@ fn run<S: Supervisor + Clone + Send + 'static>(
         if stop.load(Ordering::Acquire) {
             service.shutdown = true;
         }
-        if service.step()? {
+        let step = service.step();
+        service.publish_metrics();
+        if step? {
             return Ok(());
         }
         if let Some(web) = web {
@@ -192,8 +233,8 @@ fn run<S: Supervisor + Clone + Send + 'static>(
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => control::idle(),
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => {
-                eprintln!("Control listener: {error}");
+            Err(_) => {
+                service.event(Event::new("control_listener_failed", "control").error());
                 service.shutdown = true;
                 service.failed = true;
                 control::idle();
@@ -251,6 +292,9 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         let matchers = admission::schedule::matchers(&config);
         store.activate_schedules(&config, &matchers, now)?;
         store.set_closed(false)?;
+        if let Some(telemetry) = safety.telemetry() {
+            telemetry.seed_queue(store.queue_depth());
+        }
         Ok(Self {
             config,
             config_path: None,
@@ -276,7 +320,11 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 Err(admission::Error::Busy) => {}
                 Err(error) => {
                     self.safety.fail();
-                    eprintln!("Close admission: {error:?}");
+                    self.event(
+                        Event::new("admission_close_failed", "admission")
+                            .error()
+                            .reason(rejection(&error)),
+                    );
                 }
             }
         }
@@ -286,7 +334,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             self.safety.fail();
             if !self.failed {
                 self.failed = true;
-                eprintln!("Controller: {error:?}");
+                self.event(Event::new("controller_failed", "execution").error());
             }
         }
         if self.safety.failed() {
@@ -307,14 +355,22 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         } else {
             if let Err(error) = self.expire_history() {
                 self.safety.fail();
-                eprintln!("Expire history: {error:?}");
+                self.event(
+                    Event::new("retention_failed", "retention")
+                        .error()
+                        .reason(rejection(&error)),
+                );
                 return Ok(false);
             }
             if let Err(error) = self.evaluate_schedules()
                 && error != admission::Error::Busy
             {
                 self.safety.fail();
-                eprintln!("Evaluate schedules: {error:?}");
+                self.event(
+                    Event::new("schedule_evaluation_failed", "scheduler")
+                        .error()
+                        .reason(rejection(&error)),
+                );
                 return Ok(false);
             }
             if self.paused {
@@ -324,13 +380,40 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 Ok(Start::Preparing(_)) => self.block = None,
                 Ok(Start::Blocked(block)) => self.block = Some(block),
                 Err(controller::Error::State(admission::Error::Busy)) => {}
-                Err(error) => {
+                Err(_) => {
                     self.safety.fail();
-                    eprintln!("Dispatch: {error:?}");
+                    self.event(Event::new("dispatch_failed", "execution").error());
                 }
             }
         }
         Ok(false)
+    }
+
+    fn event(&self, event: Event) {
+        if let Some(telemetry) = self.safety.telemetry() {
+            telemetry.log(event);
+        }
+    }
+
+    fn publish_metrics(&mut self) {
+        let Some(telemetry) = self.safety.telemetry() else {
+            return;
+        };
+        let state = if self.safety.failed() {
+            State::Failed
+        } else if self.shutdown {
+            State::Draining
+        } else if self.paused {
+            State::Paused
+        } else {
+            match self.block {
+                Some(Block::ReviewRequired) => State::Review,
+                Some(Block::ExecutionCapacity) => State::ExecutionCapacity,
+                Some(Block::LogCapacity) => State::LogCapacity,
+                _ => State::Idle,
+            }
+        };
+        telemetry.state(self.controller.active_runs(), state);
     }
 
     fn expire_history(&mut self) -> Result<(), admission::Error> {
@@ -345,7 +428,14 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             .expire(cutoff, |id| self.controller.remove_retained_logs(id))
         {
             Ok(0) => 60,
-            Ok(_) | Err(admission::Error::Busy) => 1,
+            Ok(count) => {
+                if let Some(telemetry) = self.safety.telemetry() {
+                    telemetry.add(Counter::Expired, count as u64);
+                    telemetry.log(Event::new("history_expired", "retention").count(count as u64));
+                }
+                1
+            }
+            Err(admission::Error::Busy) => 1,
             Err(error) => return Err(error),
         };
         self.next_retention = now + Duration::from_secs(delay);
@@ -386,11 +476,24 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             .config_path
             .as_ref()
             .ok_or(Error::InvalidConfiguration)?;
-        let candidate = config::load(path).map_err(|_| Error::InvalidConfiguration)?;
+        let candidate = config::load(path).map_err(|_| {
+            self.event(
+                Event::new("configuration_rejected", "configuration")
+                    .reason("invalid")
+                    .error(),
+            );
+            Error::InvalidConfiguration
+        })?;
         let old = self.config.service();
         let new = candidate.service();
-        if new.storage != old.storage || new.limits != old.limits || new.retention != old.retention
+        if new.storage != old.storage
+            || new.limits != old.limits
+            || new.retention != old.retention
+            || new.telemetry != old.telemetry
         {
+            self.event(
+                Event::new("configuration_rejected", "configuration").reason("restart_required"),
+            );
             return Err(Error::InvalidConfiguration);
         }
         let matchers = admission::schedule::matchers(&candidate);
@@ -399,120 +502,10 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         let result =
             json!({"tasks":candidate.task_count(),"schedules":candidate.schedules().len()});
         self.config = candidate;
+        self.event(Event::new("configuration_accepted", "configuration").reason("reload"));
         self.matchers = matchers;
         self.clock = schedule::Clock::new(now);
         Ok(result)
-    }
-
-    fn request(&mut self, request: Request) -> Response {
-        match self.handle(request) {
-            Ok(value) => Response::Ok(value),
-            Err(error) => Response::Error(state_error(error)),
-        }
-    }
-
-    fn handle(&mut self, request: Request) -> Result<Value, admission::Error> {
-        use admission::Error;
-        let paused = matches!(&request, Request::SchedulePause { .. });
-        match request {
-            Request::IssueKey => {
-                if self.shutdown || self.safety.failed() {
-                    return Err(Error::Closed);
-                }
-                Ok(json!({"key": self.store.issue_key()?}))
-            }
-            Request::Submit {
-                key,
-                task_id,
-                inputs,
-            } => {
-                let result = self.store.admit_with_gate(
-                    &key,
-                    &self.config,
-                    &task_id,
-                    &inputs,
-                    &self.runtime_id,
-                    self.shutdown,
-                )?;
-                let (status, run_id) = match result {
-                    Admission::Admitted { run_id } => ("admitted", run_id),
-                    Admission::AlreadyAdmitted { run_id } => ("already_admitted", run_id),
-                    Admission::HistoryRemoved { run_id } => ("history_removed", run_id),
-                };
-                Ok(json!({"status": status, "run_id": run_id}))
-            }
-            Request::Status { run_id } => {
-                RunId::new(&run_id).map_err(|_| Error::InvalidInputs)?;
-                Ok(json!(self.store.run_state(&run_id)?))
-            }
-            Request::Cancel { run_id } => {
-                RunId::new(&run_id).map_err(|_| Error::InvalidInputs)?;
-                let result = self.store.cancel_queued(&run_id)?;
-                let status = match result {
-                    Cancellation::Cancelled => "Cancelled".into(),
-                    Cancellation::AlreadyCancelled => "AlreadyCancelled".into(),
-                    Cancellation::NotFound => "NotFound".into(),
-                    Cancellation::NotQueued => format!(
-                        "{:?}",
-                        self.controller
-                            .cancel_active(&run_id)
-                            .map_err(controller_error)?
-                    ),
-                };
-                Ok(json!({"status": status}))
-            }
-            Request::Pause | Request::Resume => {
-                let paused = matches!(request, Request::Pause);
-                if !paused && (self.shutdown || self.safety.failed()) {
-                    return Err(Error::Closed);
-                }
-                self.controller
-                    .set_paused(paused)
-                    .map_err(controller_error)?;
-                self.paused = paused;
-                self.block = None;
-                Ok(json!(null))
-            }
-            Request::ServiceStatus => Ok(json!({
-                "paused": self.paused, "draining": self.shutdown, "failed": self.safety.failed(),
-                "active_runs": self.controller.active_runs(),
-                "dispatch_block": self.block.as_ref().map(|block| format!("{block:?}")),
-            })),
-            Request::Reviews { after } => {
-                if let Some(after) = &after {
-                    RunId::new(after).map_err(|_| Error::InvalidInputs)?;
-                }
-                Ok(json!(self.store.pending_reviews(after.as_deref(), 10)?))
-            }
-            Request::Acknowledge {
-                acknowledgement_id,
-                review,
-                note,
-            } => Ok(json!(self.store.acknowledge(
-                &acknowledgement_id,
-                &review,
-                &note
-            )?)),
-            Request::Reload => self.reload(),
-            Request::SchedulePause { schedule_id } | Request::ScheduleResume { schedule_id } => {
-                if self.shutdown || self.safety.failed() {
-                    return Err(Error::Closed);
-                }
-                self.store.pause_schedule(schedule_id.as_deref(), paused)?;
-                Ok(json!(null))
-            }
-            Request::ScheduleHistory {
-                schedule_id,
-                after_due_ms,
-                after_gap_id,
-            } => self
-                .store
-                .schedule_history(&schedule_id, after_due_ms, after_gap_id),
-            Request::Shutdown => {
-                self.shutdown = true;
-                Ok(json!(null))
-            }
-        }
     }
 }
 

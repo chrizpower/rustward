@@ -7,6 +7,8 @@ use toml::Value;
 mod files;
 mod schedule;
 mod service;
+#[cfg(target_os = "linux")]
+pub(crate) use files::SERVICE_FILENAME_ERROR;
 pub use files::load;
 pub use schedule::Schedule;
 pub use service::{Definitions, Limits, Retention, Service, Storage};

@@ -13,6 +13,8 @@ pub struct Service {
     pub limits: Limits,
     #[serde(default)]
     pub retention: Retention,
+    #[serde(default)]
+    pub telemetry: Telemetry,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -68,6 +70,12 @@ impl Default for Retention {
     fn default() -> Self {
         Self { days: 30 }
     }
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Telemetry {
+    pub metrics: bool,
 }
 
 impl Service {

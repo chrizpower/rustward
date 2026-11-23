@@ -46,13 +46,13 @@ fn gap(
     through: i64,
     reason: &str,
     missed_count: Option<u32>,
-) -> Result<(), Error> {
-    transaction.execute(
+) -> Result<bool, Error> {
+    let inserted = transaction.execute(
         "INSERT INTO schedule_gaps(schedule_id,after_ms,through_ms,reason,missed_count) VALUES (?1,?2,?3,?4,?5)
          ON CONFLICT(schedule_id,after_ms,through_ms,reason) DO NOTHING",
         params![id, after, through, reason, missed_count],
     ).map_err(storage)?;
-    Ok(())
+    Ok(inserted != 0)
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -100,6 +100,10 @@ impl Store {
         matchers: &[(Cron, Vec<u8>)],
         now: i64,
     ) -> Result<(), Error> {
+        #[cfg(target_os = "linux")]
+        let telemetry = self.safety.telemetry().cloned();
+        #[cfg(target_os = "linux")]
+        let mut gaps = Vec::new();
         self.perform(|connection| {
             let tx = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -145,20 +149,30 @@ impl Store {
                     params![id, now, revision],
                 )
                 .map_err(storage)?;
-                match previous {
-                    None => gap(&tx, id, None, now, "first_installation", None)?,
+                let (after, through, reason, count) = match previous {
+                    None => (None, now, "first_installation", None),
                     Some((active, prior, old_revision)) if prior < now => {
                         let count = if active && old_revision == *revision { missed(matcher, prior, now)? } else { None };
-                        gap(&tx, id, Some(prior), now, "activation", count)?;
+                        (Some(prior), now, "activation", count)
                     }
-                    Some((_, prior, _)) if prior > now => {
-                        gap(&tx, id, Some(now), prior, "clock_change", None)?;
-                    }
-                    _ => {}
+                    Some((_, prior, _)) if prior > now => (Some(now), prior, "clock_change", None),
+                    _ => continue,
+                };
+                let _inserted = gap(&tx, id, after, through, reason, count)?;
+                #[cfg(target_os = "linux")]
+                if _inserted && telemetry.is_some() {
+                    gaps.push((id, reason, count));
                 }
             }
             tx.commit().map_err(storage)
-        })
+        })?;
+        #[cfg(target_os = "linux")]
+        if let Some(telemetry) = telemetry {
+            for (id, reason, count) in gaps {
+                telemetry.gap(id, reason, count);
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn evaluate_schedules(
@@ -170,6 +184,10 @@ impl Store {
         clock_changed: bool,
     ) -> Result<(), Error> {
         let safety = self.safety.clone();
+        #[cfg(target_os = "linux")]
+        let mut events = Vec::new();
+        #[cfg(target_os = "linux")]
+        let mut gaps = Vec::new();
         self.perform(|connection| {
             let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let (closed, limit): (bool, u32) = tx.query_row(
@@ -184,10 +202,14 @@ impl Store {
                     "SELECT checkpoint_ms,paused FROM schedule_state WHERE schedule_id=?1 AND active=1",
                     [id], |row| Ok((row.get(0)?, row.get(1)?)),
                 ).map_err(storage)?;
-                if clock_changed {
-                    gap(&tx, id, Some(checkpoint.min(minute)), checkpoint.max(minute), "clock_change", None)?;
-                } else if minute - checkpoint > 60_000 {
-                    gap(&tx, id, Some(checkpoint), minute, "evaluation_gap", missed(matcher, checkpoint, minute)?)?;
+                if clock_changed || minute - checkpoint > 60_000 {
+                    let reason = if clock_changed { "clock_change" } else { "evaluation_gap" };
+                    let count = if clock_changed { None } else { missed(matcher, checkpoint, minute)? };
+                    let _inserted = gap(&tx, id, Some(checkpoint.min(minute)), checkpoint.max(minute), reason, count)?;
+                    #[cfg(target_os = "linux")]
+                    if _inserted && safety.telemetry().is_some() {
+                        gaps.push((id, reason, count));
+                    }
                 } else if minute > checkpoint && matcher.is_time_matching(&time).map_err(|_| Error::Storage)? {
                     let queued: bool = tx.query_row(
                         "SELECT EXISTS(SELECT 1 FROM runs CROSS JOIN occurrences USING(run_id)
@@ -215,6 +237,10 @@ impl Store {
                         "INSERT INTO occurrences VALUES (?1,?2,?3,?4,?5)",
                         params![id, minute, revision, decision, run],
                     ).map_err(storage)?;
+                    #[cfg(target_os = "linux")]
+                    if safety.telemetry().is_some() {
+                        events.push((id, schedule.task(), decision, run));
+                    }
                 }
                 tx.execute(
                     "UPDATE schedule_state SET checkpoint_ms=max(checkpoint_ms,?2) WHERE schedule_id=?1",
@@ -222,7 +248,17 @@ impl Store {
                 ).map_err(storage)?;
             }
             tx.commit().map_err(storage)
-        })
+        })?;
+        #[cfg(target_os = "linux")]
+        if let Some(telemetry) = safety.telemetry() {
+            for (id, reason, count) in gaps {
+                telemetry.gap(id, reason, count);
+            }
+            for (id, task, decision, run) in events {
+                telemetry.occurrence(id, task, decision, run.as_deref());
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn pause_schedule(&mut self, id: Option<&str>, paused: bool) -> Result<(), Error> {

@@ -7,6 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::telemetry::Event;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use rustix::fs::{FlockOperation, flock};
 use serde::Deserialize;
@@ -180,6 +181,9 @@ impl Session {
         for id in session.active.keys().cloned().collect::<Vec<_>>() {
             let record = session.record(&id)?.ok_or(Error::Storage)?;
             session.retain_record(&id, &record);
+            if let Some(telemetry) = session.safety.telemetry() {
+                telemetry.log(Event::new("run_recovered", "execution").run(&id));
+            }
         }
         Ok(session)
     }
@@ -289,6 +293,10 @@ impl Session {
         });
         if matches!(&claimed, Ok(Claim::Ready(_))) {
             let (id, active) = timing.unwrap();
+            if let Some(telemetry) = self.safety.telemetry() {
+                telemetry.queue_change(false);
+                telemetry.log(Event::new("dispatch_committed", "execution").run(&id));
+            }
             self.active.insert(id, active);
         }
         claimed
@@ -386,6 +394,19 @@ impl Session {
             self.safety.fail();
         }
         saved?;
+        if let Some(telemetry) = self.safety.telemetry() {
+            let reason = match outcome {
+                StartOutcome::Accepted => "accepted",
+                StartOutcome::Rejected => "rejected",
+                StartOutcome::Conflict => "conflict",
+                StartOutcome::Uncertain => "uncertain",
+            };
+            telemetry.log(
+                Event::new("launch_reply", "execution")
+                    .run(run_id)
+                    .reason(reason),
+            );
+        }
         if outcome == StartOutcome::Rejected {
             self.active.get_mut(run_id).unwrap().cleaned = true;
         }

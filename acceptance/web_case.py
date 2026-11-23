@@ -18,9 +18,13 @@ from service_case import require, wait_for
 
 
 def run(root, tools, account, fixture, user_command):
+    from prometheus_client.parser import text_string_to_metric_families
+
     web = root / "web"
     create_root(web, account)
     configuration(web, root / "runtimes" / fixture["runtime_id"])
+    with (web / "configuration/rustward.toml").open("a") as settings:
+        settings.write("\n[telemetry]\nmetrics = true\n")
     socket_directory = web / "proxy"
     socket_directory.mkdir(mode=0o755)
     os.chown(socket_directory, account.pw_uid, account.pw_gid)
@@ -30,6 +34,8 @@ def run(root, tools, account, fixture, user_command):
     executable = tools / "rustward"
     credentials = "fixture:synthetic-browser-password"
     authorization = "Basic " + base64.b64encode(credentials.encode()).decode()
+    monitor_secret = "synthetic-monitor-password"
+    monitor_auth = "Basic " + base64.b64encode(f"monitor:{monitor_secret}".encode()).decode()
     with socket.socket() as port:
         port.bind(("127.0.0.1", 0))
         address = "127.0.0.1:" + str(port.getsockname()[1])
@@ -49,6 +55,9 @@ def run(root, tools, account, fixture, user_command):
         password = subprocess.check_output(["openssl", "passwd", "-apr1", credentials.split(":", 1)[1]],
                                            text=True, timeout=5).strip()
         (directory / "users").write_text("fixture:" + password + "\n")
+        monitor_hash = subprocess.check_output(["openssl", "passwd", "-apr1", monitor_secret],
+                                               text=True, timeout=5).strip()
+        (directory / "monitors").write_text("monitor:" + monitor_hash + "\n")
         config = directory / "nginx.conf"
         config.write_text(f"""
 user www-data;
@@ -66,9 +75,18 @@ http {{
         ssl_certificate_key {key};
         auth_basic "Rustward acceptance";
         auth_basic_user_file {directory}/users;
+        location = /metrics {{
+            auth_basic "Rustward monitoring";
+            auth_basic_user_file {directory}/monitors;
+            proxy_set_header Host $http_host;
+            proxy_set_header Authorization "";
+            proxy_set_header X-Rustward-Monitor 1;
+            proxy_pass http://unix:{socket_path}:;
+        }}
         location / {{
             proxy_set_header Host $http_host;
-        proxy_set_header Authorization "";
+            proxy_set_header Authorization "";
+            proxy_set_header X-Rustward-Monitor "";
             proxy_pass http://unix:{socket_path}:;
         }}
     }}
@@ -76,8 +94,8 @@ http {{
 """)
         tls = ssl.create_default_context(cafile=str(cert))
 
-        def request(path, body=None, authenticate=True, request_origin=origin, csrf=True):
-            headers = {"Authorization": authorization} if authenticate else {}
+        def request(path, body=None, authenticate=True, request_origin=origin, csrf=True, monitor=False):
+            headers = {"Authorization": monitor_auth if monitor else authorization} if authenticate else {}
             data = None
             if body is not None:
                 data = json.dumps(body).encode()
@@ -89,6 +107,15 @@ http {{
                     return response.status, response.read()
             except HTTPError as error:
                 return error.code, error.read()
+
+        def scrape():
+            status, data = request("/metrics", monitor=True)
+            require(status == 200, f"metrics route returned {status}")
+            return data, {
+                (sample.name, tuple(sorted(sample.labels.items()))): sample.value
+                for family in text_string_to_metric_families(data.decode())
+                for sample in family.samples
+            }
 
         def api(operation, **fields):
             status, data = request("/api", {"operation": operation, **fields})
@@ -117,6 +144,12 @@ http {{
                     require(path.encode() in page, f"console page did not reference {path}")
                     status, asset = request(path)
                     require(status == 200 and marker in asset, f"embedded asset {path} was not served")
+                require(request("/metrics", authenticate=False)[0] == 401, "metrics allowed anonymous access")
+                require(request("/metrics")[0] == 401, "browser credentials reached metrics")
+                require(request("/", monitor=True)[0] == 401, "monitoring credentials reached console")
+                _, before = scrape()
+                require(before[("rustward_dispatch_state", (("state", "paused"),))] == 1,
+                        "scrape did not report the dispatch pause")
                 malicious = {"operation": "control", "request": {"command": "resume"}}
                 require(request("/api", malicious, request_origin="https://other.invalid")[0] == 403,
                         "cross-origin request reached control")
@@ -139,10 +172,20 @@ http {{
                 require(retry == {"status": "already_admitted", "run_id": run_id}, "web retry created another run")
                 require(control("service_status")["paused"], "rejected request changed dispatch state")
                 control("resume")
-                wait_for(lambda: control("status", run_id=run_id)["result"] == "Success", "web run did not complete")
+                wait_for(lambda: control("status", run_id=run_id) == {"phase": "Completed", "result": "Success"},
+                         "web run did not complete")
                 output = api("output", run_id=run_id, stdout=0, stderr=0)
                 require(bytes(output["streams"]["stdout"]["bytes"]) == b"A02_STDOUT\n", "web stdout differs")
                 require(bytes(output["streams"]["stderr"]["bytes"]) == b"A02_STDERR\n", "web stderr differs")
+                data, after = scrape()
+                for metric, labels in [
+                    ("rustward_admissions_total", (("trigger", "manual"),)),
+                    ("rustward_completions_total", (("result", "success"),)),
+                    ("rustward_run_duration_seconds_count", ()),
+                ]:
+                    require(after[(metric, labels)] == 1, f"unexpected {metric} count")
+                for secret in (run_id, key_value, TEXT, "A02_STDOUT", monitor_secret):
+                    require(secret.encode() not in data, "metrics contain run data")
                 daemon.terminate()
                 require(daemon.wait(timeout=20) == 0, "web daemon failed to drain")
             finally:
@@ -155,10 +198,19 @@ http {{
                             process.kill()
                             process.wait(timeout=5)
 
+    logs = (root / "evidence/web-server.log").read_text()
+    records = [json.loads(line) for line in logs.splitlines() if line.startswith('{"timestamp_ms":')]
+    run_events = {record["event"] for record in records if record.get("run_id") == run_id}
+    require({"run_admitted", "dispatch_committed", "run_completed"} <= run_events,
+            "service logs do not trace the synthetic run")
+    for secret in (key_value, TEXT, "A02_STDOUT", monitor_secret):
+        require(secret not in logs, "service logs contain run data")
+
     with sqlite3.connect((web / "state/state.db").as_uri() + "?mode=ro", uri=True) as db:
         require(db.execute("SELECT run_id,phase,result FROM runs").fetchall() == [(run_id, "completed", "success")],
                 "web database did not retain one successful run")
     (root / "evidence/web.json").write_text(json.dumps({
         "status": "passed", "run_id": run_id, "authentication_required": True,
         "direct_peer_rejected": True, "cross_origin_rejected": True, "retained_log_bytes": 22,
+        "metrics_access_verified": True, "service_log_trace_verified": True,
     }) + "\n")

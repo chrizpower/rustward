@@ -33,6 +33,7 @@ const TIME_LIMIT: Duration = Duration::from_secs(3);
 pub(super) struct Site {
     origin: String,
     host: String,
+    pub(super) metrics: Option<crate::telemetry::Telemetry>,
 }
 
 impl Site {
@@ -48,6 +49,7 @@ impl Site {
         Ok(Self {
             origin: origin.into(),
             host: host.into(),
+            metrics: None,
         })
     }
 }
@@ -80,6 +82,22 @@ async fn route(
         return error(StatusCode::FORBIDDEN, "Wrong host");
     }
     match (request.method(), request.uri().path()) {
+        (&Method::GET, "/metrics") => {
+            let Some(metrics) = &site.metrics else {
+                return error(StatusCode::NOT_FOUND, "Page not found");
+            };
+            if headers
+                .get("x-rustward-monitor")
+                .is_none_or(|value| value != "1")
+            {
+                return error(StatusCode::FORBIDDEN, "Monitoring proxy route required");
+            }
+            response(
+                StatusCode::OK,
+                "text/plain; version=0.0.4; charset=utf-8",
+                metrics.scrape(),
+            )
+        }
         (&Method::GET, "/") => response(
             StatusCode::OK,
             "text/html; charset=utf-8",

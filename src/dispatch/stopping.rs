@@ -180,6 +180,14 @@ impl Session {
         failure: capture::Failure,
     ) -> Result<StopDecision, Error> {
         if failure.is_storage() {
+            if let Some(telemetry) = self.safety.telemetry() {
+                telemetry.add(crate::telemetry::Counter::LogFailure, 1);
+                telemetry.log(
+                    crate::telemetry::Event::new("storage_failure", "task_log")
+                        .run(run_id)
+                        .error(),
+                );
+            }
             self.safety.fail();
             self.decide_stop(run_id, StopReason::Storage)
         } else {

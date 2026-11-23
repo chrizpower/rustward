@@ -11,6 +11,10 @@ The service expires eligible completed runs and their logs in bounded batches.
 Offline state commands preserve SQLite and retained output in a checked backup.
 Restore creates a new state directory and keeps the service closed until the
 operator reviews its unfinished runs and releases the restored state.
+
+The service emits structured service logs to standard error for collection by
+systemd. The private proxy can serve read-only metrics from bounded in-process
+measurements.
 [Gravity](GRAVITY.md) owns the accepted constraints and principles.
 
 ## System diagram

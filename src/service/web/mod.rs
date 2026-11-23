@@ -31,6 +31,7 @@ use crate::{
     supervision::{RunId, Supervisor},
 };
 
+#[derive(Clone)]
 pub(super) struct Options {
     pub socket: PathBuf,
     pub origin: String,
@@ -140,9 +141,14 @@ impl Drop for SocketPath {
 }
 
 impl Web {
-    pub(super) fn bind(options: Options, logs: WorkRoot) -> Result<Self, String> {
+    pub(super) fn bind(
+        options: Options,
+        logs: WorkRoot,
+        metrics: Option<crate::telemetry::Telemetry>,
+    ) -> Result<Self, String> {
         use std::os::unix::fs::PermissionsExt;
-        let site = http::Site::new(&options.origin, "https")?;
+        let mut site = http::Site::new(&options.origin, "https")?;
+        site.metrics = metrics;
         if options.proxy_uid == rustix::process::geteuid().as_raw() {
             return Err("The web proxy must use a separate UID".into());
         }
@@ -232,7 +238,12 @@ impl Web {
                 let inputs = inputs
                     .into_iter()
                     .map(|(id, value)| Ok((id, value.typed()?)))
-                    .collect::<Result<_, Error>>()?;
+                    .collect::<Result<_, Error>>()
+                    .inspect_err(|error| {
+                        if let Some(telemetry) = service.safety.telemetry() {
+                            telemetry.rejected(error);
+                        }
+                    })?;
                 service.handle(Request::Submit {
                     key,
                     task_id,

@@ -47,3 +47,8 @@ web-test:
 
 recovery-test:
     cargo test --locked --lib service::maintenance::tests
+
+telemetry-test:
+    cargo test --locked --lib telemetry::tests
+    cargo test --locked --lib service::web::tests
+    cargo test --locked --lib service::tests

@@ -58,6 +58,7 @@ impl Session {
     /// review and never replace an earlier result or execution identity.
     pub fn observe(&mut self, run_id: &str, observation: &Observation) -> Result<(), Error> {
         self.retain_observation(run_id, observation);
+        let mut running = false;
         let saved = self.store.perform(|connection| {
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -102,6 +103,7 @@ impl Session {
                 }
                 _ => None,
             };
+            let was_launching = phase == "launching";
             let mut result = previous;
             let mut next_phase = phase;
             let mut review = record.review_required;
@@ -185,8 +187,14 @@ impl Session {
             if changed != 1 {
                 return Err(Error::Storage);
             }
-            transaction.commit().map_err(storage)
+            transaction.commit().map_err(storage)?;
+            running = was_launching && next_phase == "running";
+            Ok(())
         });
+        if running && let Some(telemetry) = self.safety.telemetry() {
+            telemetry
+                .log(crate::telemetry::Event::new("run_observed_running", "execution").run(run_id));
+        }
         if matches!(saved, Err(Error::Storage | Error::Busy)) {
             self.store.close();
             self.safety.fail();
@@ -232,18 +240,31 @@ impl Session {
         failed_output: bool,
         evidence: Option<&crate::capture::Evidence>,
     ) -> Result<(), Error> {
+        let telemetry = self.safety.telemetry().cloned();
         let saved = self.store.perform(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let record = read(&transaction, run_id)?.ok_or(Error::InvalidTransition)?;
             if record.output_failed != failed_output || !record.cleanup_confirmed || retained_bytes > record.log_bytes { return Err(Error::InvalidTransition); }
-            let ready: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM runs WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL)", [run_id], |r| r.get(0)).map_err(storage)?;
-            if !ready { return Err(Error::InvalidTransition); }
-            let changed = transaction.execute("UPDATE runs SET phase='completed',completed_at=?2 WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL", params![run_id,utc_ms()?]).map_err(storage)?;
+            let (task, result, dispatched): (String, String, Option<i64>) = transaction.query_row(
+                "SELECT task_id,result,dispatched_at FROM runs
+                 WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL",
+                [run_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            ).optional().map_err(storage)?.ok_or(Error::InvalidTransition)?;
+            let completed = utc_ms()?;
+            let changed = transaction.execute("UPDATE runs SET phase='completed',completed_at=?2 WHERE run_id=?1 AND phase='cleaning_up' AND result IS NOT NULL", params![run_id,completed]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
             let encoded=evidence.map(serde_json::to_string).transpose().map_err(|_|Error::Storage)?;
             let changed = transaction.execute("UPDATE launches SET log_bytes=?1,output_evidence=?3 WHERE run_id=?2", params![retained_bytes as i64,run_id,encoded]).map_err(storage)?;
             if changed != 1 { return Err(Error::Storage); }
-            transaction.commit().map_err(storage)
+            transaction.commit().map_err(storage)?;
+            if let Some(telemetry) = telemetry {
+                let duration = dispatched.and_then(|start| completed.checked_sub(start))
+                    .and_then(|elapsed| u64::try_from(elapsed).ok());
+                let truncated = evidence.is_some_and(|output|
+                    output.stdout.truncated == Some(true) || output.stderr.truncated == Some(true));
+                telemetry.completed(run_id, &task, &result, duration, truncated);
+            }
+            Ok(())
         });
         if matches!(saved, Err(Error::Storage | Error::Busy)) {
             self.store.close();

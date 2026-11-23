@@ -25,13 +25,15 @@ struct Candidate {
 
 /// Load a complete version 2 configuration. Keep the files unchanged during
 /// loading. Two matching reads detect observed edits, but are not a filesystem snapshot.
+pub(crate) const SERVICE_FILENAME_ERROR: &str = "service file must be named rustward.toml";
+
 pub fn load(path: impl AsRef<Path>) -> Result<Config, String> {
     load_checked(path.as_ref(), || {})
 }
 
 fn load_checked(path: &Path, between_reads: impl FnOnce()) -> Result<Config, String> {
     if path.file_name().is_none_or(|name| name != "rustward.toml") {
-        return Err("service file must be named rustward.toml".into());
+        return Err(SERVICE_FILENAME_ERROR.into());
     }
     let absolute = std::path::absolute(path).map_err(|e| e.to_string())?;
     let parent = absolute.parent().unwrap();

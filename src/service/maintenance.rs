@@ -31,9 +31,33 @@ const USAGE: &str = "Usage:
   rustward state release <state-directory>";
 
 pub fn command(args: impl Iterator<Item = OsString>) -> Result<(), String> {
+    use crate::telemetry::{Event, Telemetry};
     let args: Vec<_> = args.collect();
+    let result = execute(&args);
+    let verb = match args.first().and_then(|action| action.to_str()) {
+        Some("backup") => Some("state_backup"),
+        Some("restore") => Some("state_restore"),
+        Some("decide") => Some("restore_decision"),
+        Some("release") => Some("restore_release"),
+        _ => None,
+    };
+    if let Some(verb) = verb
+        && let Ok(telemetry) = Telemetry::stderr()
+    {
+        let event = Event::new(verb, "maintenance");
+        telemetry.log(if result.is_ok() {
+            event
+        } else {
+            event.error().reason("operation_failed")
+        });
+        telemetry.flush();
+    }
+    result
+}
+
+fn execute(args: &[OsString]) -> Result<(), String> {
     let usage = || USAGE.to_owned();
-    match args.as_slice() {
+    match args {
         [action, config, target] if action == "backup" => {
             backup(Path::new(config), &absolute(target)?)
         }

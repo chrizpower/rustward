@@ -13,6 +13,7 @@ use crate::config::Config;
 
 #[cfg(target_os = "linux")]
 pub(crate) mod maintenance;
+mod manual;
 pub(crate) mod schedule;
 mod schema;
 
@@ -224,7 +225,7 @@ impl Store {
     ) -> Result<Self, Error> {
         let result = Self::open_inner(path.as_ref(), safety.clone());
         if matches!(result, Err(Error::Storage)) {
-            safety.fail();
+            safety.state_failed();
         }
         result
     }
@@ -345,9 +346,23 @@ impl Store {
         let result = action(&mut self.connection);
         if matches!(result, Err(Error::Storage)) {
             self.failed = true;
-            self.safety.fail();
+            self.safety.state_failed();
         }
         result
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn queue_depth(&self) -> Option<u32> {
+        if self.failed || self.safety.failed() {
+            return None;
+        }
+        self.connection
+            .query_row(
+                "SELECT count(*) FROM runs WHERE phase='queued'",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
     }
 
     /// Issue an unbound key without inserting a run or admission record.
@@ -398,7 +413,7 @@ impl Store {
 
     /// Complete a queued run with a cancellation result and preserve its admission.
     pub fn cancel_queued(&mut self, run_id: &str) -> Result<Cancellation, Error> {
-        self.perform(|connection| {
+        let decision = self.perform(|connection| {
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(storage)?;
@@ -428,7 +443,15 @@ impl Store {
             }
             transaction.commit().map_err(storage)?;
             Ok(Cancellation::Cancelled)
-        })
+        });
+        #[cfg(target_os = "linux")]
+        if matches!(decision, Ok(Cancellation::Cancelled))
+            && let Some(telemetry) = self.safety.telemetry()
+        {
+            telemetry.queue_change(false);
+            telemetry.completed(run_id, "", "cancellation", None, false);
+        }
+        decision
     }
 
     /// Admit a new request or return its original identity before current validation.
@@ -441,60 +464,6 @@ impl Store {
         runtime_id: &str,
     ) -> Result<Admission, Error> {
         self.admit_with_gate(key, config, task_id, submitted_values, runtime_id, false)
-    }
-
-    pub(crate) fn admit_with_gate(
-        &mut self,
-        key: &str,
-        config: &Config,
-        task_id: &str,
-        submitted_values: &BTreeMap<String, Value>,
-        runtime_id: &str,
-        closed_for_request: bool,
-    ) -> Result<Admission, Error> {
-        let safety = self.safety.clone();
-        self.perform(|connection| {
-            let key_bytes = decode_key(key)?;
-            let fingerprint = fingerprint(task_id, submitted_values)?;
-            let transaction = connection
-                .transaction_with_behavior(TransactionBehavior::Immediate)
-                .map_err(storage)?;
-            let existing: Option<(Vec<u8>, String, bool)> = transaction.query_row(
-                "SELECT a.fingerprint, a.run_id, EXISTS(SELECT 1 FROM runs r WHERE r.run_id=a.run_id)
-                 FROM admissions a WHERE request_key=?1", [key],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            ).optional().map_err(storage)?;
-            if let Some((original, run_id, history_exists)) = existing {
-                if original != fingerprint {
-                    return Err(Error::PayloadConflict);
-                }
-                return Ok(if history_exists {
-                    Admission::AlreadyAdmitted { run_id }
-                } else {
-                    Admission::HistoryRemoved { run_id }
-                });
-            }
-            let (generation, secret, limit, closed): (Vec<u8>, Vec<u8>, u32, bool) = transaction.query_row(
-                "SELECT generation, secret, queue_limit, closed FROM issuer WHERE id=1", [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-            ).map_err(storage)?;
-            if generation.len() != 32 || secret.len() != 32 {
-                return Err(Error::Storage);
-            }
-            if key_bytes[1..33] != generation {
-                return Err(Error::InvalidKey);
-            }
-            let mut mac = KeyMac::new_from_slice(&secret).unwrap();
-            mac.update(&key_bytes[..65]);
-            mac.verify_slice(&key_bytes[65..]).map_err(|_| Error::InvalidKey)?;
-            if closed || closed_for_request || safety.failed() {
-                return Err(Error::Closed);
-            }
-            let run_id = insert_run(&transaction, config, task_id, submitted_values, runtime_id, limit)?;
-            transaction.execute("INSERT INTO admissions VALUES (?1, ?2, ?3)", params![key, fingerprint, run_id]).map_err(storage)?;
-            transaction.commit().map_err(storage)?;
-            Ok(Admission::Admitted { run_id })
-        })
     }
 }
 

@@ -172,6 +172,9 @@ retained_log_bytes = 1073741824
 
 [retention] # The table and field can be omitted.
 days = 30
+
+[telemetry] # The table and field can be omitted.
+metrics = false
 ```
 
 Limits and retention are nonnegative integers. Run counts and days fit `u32`.

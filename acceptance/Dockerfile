@@ -23,7 +23,12 @@ ENTRYPOINT ["rustward", "web-preview", "--container"]
 FROM source AS recovery-test
 RUN cargo test --locked --release --lib service::maintenance::tests
 
-FROM recovery-test AS build
+FROM recovery-test AS telemetry-test
+RUN cargo test --locked --release --lib telemetry::tests && \
+    cargo test --locked --release --lib service::web::tests && \
+    cargo test --locked --release --lib service::tests
+
+FROM telemetry-test AS build
 RUN cargo build --locked --release --bin rustward --bin rustward-exec --example acceptance
 COPY tests ./tests
 RUN cargo test --locked --release --no-run --test systemd_host --test runtime_host --message-format=json > /test-artifacts.json
@@ -44,7 +49,7 @@ FROM ${DEBIAN_IMAGE}
 ENV container=docker
 RUN apt-get update && apt-get install --yes --no-install-recommends \
       systemd systemd-sysv dbus dbus-user-session libpam-systemd \
-      ansible-core openssh-client python3 coreutils libc-bin util-linux mount ca-certificates nginx openssl && \
+      ansible-core openssh-client python3 python3-prometheus-client coreutils libc-bin util-linux mount ca-certificates nginx openssl && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --uid 1000 --create-home --shell /bin/bash rustward && \
     mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/rustward && \

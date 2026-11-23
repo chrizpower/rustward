@@ -70,6 +70,7 @@ fn serves_assets_and_bounded_operations_with_origin_checks() {
     }
     assert_eq!(get("/", "wrong.example").0, 403);
     assert_eq!(get("/missing", &host).0, 404);
+    assert_eq!(get("/metrics", &host).0, 404);
     let request = |origin: &str, body: &str, csrf| {
         http(
             TcpStream::connect(address).unwrap(),
@@ -169,10 +170,22 @@ fn unix_web_socket_rejects_the_wrong_peer_and_removes_its_path() {
         origin: origin.into(),
         proxy_uid,
     };
-    assert!(Web::bind(options("http://rustward.test", uid + 1), logs.clone()).is_err());
-    assert!(Web::bind(options("https://rustward.test", uid), logs.clone()).is_err());
-    let web = Web::bind(options("https://rustward.test", uid + 1), logs.clone()).unwrap();
-    assert!(Web::bind(options("https://rustward.test", uid + 1), logs.clone()).is_err());
+    assert!(Web::bind(options("http://rustward.test", uid + 1), logs.clone(), None).is_err());
+    assert!(Web::bind(options("https://rustward.test", uid), logs.clone(), None).is_err());
+    let web = Web::bind(
+        options("https://rustward.test", uid + 1),
+        logs.clone(),
+        None,
+    )
+    .unwrap();
+    assert!(
+        Web::bind(
+            options("https://rustward.test", uid + 1),
+            logs.clone(),
+            None
+        )
+        .is_err()
+    );
     let mut stream = UnixStream::connect(&socket).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
@@ -185,7 +198,8 @@ fn unix_web_socket_rejects_the_wrong_peer_and_removes_its_path() {
     drop(web);
     assert!(!socket.exists());
     let listener = UnixListener::bind(&socket).unwrap();
-    let site = http::Site::new("https://rustward.test", "https").unwrap();
+    let mut site = http::Site::new("https://rustward.test", "https").unwrap();
+    site.metrics = Some(crate::telemetry::Telemetry::start(|_| Ok(())).unwrap());
     let _web = Web::start(
         Listener::Proxy(listener, uid),
         site,
@@ -202,4 +216,21 @@ fn unix_web_socket_rejects_the_wrong_peer_and_removes_its_path() {
         .0,
         200
     );
+    let scrape = |headers: &str| {
+        http(
+            UnixStream::connect(&socket).unwrap(),
+            format!("GET /metrics HTTP/1.1\r\nHost: rustward.test\r\n{headers}\r\n"),
+        )
+    };
+    assert_eq!(scrape("").0, 403);
+    assert_eq!(scrape("X-Rustward-Monitor: 0\r\n").0, 403);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                let (status, body) = scrape("X-Rustward-Monitor: 1\r\n");
+                assert_eq!(status, 200);
+                assert!(body.contains("# TYPE rustward_run_duration_seconds histogram"));
+            });
+        }
+    });
 }

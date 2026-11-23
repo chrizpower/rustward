@@ -21,3 +21,6 @@ pub mod systemd;
 
 #[cfg(target_os = "linux")]
 pub mod launcher;
+
+#[cfg(target_os = "linux")]
+mod telemetry;

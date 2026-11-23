@@ -11,7 +11,15 @@ fn ok(response: Response) -> Value {
 
 #[test]
 fn service_retries_admission_and_drains_active_work_on_shutdown() {
-    let fixture = Fixture::new();
+    let mut fixture = Fixture::new();
+    let (send, records) = std::sync::mpsc::channel();
+    let telemetry = Telemetry::start(move |bytes| {
+        send.send(serde_json::from_slice::<Value>(bytes).unwrap())
+            .unwrap();
+        Ok(())
+    })
+    .unwrap();
+    fixture.safety = Safety::observed(telemetry.clone());
     let config = config::load("examples/rustward.toml").unwrap();
     let store = Store::open_with_safety(&fixture.path, fixture.safety.clone()).unwrap();
     let controller = fixture.controller(Limits::default());
@@ -76,6 +84,25 @@ fn service_retries_admission_and_drains_active_work_on_shutdown() {
         ok(service.request(Request::Status { run_id: waiting }))["phase"],
         "Queued"
     );
+    service.publish_metrics();
+    let scrape = telemetry.scrape();
+    assert!(scrape.contains("rustward_queue_depth 1\n"));
+    assert!(scrape.contains("rustward_admissions_total{trigger=\"manual\"} 2"));
+    assert!(scrape.contains("rustward_completions_total{result=\"success\"} 1"));
+    assert!(scrape.contains("rustward_run_duration_seconds_count 1"));
+    telemetry.flush();
+    let events: Vec<_> = records
+        .try_iter()
+        .map(|entry| entry["event"].as_str().unwrap().to_owned())
+        .collect();
+    for expected in [
+        "run_admitted",
+        "dispatch_committed",
+        "launch_reply",
+        "run_completed",
+    ] {
+        assert!(events.iter().any(|event| event == expected), "{expected}");
+    }
 }
 
 #[test]
@@ -274,7 +301,8 @@ fn restart_requires_review_before_dispatching_queued_work() {
         started(&mut daemon.controller, &fixture);
     }
     fixture.ended(&id);
-    fixture.safety = Safety::default();
+    let telemetry = Telemetry::start(|_| Ok(())).unwrap();
+    fixture.safety = Safety::observed(telemetry.clone());
     let mut daemon = service(&fixture);
     ok(daemon.request(Request::Resume));
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -289,6 +317,12 @@ fn restart_requires_review_before_dispatching_queued_work() {
         thread::sleep(Duration::from_millis(2));
     };
     assert_eq!(daemon.block, Some(Block::ReviewRequired));
+    daemon.publish_metrics();
+    let scrape = telemetry.scrape();
+    assert!(scrape.contains("rustward_dispatch_state{state=\"review\"} 1"));
+    assert!(scrape.contains("rustward_queue_depth 1\n"));
+    assert!(scrape.contains("rustward_completions_total{result=\"interruption\"} 1"));
+    assert!(scrape.contains("rustward_admissions_total{trigger=\"manual\"} 0"));
     assert_eq!(
         ok(daemon.request(Request::Status {
             run_id: waiting.clone()
@@ -477,3 +511,5 @@ fn reload_preserves_active_schedules_after_invalid_candidate() {
         matches!(daemon.request(Request::SchedulePause { schedule_id: None }), Response::Error(message) if message == "Closed")
     );
 }
+
+mod telemetry;

@@ -1,7 +1,7 @@
 # Operational contracts
 
-Scheduling, explicit reload, age-based retention, and offline backup and
-restore are implemented. Telemetry is accepted future work. See the [service interface](service.md).
+The service implements scheduling, explicit reload, age-based retention,
+offline backup and restore, and telemetry. See the [service interface](service.md).
 
 ## Scheduling
 
@@ -152,103 +152,70 @@ acceptance image build runs the same tests before running the isolated host suit
 
 ## Telemetry
 
-On 2026-11-08, the user accepted structured service logs and private metrics for
-the monitoring service. Collector configuration belongs in `the deployment repository`.
+Rustward writes one JSON record per line to standard error. For the systemd
+service, route standard error to the journal. Deployment owns journal rotation,
+retention, and collection. Task output stays in the existing run log files.
 
-### Service logs
+Records carry the UTC timestamp in milliseconds, severity, event, and component.
+Run, task, and schedule IDs are included where available. Reasons use fixed
+codes. A committed dispatch is a launch intent. A launch reply records what
+the supervisor reported. Only an observed running transition emits
+`run_observed_running`. Admission and completion records follow their database
+commits. A restore note remains in the state database. Request keys, submitted
+values, command arguments, task output, and raw error text are excluded from
+structured service records.
 
-Provide structured service logs for startup and shutdown, configuration
-acceptance and rejection, admission, dispatch, run completion, recovery,
-operational controls, and state or task-log storage failures. Report only
-implemented and observed events. A launch request is not proof of process start.
-A successful admission log must follow the durable admission decision.
+The log worker accepts up to 128 waiting records of at most 4 KiB each. When
+the queue is full or the worker cannot write a record, Rustward counts the loss
+and continues. Shutdown waits up to 100 ms for a flush acknowledgement. A service
+log loss or failed scrape does not trigger the state and task-log storage
+failure policy.
 
-Records need a timestamp, severity, stable event name, component, and bounded
-reason or result fields. Where relevant, include task, schedule, and run IDs as log fields to correlate
-with retained state.
-Use established run phases and results from the [glossary](../GLOSSARY.md).
+### Private metrics
 
-Keep task stdout/stderr in the existing [capture interface](service.md#bounded-output-capture). Do not
-copy task output, submitted input values, command arguments, credentials,
-request keys, or secret-bearing error details into service logs. Apply the same
-restrictions at debug levels. Use bounded reason codes instead of raw error
-strings where errors can contain payloads. Logs support diagnosis. They do not
-replace durable admission records, run history, or acknowledgement evidence.
+Metrics require the existing private HTTPS proxy and an explicit opt-in:
 
-### Metrics collection
+```toml
+[telemetry]
+metrics = true
+```
 
-Provide a private, read-only HTTP `GET /metrics` endpoint with a
-Prometheus-compatible exposition format and matching content type. the monitoring service must be
-able to scrape it without a browser session. A scrape must not admit work,
-change controls, or execute a task. Keep metrics available during admission or
-dispatch blocks where the service can still serve requests, so the block remains
-observable.
+The default is false. Restart Rustward after changing this setting. Define an
+exact `/metrics` location in the proxy. Authenticate a separate monitoring
+identity and set `X-Rustward-Monitor: 1` on the upstream request only after
+authorization. Clear that header on every other route. Preserve the configured
+Host. The Rust service also checks the Unix socket peer UID. A browser session
+alone cannot authorize a scrape. Production identity and route configuration for
+the monitoring service belong in `the deployment repository`.
 
-Keep access private and restrict it to authorized monitoring access. Specify the
-listener, access mechanism, and collector route before deployment. Do not infer
-the monitoring service's address, credentials, collector software, or network access from its name.
-Service telemetry settings belong in `rustward.toml`. No telemetry fields are
-implemented in the current schema. Exact keys and defaults remain open.
+A scrape reads in-memory measurements. It does not use SQLite, enter the service
+request queue, or change controls. The web listener allows up to 16 concurrent
+connections across all routes and applies its existing header and connection
+timeouts. The response uses Prometheus text format 0.0.4, a fixed set of series,
+and no per-run labels.
 
-Expose these measurements as their owning components are implemented:
-
-| Measurement | Required meaning |
+| Metric | Type and meaning |
 | --- | --- |
-| Queue depth | Current accepted runs waiting for dispatch |
-| Active runs | Current runs holding an execution slot, including launch and cleanup |
-| Admissions and rejections | New durable admissions and rejected submissions, with bounded trigger/reason categories. A matching retry is not a new admission |
-| Completed runs | Recorded completions by result. Cancellation before dispatch is included |
-| Run duration | A defined duration distribution. Specify start/end points and treatment of queued cancellation before implementation |
-| Skipped occurrences | Known skipped schedule occurrences by bounded reason. Unknown schedule gaps must not be converted to invented counts |
-| Dispatch blocks | Current block state by bounded reason, including pause, external uncertainty, and protected log capacity |
-| Log truncation | Runs whose task output reached its retention limit, distinct from storage failures |
-| Storage failures | Observed state or task-log storage failures by bounded component/category |
+| `rustward_queue_depth` | Gauge of queued runs, seeded from SQLite and updated after committed transitions. Omitted when the state is unavailable. |
+| `rustward_queue_depth_available` | Gauge of 1 if the queue depth is available, or 0 otherwise. |
+| `rustward_active_runs` | Gauge of execution slots in use, including launch and cleanup. |
+| `rustward_dispatch_state` | One gauge per state. The current state has value 1. States are idle, paused, review, execution capacity, log capacity, draining, and failed. |
+| `rustward_admissions_total` | Counter by manual or schedule trigger. A matching retry is excluded. |
+| `rustward_admission_rejections_total` | Counter of rejected manual submissions by reason. Unparsed HTTP requests are excluded. |
+| `rustward_completions_total` | Counter by durable run result, including queued cancellation. |
+| `rustward_run_duration_seconds` | Histogram from recorded dispatch through durable completion. Queued cancellations and missing or invalid elapsed times are excluded. Upper bounds in seconds are 0.1, 0.5, 1, 5, 30, 60, 300, and 3600, plus infinity. |
+| `rustward_schedule_skips_total` | Counter of committed skips and exact missed counts in schedule gaps. Gaps with unknown counts appear in service logs without a count. |
+| `rustward_log_truncations_total` | Counter of completed runs with a positive truncation flag on either stream. |
+| `rustward_storage_failures_total` | Counter of observed state and task-log storage failures by component. |
+| `rustward_expired_runs_total` | Counter of completed runs removed by age-based retention. |
+| `rustward_service_logs_dropped_total` | Counter of records dropped due to a full queue or failed service log write. |
 
-Use bounded label sets. Do not use run IDs, task IDs, schedule IDs, input values,
-paths, request keys, arbitrary error text, or definition revisions as metric
-labels. This prevents file changes and individual requests from creating an
-unbounded number of time series. Detailed per-run diagnosis belongs in logs
-and retained state.
+Counters and histogram observations reset at process start. Reopening retained
+history does not replay earlier transitions into the counters. A completion
+committed during recovery counts in the recovering process. Offline state
+commands emit logs for their own operations.
 
-Specify metric names, types, units, label values, duration boundaries, histogram
-buckets, and reset behavior before implementation. Document whether each count
-covers the current process lifetime or retained history. Do not count a retried
-submission as another run or count the same committed transition twice during
-recovery. Metrics are operational observations, not an admission ledger. Do not
-publish fabricated zero values for components that are not implemented or whose
-state is unknown.
-
-### Bounds and failure behavior
-
-Bound log record size, log buffering, metric series, scrape work, and concurrent
-scrapes. Specify numeric bounds and overload handling before implementation.
-Telemetry must not introduce an unbounded queue or hold an admission transaction
-open while waiting for a remote collector. A failed scrape or an unreachable the monitoring service
-does not change a run result or prove that execution failed.
-
-Existing P06 behavior for state and retained task-log storage failures remains
-mandatory. The response to service-log sink failure, its relation to P06, and
-how to expose telemetry loss remain open decisions. Do not silently weaken P06
-or equate a remote collection outage with a local state-storage failure.
-Service-log transport, encoding, rotation, and retention also need specification.
-Per-run task-log limits do not define service-log retention.
-
-### Verification and implementation gates
-
-- Check structured records for each implemented event and valid correlation IDs.
-  Use synthetic sensitive values to prove exclusion at every enabled log level.
-- Parse endpoint output with a Prometheus-compatible parser and verify content
-  type, types, labels, units, and escaping. Test private access and read-only use.
-- Verify counters against durable decisions, matching retries, queued
-  cancellation, and recovery. Test queue/active gauges and dispatch blocks.
-- Flood logs and issue concurrent scrapes. Verify the selected memory, record,
-  series, and request bounds, including slow or failed sinks.
-- Check truncation separately from storage failure. Verify unknown state and
-  schedule gaps are not reported as successful or zero-failure operation.
-- In separate deployment work, prove an end-to-end scrape from the monitoring service and service
-  log collection through the selected transport. Repository tests alone do not
-  prove collector connectivity or production collection.
-
-Health and readiness mechanisms remain separate F15 work. Select libraries and
-settle the open interface and failure decisions before implementation. This
-contract does not require distributed tracing or a new log storage service.
+Run `just telemetry-test` for synthetic state, HTTP, and stalled sink checks.
+The Docker acceptance web case verifies separate proxy credentials, parses the
+metrics, and traces a synthetic run through service logs. Live collection by the monitoring service
+and health and readiness endpoints remain separate work.
