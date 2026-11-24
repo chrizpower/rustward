@@ -82,7 +82,7 @@ async fn route(
         return error(StatusCode::FORBIDDEN, "Wrong host");
     }
     match (request.method(), request.uri().path()) {
-        (&Method::GET, "/metrics") => {
+        (&Method::GET, path @ ("/metrics" | "/healthz" | "/readyz")) => {
             let Some(metrics) = &site.metrics else {
                 return error(StatusCode::NOT_FOUND, "Page not found");
             };
@@ -91,6 +91,24 @@ async fn route(
                 .is_none_or(|value| value != "1")
             {
                 return error(StatusCode::FORBIDDEN, "Monitoring proxy route required");
+            }
+            if path != "/metrics" {
+                let check = metrics.probe();
+                let ok = if path == "/healthz" {
+                    check.live
+                } else {
+                    check.ready
+                };
+                let status = if ok {
+                    StatusCode::OK
+                } else {
+                    StatusCode::SERVICE_UNAVAILABLE
+                };
+                return response(
+                    status,
+                    "application/json",
+                    serde_json::json!({"ok": ok, "state": check.state}).to_string(),
+                );
             }
             response(
                 StatusCode::OK,

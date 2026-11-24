@@ -7,7 +7,7 @@ cancellation, recovery, review, and bounded output capture. Ansible is the
 first workload. A private web console supports task submission, run output,
 schedule controls, and review. Rustward expires eligible history by age and
 supports offline application-state backup and restore, structured service logs,
-and private metrics.
+and private monitoring routes.
 
 Validate the synthetic configuration:
 
@@ -104,8 +104,15 @@ Run the synthetic retention and restore tests on Linux:
 just recovery-test
 ```
 
-Run `just telemetry-test` on Linux for telemetry checks. The Docker integration
-build runs both sets of tests, including on a Mac with Docker Desktop.
+Run `just telemetry-test` on Linux for monitoring checks. To rehearse alert
+delivery in an isolated container, run:
+
+```sh
+just pilot-test
+```
+
+The rehearsal uses Podman or Docker and sends test mail to a loopback SMTP
+sink. The full Docker suite also rehearses a backup and restore with systemd.
 
 Run the Docker integration suite from the checkout on your laptop with Docker
 Desktop running in Linux container mode, or on an isolated Linux Docker host:

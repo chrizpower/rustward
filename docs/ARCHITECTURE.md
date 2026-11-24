@@ -13,8 +13,8 @@ Restore creates a new state directory and keeps the service closed until the
 operator reviews its unfinished runs and releases the restored state.
 
 The service emits structured service logs to standard error for collection by
-systemd. The private proxy can serve read-only metrics from bounded in-process
-measurements.
+systemd. The private proxy serves read-only metrics, health, and readiness
+from bounded in-process measurements.
 [Gravity](GRAVITY.md) owns the accepted constraints and principles.
 
 ## System diagram

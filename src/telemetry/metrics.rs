@@ -1,6 +1,7 @@
 use std::{
     fmt::Write as _,
     sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering::Relaxed},
+    time::Instant,
 };
 
 #[derive(Clone, Copy)]
@@ -12,6 +13,12 @@ pub(crate) enum State {
     LogCapacity,
     Draining,
     Failed,
+}
+
+pub(crate) struct Probe {
+    pub live: bool,
+    pub ready: bool,
+    pub state: &'static str,
 }
 
 macro_rules! counters {
@@ -49,6 +56,7 @@ counters! {
     Truncated => "log_truncations_total",
     StateFailure => "storage_failures_total{component=\"state\"}",
     LogFailure => "storage_failures_total{component=\"task_log\"}",
+    UnknownGap => "schedule_unknown_gaps_total",
     Expired => "expired_runs_total",
 }
 
@@ -72,6 +80,7 @@ const STATES: [&str; 7] = [
     "failed",
 ];
 const UNKNOWN: u64 = u64::MAX;
+const HEARTBEAT_LIMIT_MS: u64 = 10_000;
 
 pub(super) struct Metrics {
     counters: [AtomicU64; NAMES.len()],
@@ -80,6 +89,9 @@ pub(super) struct Metrics {
     queue: AtomicU64,
     active: AtomicUsize,
     state: AtomicU32,
+    started: Instant,
+    heartbeat: AtomicU64,
+    schedule_gap_ms: AtomicU64,
 }
 
 impl Default for Metrics {
@@ -91,6 +103,9 @@ impl Default for Metrics {
             queue: AtomicU64::new(UNKNOWN),
             active: AtomicUsize::new(0),
             state: AtomicU32::new(State::Paused as u32),
+            started: Instant::now(),
+            heartbeat: AtomicU64::new(0),
+            schedule_gap_ms: AtomicU64::new(0),
         }
     }
 }
@@ -125,12 +140,68 @@ impl Metrics {
     pub(super) fn state(&self, active: usize, state: State) {
         self.active.store(active, Relaxed);
         self.state.store(state as u32, Relaxed);
+        self.heartbeat.store(self.elapsed_ms(), Relaxed);
+    }
+
+    fn elapsed_ms(&self) -> u64 {
+        self.started.elapsed().as_millis() as u64 + 1
+    }
+
+    pub(super) fn gap_at(&self, timestamp: u64) {
+        self.schedule_gap_ms.store(timestamp, Relaxed);
+    }
+
+    pub(super) fn probe(&self) -> Probe {
+        self.probe_at(self.elapsed_ms())
+    }
+
+    pub(super) fn probe_at(&self, now: u64) -> Probe {
+        let heartbeat = self.heartbeat.load(Relaxed);
+        let responsive = heartbeat != 0 && now.saturating_sub(heartbeat) <= HEARTBEAT_LIMIT_MS;
+        let state = self.state.load(Relaxed);
+        let live = responsive && state != State::Failed as u32;
+        let ready =
+            live && (state == State::Idle as u32 || state == State::ExecutionCapacity as u32);
+        let state = if responsive {
+            STATES[state as usize]
+        } else {
+            "unresponsive"
+        };
+        Probe { live, ready, state }
     }
 
     pub(super) fn render(&self, dropped: u64) -> String {
         let mut out = String::with_capacity(4096);
+        let probe = self.probe();
+        let gap = self.schedule_gap_ms.load(Relaxed);
+        writeln!(
+            out,
+            "# TYPE rustward_service_healthy gauge\nrustward_service_healthy {}",
+            u8::from(probe.live)
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "# TYPE rustward_service_ready gauge\nrustward_service_ready {}",
+            u8::from(probe.ready)
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "# TYPE rustward_last_schedule_gap_timestamp_seconds gauge"
+        )
+        .unwrap();
+        if gap != 0 {
+            writeln!(
+                out,
+                "rustward_last_schedule_gap_timestamp_seconds {}.{:03}",
+                gap / 1000,
+                gap % 1000
+            )
+            .unwrap();
+        }
         let current = self.state.load(Relaxed);
-        let queue = if current == State::Failed as u32 {
+        let queue = if !probe.live {
             UNKNOWN
         } else {
             self.queue.load(Relaxed)

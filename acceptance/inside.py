@@ -13,6 +13,8 @@ import time
 from prepare import prepare
 import service_case
 import web_case
+import pilot_alerts
+import pilot_recovery
 
 
 def invoke(command, timeout=240, capture=False):
@@ -88,8 +90,8 @@ def wait_manager(account, tools, evidence, timeout=30, interval=0.1):
     raise RuntimeError("user manager readiness deadline; see manager-readiness.json")
 
 
-def stop_fixture_units(root, account):
-    database = root / "state/state.db"
+def stop_fixture_units(root, account, state="state/state.db"):
+    database = root / state
     if not database.exists():
         return
     with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
@@ -151,6 +153,10 @@ def run(root, tools, user, revision):
         service_case.run_schedules(root, tools, account, fixture, user_command)
         status["phase"] = "web-acceptance"
         web_case.run(root, tools, account, fixture, user_command)
+        status["phase"] = "pilot-monitoring"
+        pilot_alerts.run(tools / "rustward-preview", evidence / "pilot-monitoring")
+        status["phase"] = "pilot-recovery"
+        pilot_recovery.run(root, tools, account, fixture, user_command)
         status = {"status": "passed", "phase": "complete"}
     finally:
         (evidence / "host-runner.json").write_text(json.dumps(status, sort_keys=True) + "\n")
@@ -159,6 +165,8 @@ def run(root, tools, user, revision):
             stop_fixture_units(root / "daemon", account)
             stop_fixture_units(root / "scheduled", account)
             stop_fixture_units(root / "web", account)
+            stop_fixture_units(root / "pilot-original", account)
+            stop_fixture_units(root / "pilot-restored", account, state="state/restored/state.db")
         finally:
             checked(["/usr/bin/systemctl", "stop", f"user@{account.pw_uid}.service"])
 

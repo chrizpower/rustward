@@ -78,6 +78,7 @@ impl Preparation for Prepare {
 struct Run {
     end: Instant,
     review: bool,
+    failure: bool,
     stdout: Option<File>,
 }
 
@@ -127,6 +128,7 @@ impl Supervisor for Fake {
                 end: Instant::now()
                     + Duration::from_secs(if kind == Some("hold") { 30 } else { 2 }),
                 review: kind == Some("review"),
+                failure: kind == Some("failure"),
                 stdout: Some(stdout),
             },
         );
@@ -158,7 +160,7 @@ impl Supervisor for Fake {
             } else {
                 ExecutionState::Running
             },
-            exit: (ended && !run.review).then_some(ProcessExit::Code(0)),
+            exit: (ended && !run.review).then_some(ProcessExit::Code(i32::from(run.failure))),
             cleanup: if ended {
                 Cleanup::Confirmed
             } else {

@@ -1,0 +1,14 @@
+groups:
+  - name: rustward-pilot
+    interval: 1s
+    rules:
+      - alert: RustwardRunProblem
+        expr: increase(rustward_completions_total{result=~"failure|timeout|interruption"}[30s]) > 0
+      - alert: RustwardScheduleGap
+        expr: time() - rustward_last_schedule_gap_timestamp_seconds < 60
+      - alert: RustwardUnhealthy
+        expr: rustward_service_healthy == 0
+        for: 3s
+      - alert: RustwardUnavailable
+        expr: up{job="rustward-pilot"} == 0
+        for: 3s

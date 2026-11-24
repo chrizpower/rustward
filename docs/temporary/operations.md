@@ -171,7 +171,7 @@ and continues. Shutdown waits up to 100 ms for a flush acknowledgement. A servic
 log loss or failed scrape does not trigger the state and task-log storage
 failure policy.
 
-### Private metrics
+### Private monitoring
 
 Metrics require the existing private HTTPS proxy and an explicit opt-in:
 
@@ -181,7 +181,7 @@ metrics = true
 ```
 
 The default is false. Restart Rustward after changing this setting. Define an
-exact `/metrics` location in the proxy. Authenticate a separate monitoring
+exact location for each of `/metrics`, `/healthz`, and `/readyz` in the proxy. Authenticate a separate monitoring
 identity and set `X-Rustward-Monitor: 1` on the upstream request only after
 authorization. Clear that header on every other route. Preserve the configured
 Host. The Rust service also checks the Unix socket peer UID. A browser session
@@ -196,6 +196,10 @@ and no per-run labels.
 
 | Metric | Type and meaning |
 | --- | --- |
+| `rustward_service_healthy` | Gauge of 1 when the service loop is responsive and healthy. |
+| `rustward_service_ready` | Gauge of 1 when the service can process new work as execution slots become available. |
+| `rustward_last_schedule_gap_timestamp_seconds` | UTC time when the service last recorded a schedule gap, excluding first installation. Omitted until a gap is recorded. |
+| `rustward_schedule_unknown_gaps_total` | Counter of newly recorded gaps with unknown missed counts, excluding first installation. |
 | `rustward_queue_depth` | Gauge of queued runs, seeded from SQLite and updated after committed transitions. Omitted when the state is unavailable. |
 | `rustward_queue_depth_available` | Gauge of 1 if the queue depth is available, or 0 otherwise. |
 | `rustward_active_runs` | Gauge of execution slots in use, including launch and cleanup. |
@@ -217,5 +221,31 @@ commands emit logs for their own operations.
 
 Run `just telemetry-test` for synthetic state, HTTP, and stalled sink checks.
 The Docker acceptance web case verifies separate proxy credentials, parses the
-metrics, and traces a synthetic run through service logs. Live collection by the monitoring service
-and health and readiness endpoints remain separate work.
+metrics, and traces a synthetic run through service logs.
+
+### Health, readiness, and pilot rehearsal
+
+Both probe routes return JSON with `ok` and `state`. A passing probe returns
+HTTP 200. A failing probe returns HTTP 503. Health requires a service-loop
+heartbeat within 10 seconds and a healthy controller. A paused, draining, or
+review-blocked service can still be healthy. Readiness requires health and an
+idle dispatch state or ordinary execution capacity in use. A pause, drain,
+unresolved review, or log capacity block makes readiness fail.
+
+The pilot alerts when a run fails, times out, or ends in interruption, when a
+schedule gap is recorded, and when Rustward becomes unhealthy or unreachable.
+A pause, drain, full execution capacity, or readiness block alone is displayed
+in operator status. A run interruption can still alert while dispatch waits
+for review. Alert rules use process-local measurements. An event followed by
+a restart between scrapes can be missed.
+
+`just pilot-test` sends synthetic alerts through Prometheus and Alertmanager to
+a loopback SMTP sink. The full `just acceptance-container` suite also proves
+proxy access and rehearses a systemd restore. It checks that the held state
+rejects startup, a second scheduler cannot open the same state database, and
+the restored service admits only a new occurrence after explicit resume.
+On separate state databases, keep schedule ownership exclusive by stopping the
+original before starting the replacement.
+
+the monitoring service's live scrape and delivery through the deployment relay require a separate
+deployment check in `the deployment repository`.

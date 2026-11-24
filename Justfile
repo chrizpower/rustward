@@ -52,3 +52,6 @@ telemetry-test:
     cargo test --locked --lib telemetry::tests
     cargo test --locked --lib service::web::tests
     cargo test --locked --lib service::tests
+
+pilot-test:
+    python3 -B acceptance/pilot_container.py

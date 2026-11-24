@@ -58,6 +58,15 @@ def run(root, tools, account, fixture, user_command):
         monitor_hash = subprocess.check_output(["openssl", "passwd", "-apr1", monitor_secret],
                                                text=True, timeout=5).strip()
         (directory / "monitors").write_text("monitor:" + monitor_hash + "\n")
+        monitoring_routes = "\n".join(f"""
+        location = {path} {{
+            auth_basic "Rustward monitoring";
+            auth_basic_user_file {directory}/monitors;
+            proxy_set_header Host $http_host;
+            proxy_set_header Authorization "";
+            proxy_set_header X-Rustward-Monitor 1;
+            proxy_pass http://unix:{socket_path}:;
+        }}""" for path in ("/metrics", "/healthz", "/readyz"))
         config = directory / "nginx.conf"
         config.write_text(f"""
 user www-data;
@@ -75,14 +84,7 @@ http {{
         ssl_certificate_key {key};
         auth_basic "Rustward acceptance";
         auth_basic_user_file {directory}/users;
-        location = /metrics {{
-            auth_basic "Rustward monitoring";
-            auth_basic_user_file {directory}/monitors;
-            proxy_set_header Host $http_host;
-            proxy_set_header Authorization "";
-            proxy_set_header X-Rustward-Monitor 1;
-            proxy_pass http://unix:{socket_path}:;
-        }}
+        {monitoring_routes}
         location / {{
             proxy_set_header Host $http_host;
             proxy_set_header Authorization "";
@@ -146,6 +148,12 @@ http {{
                     require(status == 200 and marker in asset, f"embedded asset {path} was not served")
                 require(request("/metrics", authenticate=False)[0] == 401, "metrics allowed anonymous access")
                 require(request("/metrics")[0] == 401, "browser credentials reached metrics")
+                for path in ("/healthz", "/readyz"):
+                    require(request(path)[0] == 401, "browser credentials reached monitoring health")
+                require(request("/healthz", monitor=True)[0] == 200, "paused service did not report healthy")
+                code, body = request("/readyz", monitor=True)
+                require(code == 503 and json.loads(body) == {"ok": False, "state": "paused"},
+                        "readiness did not report the dispatch pause")
                 require(request("/", monitor=True)[0] == 401, "monitoring credentials reached console")
                 _, before = scrape()
                 require(before[("rustward_dispatch_state", (("state", "paused"),))] == 1,
@@ -177,6 +185,8 @@ http {{
                 output = api("output", run_id=run_id, stdout=0, stderr=0)
                 require(bytes(output["streams"]["stdout"]["bytes"]) == b"A02_STDOUT\n", "web stdout differs")
                 require(bytes(output["streams"]["stderr"]["bytes"]) == b"A02_STDERR\n", "web stderr differs")
+                wait_for(lambda: request("/readyz", monitor=True)[0] == 200,
+                         "resumed service did not report ready")
                 data, after = scrape()
                 for metric, labels in [
                     ("rustward_admissions_total", (("trigger", "manual"),)),
@@ -213,4 +223,5 @@ http {{
         "status": "passed", "run_id": run_id, "authentication_required": True,
         "direct_peer_rejected": True, "cross_origin_rejected": True, "retained_log_bytes": 22,
         "metrics_access_verified": True, "service_log_trace_verified": True,
+        "monitoring_health_verified": True,
     }) + "\n")

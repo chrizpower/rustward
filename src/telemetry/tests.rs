@@ -21,6 +21,7 @@ fn admission_and_cancel_count_commits_only_and_leave_secrets_out() {
     let path = root.path().join("state.db");
     let mut store = Store::open_with_safety(&path, Safety::observed(telemetry.clone())).unwrap();
     telemetry.seed_queue(store.queue_depth());
+    telemetry.state(0, State::Idle);
     let config = config::load("examples/rustward.toml").unwrap();
     let secret = "synthetic secret value";
     let values = BTreeMap::from([("name".to_string(), secret.into())]);
@@ -120,6 +121,7 @@ fn schedule_counts_only_committed_occurrences_and_known_gaps() {
         Store::open_with_safety(root.path().join("db"), Safety::observed(telemetry.clone()))
             .unwrap();
     telemetry.seed_queue(store.queue_depth());
+    telemetry.state(0, State::Idle);
     let config = config::load("examples/rustward.toml").unwrap();
     let matchers = admission::schedule::matchers(&config);
     let due = 2 * 60 * 60_000;
@@ -288,4 +290,52 @@ fn service_log_write_errors_are_counted_separately_from_task_storage() {
     assert!(scrape.contains("rustward_service_logs_dropped_total 1"));
     assert!(scrape.contains("rustward_storage_failures_total{component=\"task_log\"} 0"));
     assert!(scrape.contains("rustward_storage_failures_total{component=\"state\"} 0"));
+}
+
+#[test]
+fn monitoring_stales_the_service_heartbeat_and_distinguishes_readiness() {
+    let metrics = metrics::Metrics::default();
+    assert_eq!(metrics.probe().state, "unresponsive");
+    for (state, live, ready, label) in [
+        (State::Idle, true, true, "idle"),
+        (State::Paused, true, false, "paused"),
+        (State::Review, true, false, "review"),
+        (State::ExecutionCapacity, true, true, "execution_capacity"),
+        (State::LogCapacity, true, false, "log_capacity"),
+        (State::Draining, true, false, "draining"),
+        (State::Failed, false, false, "failed"),
+    ] {
+        metrics.state(0, state);
+        let current = metrics.probe();
+        assert_eq!(
+            (current.live, current.ready, current.state),
+            (live, ready, label)
+        );
+    }
+    metrics.state(0, State::Idle);
+    let stalled = metrics.probe_at(u64::MAX);
+    assert_eq!(
+        (stalled.live, stalled.ready, stalled.state),
+        (false, false, "unresponsive")
+    );
+}
+
+#[test]
+fn unknown_schedule_gaps_are_visible_without_inventing_skipped_occurrences() {
+    let telemetry = Telemetry::start(|_| Ok(())).unwrap();
+    telemetry.gap("first", "first_installation", None);
+    assert!(
+        !telemetry
+            .scrape()
+            .lines()
+            .any(|line| line.starts_with("rustward_last_schedule_gap_timestamp_seconds "))
+    );
+    telemetry.gap("first", "clock_change", None);
+    let data = telemetry.scrape();
+    assert!(data.contains("rustward_schedule_unknown_gaps_total 1\n"));
+    assert!(data.contains("rustward_schedule_skips_total{reason=\"activation\"} 0"));
+    assert!(
+        data.lines()
+            .any(|line| line.starts_with("rustward_last_schedule_gap_timestamp_seconds "))
+    );
 }

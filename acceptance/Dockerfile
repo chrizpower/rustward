@@ -45,7 +45,17 @@ COPY acceptance/fixtures/hold.py /opt/rustward_hold.py
 COPY acceptance/fixtures/flood.py /opt/rustward_flood.py
 CMD ["/usr/bin/python3", "-I", "-B", "/opt/ssh_target.py", "serve"]
 
-FROM ${DEBIAN_IMAGE}
+FROM ${DEBIAN_IMAGE} AS pilot-tools
+RUN apt-get update && apt-get install --yes --no-install-recommends \
+      prometheus prometheus-alertmanager python3-aiosmtpd && \
+    rm -rf /var/lib/apt/lists/*
+
+FROM pilot-tools AS pilot-rehearsal
+COPY --from=preview-build /source/target/release/rustward /usr/local/bin/rustward-preview
+COPY acceptance /opt/rustward-acceptance-source
+ENTRYPOINT ["python3", "-B", "/opt/rustward-acceptance-source/pilot_alerts.py", "/usr/local/bin/rustward-preview", "/results"]
+
+FROM pilot-tools
 ENV container=docker
 RUN apt-get update && apt-get install --yes --no-install-recommends \
       systemd systemd-sysv dbus dbus-user-session libpam-systemd \
@@ -54,10 +64,12 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     useradd --uid 1000 --create-home --shell /bin/bash rustward && \
     mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/rustward && \
     systemctl --global enable dbus.socket && \
+    systemctl --root=/ mask prometheus.service prometheus-alertmanager.service && \
     mkdir -p /etc/systemd/system/user@1000.service.d && \
     printf '[Service]\nNoNewPrivileges=yes\nCapabilityBoundingSet=\nAmbientCapabilities=\n' > /etc/systemd/system/user@1000.service.d/rustward-acceptance.conf && \
     truncate --size=0 /etc/machine-id
 COPY --from=build /bundle /opt/rustward-acceptance-tools
+COPY --from=preview-build /source/target/release/rustward /opt/rustward-acceptance-tools/rustward-preview
 COPY acceptance /opt/rustward-acceptance-source
 ARG SOURCE_REVISION=unspecified
 RUN printf '%s\n' "$SOURCE_REVISION" > /opt/rustward-acceptance-source/source-revision

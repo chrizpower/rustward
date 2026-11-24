@@ -1,5 +1,5 @@
 mod metrics;
-pub(crate) use metrics::{Counter, State};
+pub(crate) use metrics::{Counter, Probe, State};
 
 use std::{
     io::{self, Write},
@@ -252,7 +252,19 @@ impl Telemetry {
             self.add(counter, u64::from(missed));
             event = event.count(u64::from(missed));
         }
+        if reason != "first_installation" {
+            if missed.is_none() {
+                self.add(Counter::UnknownGap, 1);
+            }
+            if let Some(timestamp) = event.timestamp_ms.and_then(|ms| u64::try_from(ms).ok()) {
+                self.0.metrics.gap_at(timestamp);
+            }
+        }
         self.log(event);
+    }
+
+    pub(crate) fn probe(&self) -> Probe {
+        self.0.metrics.probe()
     }
 
     pub(crate) fn scrape(&self) -> String {
