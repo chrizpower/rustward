@@ -10,6 +10,10 @@ fn main() -> ExitCode {
     let mut args = env::args_os().skip(1);
     let command = args.next();
     let result = match command.as_deref().and_then(|value| value.to_str()) {
+        Some("--version") if args.next().is_none() => {
+            println!("rustward {}", rustward::VERSION);
+            Ok(true)
+        }
         Some("validate") => match (args.next(), args.next()) {
             (Some(path), None) => config::load(path)
                 .map(|config| {
@@ -59,6 +63,7 @@ fn main() -> ExitCode {
 #[cfg(target_os = "linux")]
 fn usage() -> String {
     "Usage:
+  rustward --version
   rustward validate <rustward.toml>
   rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid> [--web <socket> <https-origin> <proxy-uid>]
   rustward state <backup|restore|reviews|decide|release> ...
@@ -67,5 +72,5 @@ fn usage() -> String {
 
 #[cfg(not(target_os = "linux"))]
 fn usage() -> String {
-    "Usage: rustward validate <rustward.toml>".into()
+    "Usage: rustward --version | rustward validate <rustward.toml>".into()
 }

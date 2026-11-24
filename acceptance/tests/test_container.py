@@ -74,7 +74,8 @@ class RunnerTests(unittest.TestCase):
                 docker.call(["failure"])
 
 class CleanupTests(unittest.TestCase):
-    def attempt(self, directory, harness_code=0, complete=True, logs_timeout=False, remote=False, scan_failed=False):
+    def attempt(self, directory, harness_code=0, complete=True, logs_timeout=False,
+                remote=False, scan_failed=False, images=("rust", "debian")):
         root = Path(directory)
         evidence = root / "evidence"
         calls = []
@@ -128,7 +129,7 @@ class CleanupTests(unittest.TestCase):
             def cleanup(self):
                 calls.append(["ssh-cleanup"])
         with patch("container.shutil.which", return_value="/synthetic/docker"), patch("container.Docker", FakeDocker), patch("container.snapshot", return_value={"revision": "c" * 64}), patch("ssh_runner.Remote", FakeRemote):
-            code = container.execute(root, evidence, "rust", "debian", remote=remote)
+            code = container.execute(root, evidence, *images, remote=remote)
         return code, json.loads((evidence / "result.json").read_text()), calls
 
     def test_success_requires_collected_pass_evidence_and_stops_before_removal(self):
@@ -139,6 +140,13 @@ class CleanupTests(unittest.TestCase):
         operations = [args[0] for args in calls]
         self.assertLess(operations.index("cp"), operations.index("stop"))
         self.assertLess(operations.index("stop"), operations.index("rm"))
+
+    def test_default_build_uses_the_images_pinned_in_the_dockerfile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, calls = self.attempt(directory, images=(None, None))
+        self.assertEqual(code, 0)
+        build = next(args for args in calls if args[0] == "build")
+        self.assertFalse(any(arg.startswith(("RUST_IMAGE=", "DEBIAN_IMAGE=")) for arg in build))
 
     def test_exit_zero_without_pass_evidence_never_passes(self):
         with tempfile.TemporaryDirectory() as directory:

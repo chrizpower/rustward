@@ -1,7 +1,8 @@
-ARG RUST_IMAGE=rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07
-ARG DEBIAN_IMAGE=debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
-ARG NODE_IMAGE=docker.io/library/node:24.16.0-trixie-slim@sha256:45fbb3ca3b6c7e6646cd2889d0ac7bf314bb180036da792221fc2f48fe4d43fb
-FROM ${NODE_IMAGE} AS node
+ARG RUST_IMAGE=default-rust
+ARG DEBIAN_IMAGE=default-debian
+FROM rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 AS default-rust
+FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS default-debian
+FROM docker.io/library/node:24.16.0-trixie-slim@sha256:45fbb3ca3b6c7e6646cd2889d0ac7bf314bb180036da792221fc2f48fe4d43fb AS node
 FROM ${RUST_IMAGE} AS source
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
@@ -13,6 +14,7 @@ COPY examples ./examples
 COPY web ./web
 
 FROM source AS release-build
+ARG RUSTWARD_SOURCE_REVISION
 RUN cargo build --locked --release --bin rustward --bin rustward-exec
 
 FROM ${DEBIAN_IMAGE} AS release-smoke
@@ -23,10 +25,15 @@ COPY examples/tasks /example/tasks
 COPY examples/schedules /example/schedules
 USER 65534:65534
 RUN /release/rustward validate /example/rustward.toml && \
+    version="$(/release/rustward --version)" && \
+    launcher_version="$(/release/rustward-exec --version)" && \
+    test "${version#rustward }" = "${launcher_version#rustward-exec }" && \
+    printf '%s\n' "${version#rustward }" > /tmp/rustward-version && \
     test "$(/release/rustward-exec /tmp /tmp /usr/bin/printf '%s' 'launcher works')" = 'launcher works'
 
 FROM scratch AS release-files
 COPY --from=release-smoke /release/ /
+COPY --from=release-smoke /tmp/rustward-version /rustward-version
 
 FROM source AS preview-build
 RUN cargo build --locked --release --features web-preview --bin rustward

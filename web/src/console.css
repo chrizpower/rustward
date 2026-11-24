@@ -44,3 +44,5 @@ pre { background: #101e34; color: #e5edfb; padding: 1rem; margin: 0; min-height:
 @media (max-width: 44rem) { #service { margin-left: 0; } }
 .empty-choice { font-weight: 400; }
 .empty-choice input { width: auto; }
+
+.service-version { overflow-wrap: anywhere; min-width: 0; font-size: .875rem; }

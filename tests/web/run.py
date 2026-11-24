@@ -32,13 +32,15 @@ def run_browser_tests(project):
     playwright = project / "node_modules/.bin/playwright"
     if engine == "podman":
         artifacts.mkdir(parents=True, exist_ok=True)
+        locked = json.loads((project / "package-lock.json").read_text())
+        version = locked["packages"]["node_modules/@playwright/test"]["version"]
         subprocess.run([
             "podman", "run", "--rm", "--network=none", "--userns=keep-id",
             "--user", f"{os.getuid()}:{os.getgid()}", "--shm-size=512m",
             "-v", f"{project}:/web:ro", "-v", f"{binary}:/usr/local/bin/rustward:ro",
             "-v", f"{artifacts}:/results:rw", "-w", "/web",
             "-e", "RUSTWARD_WEB_BINARY=/usr/local/bin/rustward", "-e", "RUSTWARD_WEB_ARTIFACTS=/results/browser",
-            "mcr.microsoft.com/playwright:v1.58.2-noble", "/web/node_modules/.bin/playwright", "test",
+            f"mcr.microsoft.com/playwright:v{version}-noble", "/web/node_modules/.bin/playwright", "test",
         ], check=True)
     elif engine == "none":
         subprocess.run([playwright, "install", "chromium"], cwd=project, check=True)

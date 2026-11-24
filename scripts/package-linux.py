@@ -4,6 +4,7 @@ import gzip
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import struct
@@ -51,7 +52,38 @@ def add_bytes(archive, name, data, mode):
     archive.addfile(entry, io.BytesIO(data))
 
 
-def package(binaries, output, architecture, revision, version):
+def tag_for_version(version, revision):
+    if not isinstance(version, str) or not re.fullmatch(
+        r"\d+\.\d+\.\d+-[0-9A-Za-z.-]+\.g" + revision + r"(?:\+[0-9A-Za-z.-]+)?", version
+    ):
+        raise ValueError("Artifact version does not identify the source commit")
+    return f"v{version}"
+
+
+def tag_for_downloads(downloads, revision):
+    tags = set()
+    for architecture in MACHINES:
+        name = f"rustward-linux-{architecture}"
+        bundle = downloads / name / f"{name}.tar.gz"
+        checksum = bundle.with_name(bundle.name + ".sha256")
+        with bundle.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if checksum.read_text(encoding="ascii").strip() != f"{digest}  {bundle.name}":
+            raise ValueError(f"Checksum differs for {architecture}")
+        with tarfile.open(bundle) as archive:
+            with archive.extractfile("BUILD-INFO.json") as info:
+                build = json.load(info)
+        if (build["architecture"], build["os"], build["revision"]) != (architecture, "linux", revision):
+            raise ValueError(f"Build metadata differs for {architecture}")
+        tags.add(tag_for_version(build["version"], revision))
+    if len(tags) != 1:
+        raise ValueError("Linux archives report different versions")
+    return tags.pop()
+
+
+def package(binaries, output, architecture, revision, package_version):
+    version = (binaries / "rustward-version").read_text(encoding="ascii").strip()
+    tag_for_version(version, revision)
     for name in EXECUTABLES:
         check_executable(binaries / name, architecture)
     output.mkdir(parents=True, exist_ok=True)
@@ -60,6 +92,7 @@ def package(binaries, output, architecture, revision, version):
         "architecture": architecture,
         "executables": EXECUTABLES,
         "os": "linux",
+        "package_version": package_version,
         "revision": revision,
         "version": version,
     }, indent=2, sort_keys=True).encode() + b"\n"
@@ -81,14 +114,21 @@ def package(binaries, output, architecture, revision, version):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--revision", default="HEAD")
-    parser.add_argument("--architecture", required=True, choices=MACHINES)
-    parser.add_argument("--output", required=True, type=Path)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--architecture", choices=MACHINES)
+    mode.add_argument("--tag-for", type=Path, metavar="DOWNLOADED_ARTIFACTS")
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--engine", choices=("docker", "podman"))
     args = parser.parse_args()
+    revision = git("rev-parse", "--verify", "--end-of-options", args.revision + "^{commit}").decode().strip()
+    if args.tag_for is not None:
+        print(tag_for_downloads(args.tag_for, revision))
+        return
+    if args.output is None:
+        parser.error("--architecture requires --output")
     engine = args.engine or shutil.which("podman") or shutil.which("docker")
     if engine is None:
         parser.error("Install Podman or Docker")
-    revision = git("rev-parse", "--verify", "--end-of-options", args.revision + "^{commit}").decode().strip()
     version = tomllib.loads(git("show", f"{revision}:Cargo.toml").decode())["package"]["version"]
     platform = {"x86_64": "amd64", "aarch64": "arm64"}[args.architecture]
     with tempfile.TemporaryDirectory(prefix="rustward-release-") as directory:
@@ -99,6 +139,7 @@ def main():
         binaries = staging / "binaries"
         subprocess.run([
             engine, "build", "--platform", f"linux/{platform}", "--target", "release-files",
+            "--build-arg", f"RUSTWARD_SOURCE_REVISION={revision}",
             "--output", f"type=local,dest={binaries}", "-f", "acceptance/Dockerfile", ".",
         ], cwd=context, check=True)
         package(binaries, args.output, args.architecture, revision, version)

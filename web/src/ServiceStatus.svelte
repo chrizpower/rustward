@@ -43,6 +43,7 @@
 <div id="service" aria-live="polite">
   {#if status}
     {@const current = status}
+    <span class="service-version">Version {current.version}</span>
     <span>{describe(current)}</span>
     <ActionButton {actions} disabled={current.failed || current.draining} action={async () => {
       await control(current.paused ? 'resume' : 'pause', {});

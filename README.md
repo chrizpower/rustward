@@ -30,12 +30,36 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 
 ## Download Linux executables
 
-Each push to `main` starts [Linux builds](https://github.com/chrizpower/rustward/actions/workflows/linux-builds.yml).
-After both archives upload, the workflow creates `build-<full-commit-sha>`.
-The tag message links to the workflow run. Choose the archive for your Linux
-VM's architecture. Each archive contains `rustward`, `rustward-exec`, and a
-`BUILD-INFO.json` file. Builds and smoke tests use the Debian 13 baseline.
-The two executables in an archive come from the same locked build.
+[Linux builds](https://github.com/chrizpower/rustward/actions/workflows/linux-builds.yml)
+runs the project and browser checks and builds both Linux architectures on
+pull requests to `main` and pushes to `main`. Successful pushes upload private
+Actions artifacts and create a version tag after verifying both archives.
+
+The version starts with the package version in `Cargo.toml`. For example,
+an artifact from package version `0.1.0` reports `0.1.0-dev.g<full-commit-sha>`.
+Both executables report that value with `--version`. The web console and
+`BUILD-INFO.json` show the same version, and the Git tag adds a leading `v`.
+The tag message links to the workflow run. Local Cargo builds report a
+`-dev.local` version. Change the package version in `Cargo.toml` and update
+`Cargo.lock` to select a new base version. Existing `build-<full-commit-sha>` tags
+still identify earlier artifacts.
+
+To find the newest completed versioned build on `main`, run from a checkout:
+
+```sh
+git fetch origin --tags
+tag=$(git describe --first-parent --tags --abbrev=0 --match 'v[0-9]*.g*' origin/main)
+printf '%s\n' "${tag#v}"
+git tag -ln "$tag"
+```
+
+The printed version matches `rustward --version`. The tag message contains the
+download run URL. The lookup stays on the last completed build while a newer
+commit is still building.
+
+Choose the archive for your Linux server's architecture. Each archive contains
+`rustward`, `rustward-exec`, and `BUILD-INFO.json`. Both executables come from the
+same locked build. The build and smoke tests use the Debian 13 baseline.
 
 To download by exact source revision, sign in to GitHub CLI with repository
 read access and run the following. Set `arch` to `x86_64` or `aarch64`.
@@ -53,7 +77,7 @@ tar -xzf "rustward-linux-$arch.tar.gz"
 ```
 
 GitHub Actions artifacts expire under the repository's retention policy.
-Keep a copy and its checksum with the pinned build inputs for VM installations
+Keep a copy and its checksum with the pinned build inputs for server installations
 that must be repeatable after the artifact expires.
 
 ## Development
@@ -171,8 +195,12 @@ The hooks divide the checks as follows:
 
 Rust checks use the working tree. For a partial commit, run them with only the
 intended changes present. Before a push, run them on the commit to be pushed.
-Each checkout needs `just hooks-install`; it sets the local Git `core.hooksPath`
+Each checkout needs `just hooks-install` to set the local Git `core.hooksPath`
 to `.githooks`.
+
+Dependabot opens weekly update pull requests for Rust, npm, GitHub Actions,
+and pinned Docker images. Update pull requests use the same CI checks as
+other pull requests.
 
 The file size check reads only added, copied, modified, renamed, or type-changed
 files in the Git index. Each file must be at most 5,000 tokens, where tokens equal

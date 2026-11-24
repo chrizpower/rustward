@@ -194,3 +194,19 @@ test('a failed output poll reports the error and retries', async ({ page, consol
   await expect(page.getByRole('alert')).toBeHidden();
   await expect(page.getByText('Completed · Cancellation')).toBeVisible();
 });
+
+test('the console shows the version reported by the service', async ({ page, consoleUrl }) => {
+  await page.goto(consoleUrl);
+  const version = await page.evaluate(async () => {
+    const response = await fetch('/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Rustward-CSRF': '1' },
+      body: JSON.stringify({ operation: 'control', request: { command: 'service_status' } }),
+    });
+    const result = await response.json() as ApiResponse<{ version: string }>;
+    if ('error' in result) throw new Error(result.error);
+    return result.ok.version;
+  });
+  expect(version).toMatch(/^\d+\.\d+\.\d+-/);
+  await expect(page.getByText(`Version ${version}`, { exact: true })).toHaveText(`Version ${version}`);
+});

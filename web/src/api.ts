@@ -101,6 +101,7 @@ type Acknowledgement = {
   acknowledged_at_ms: number;
 };
 export type ServiceStatus = {
+  version: string;
   paused: boolean;
   draining: boolean;
   failed: boolean;

@@ -1,3 +1,5 @@
+pub const VERSION: &str = env!("RUSTWARD_VERSION");
+
 pub mod admission;
 #[cfg(target_os = "linux")]
 pub mod capture;

@@ -84,6 +84,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 Ok(json!(null))
             }
             Request::ServiceStatus => Ok(json!({
+                "version": crate::VERSION,
                 "paused": self.paused, "draining": self.shutdown, "failed": self.safety.failed(),
                 "active_runs": self.controller.active_runs(),
                 "dispatch_block": self.block.as_ref().map(|block| format!("{block:?}")),

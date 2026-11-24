@@ -54,7 +54,34 @@ fn build_console(project: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn set_version() {
+    println!("cargo:rerun-if-env-changed=RUSTWARD_SOURCE_REVISION");
+    let revision = env::var("RUSTWARD_SOURCE_REVISION").unwrap_or_default();
+    let build = if revision.is_empty() {
+        "local".to_owned()
+    } else {
+        assert!(
+            revision.len() == 40
+                && revision
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+            "RUSTWARD_SOURCE_REVISION must be a full lowercase Git commit SHA"
+        );
+        format!("g{revision}")
+    };
+    let version = env::var("CARGO_PKG_VERSION").expect("Cargo package version");
+    let (base, metadata) = version.split_once('+').unwrap_or((&version, ""));
+    let separator = if base.contains('-') { "." } else { "-dev." };
+    let metadata = if metadata.is_empty() {
+        String::new()
+    } else {
+        format!("+{metadata}")
+    };
+    println!("cargo:rustc-env=RUSTWARD_VERSION={base}{separator}{build}{metadata}");
+}
+
 fn main() {
+    set_version();
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
         println!("cargo:rerun-if-changed=build.rs");
         return;

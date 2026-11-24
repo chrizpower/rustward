@@ -135,10 +135,12 @@ def execute(repository, evidence, rust_image, debian_image, remote=False):
         source = snapshot(repository, evidence / "context")
         (evidence / "source.json").write_text(json.dumps(source, indent=2) + "\n")
         image_file = evidence / "image-id"
-        docker.call(["build", "--pull", "--iidfile", image_file, "--file", "acceptance/Dockerfile",
-                     "--build-arg", f"SOURCE_REVISION={source['revision']}",
-                     "--build-arg", f"RUST_IMAGE={rust_image}", "--build-arg",
-                     f"DEBIAN_IMAGE={debian_image}", evidence / "context"], timeout=2400)
+        build = ["build", "--pull", "--iidfile", image_file, "--file", "acceptance/Dockerfile",
+                 "--build-arg", f"SOURCE_REVISION={source['revision']}"]
+        for name, override in (("RUST_IMAGE", rust_image), ("DEBIAN_IMAGE", debian_image)):
+            if override is not None:
+                build.extend(["--build-arg", f"{name}={override}"])
+        docker.call([*build, evidence / "context"], timeout=2400)
         image = image_file.read_text().strip()
         if not image.startswith("sha256:") or len(image) != 71:
             raise RuntimeError("build did not return a fixed image ID")
@@ -247,8 +249,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path)
     parser.add_argument("--remote", action="store_true", help="also run A03 through A10 on isolated SSH targets")
-    parser.add_argument("--rust-image", default="rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07")
-    parser.add_argument("--debian-image", default="debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2")
+    parser.add_argument("--rust-image")
+    parser.add_argument("--debian-image")
     options = parser.parse_args()
     name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     evidence = options.artifacts or Path.home() / "artifacts/rustward/ansible-acceptance" / name

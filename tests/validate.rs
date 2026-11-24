@@ -86,3 +86,19 @@ fn service_reports_startup_and_control_errors() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("Control request"));
 }
+
+#[test]
+fn both_executables_report_the_same_version() {
+    for (name, binary) in [
+        ("rustward", env!("CARGO_BIN_EXE_rustward")),
+        ("rustward-exec", env!("CARGO_BIN_EXE_rustward-exec")),
+    ] {
+        let output = Command::new(binary).arg("--version").output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("{name} {}\n", rustward::VERSION)
+        );
+        assert!(output.stderr.is_empty());
+    }
+}

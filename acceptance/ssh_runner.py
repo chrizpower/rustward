@@ -38,9 +38,11 @@ class Remote:
         if self.public_key is None:
             raise RuntimeError("prepare fixture credentials before running workloads")
         image_file = self.evidence / "target-image-id"
-        self.docker.call(["build", "--pull", "--target", "ssh-target", "--iidfile", image_file,
-            "--file", "acceptance/Dockerfile", "--build-arg", f"DEBIAN_IMAGE={debian_image}",
-            context], timeout=900)
+        build = ["build", "--pull", "--target", "ssh-target", "--iidfile", image_file,
+                 "--file", "acceptance/Dockerfile"]
+        if debian_image is not None:
+            build.extend(["--build-arg", f"DEBIAN_IMAGE={debian_image}"])
+        self.docker.call([*build, context], timeout=900)
         image = image_file.read_text().strip()
         if not image.startswith("sha256:") or len(image) != 71:
             raise RuntimeError("SSH target build has no fixed image ID")
