@@ -12,6 +12,22 @@ COPY src ./src
 COPY examples ./examples
 COPY web ./web
 
+FROM source AS release-build
+RUN cargo build --locked --release --bin rustward --bin rustward-exec
+
+FROM ${DEBIAN_IMAGE} AS release-smoke
+COPY --from=release-build /source/target/release/rustward /release/rustward
+COPY --from=release-build /source/target/release/rustward-exec /release/rustward-exec
+COPY examples/rustward.toml /example/rustward.toml
+COPY examples/tasks /example/tasks
+COPY examples/schedules /example/schedules
+USER 65534:65534
+RUN /release/rustward validate /example/rustward.toml && \
+    test "$(/release/rustward-exec /tmp /tmp /usr/bin/printf '%s' 'launcher works')" = 'launcher works'
+
+FROM scratch AS release-files
+COPY --from=release-smoke /release/ /
+
 FROM source AS preview-build
 RUN cargo build --locked --release --features web-preview --bin rustward
 

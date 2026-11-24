@@ -28,6 +28,34 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 | [Glossary](docs/GLOSSARY.md) | Shared domain definitions |
 | [Agent instructions](AGENTS.md) | Repository work and documentation rules |
 
+## Download Linux executables
+
+Each push to `main` starts [Linux builds](https://github.com/chrizpower/rustward/actions/workflows/linux-builds.yml).
+After both archives upload, the workflow creates `build-<full-commit-sha>`.
+The tag message links to the workflow run. Choose the archive for your Linux
+VM's architecture. Each archive contains `rustward`, `rustward-exec`, and a
+`BUILD-INFO.json` file. Builds and smoke tests use the Debian 13 baseline.
+The two executables in an archive come from the same locked build.
+
+To download by exact source revision, sign in to GitHub CLI with repository
+read access and run the following. Set `arch` to `x86_64` or `aarch64`.
+
+```sh
+repo=chrizpower/rustward
+revision=REPLACE_WITH_FULL_COMMIT_SHA
+arch=aarch64
+run=$(gh run list --repo "$repo" --workflow linux-builds.yml --commit "$revision" \
+  --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$run" --repo "$repo" --name "rustward-linux-$arch" --dir downloads
+cd downloads
+sha256sum --check "rustward-linux-$arch.tar.gz.sha256"
+tar -xzf "rustward-linux-$arch.tar.gz"
+```
+
+GitHub Actions artifacts expire under the repository's retention policy.
+Keep a copy and its checksum with the pinned build inputs for VM installations
+that must be repeatable after the artifact expires.
+
 ## Development
 
 Use the Rustward devbox on the development host. Its checkout is `the checkout`.
@@ -144,7 +172,7 @@ The hooks divide the checks as follows:
 Rust checks use the working tree. For a partial commit, run them with only the
 intended changes present. Before a push, run them on the commit to be pushed.
 Each checkout needs `just hooks-install`; it sets the local Git `core.hooksPath`
-to `.githooks`. GitHub Actions workflows are currently disabled.
+to `.githooks`.
 
 The file size check reads only added, copied, modified, renamed, or type-changed
 files in the Git index. Each file must be at most 5,000 tokens, where tokens equal

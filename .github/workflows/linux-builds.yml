@@ -1,0 +1,69 @@
+name: Linux builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-builds-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    name: Package Linux ${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x86_64
+            runner: ubuntu-24.04
+          - architecture: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build and package the executables
+        env:
+          RUSTWARD_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          python3 -B scripts/package-linux.py --engine docker --revision "$GITHUB_SHA" \
+            --architecture "$RUSTWARD_ARCHITECTURE" --output "$RUNNER_TEMP/downloads"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rustward-linux-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/downloads/
+          if-no-files-found: error
+          compression-level: 0
+
+  tag:
+    name: Tag the build
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Tag the commit
+        run: |
+          tag="build-$GITHUB_SHA"
+          ref="refs/tags/$tag"
+          existing="$(git ls-remote --refs origin "$ref")"
+          if [ -z "$existing" ]; then
+            run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
+              tag --annotate "$tag" "$GITHUB_SHA" --message "Linux downloads: $run_url"
+            git push origin "$ref"
+          else
+            git fetch --no-tags origin "$ref:$ref"
+            test "$(git rev-parse "$ref^{commit}")" = "$GITHUB_SHA"
+          fi
+          printf 'Linux executables for `%s` are available in this run’s artifacts.\n' "$tag" >> "$GITHUB_STEP_SUMMARY"
