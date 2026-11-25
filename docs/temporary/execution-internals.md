@@ -194,7 +194,7 @@ limits, and migration.
 ## Supervision interface and systemd adapter
 
 The user selected a dedicated unprivileged systemd user manager and supplied
-Debian 13 as the fleet baseline. The adapter targets systemd 257 or newer and
+Debian 13 as the build baseline. The adapter targets systemd 257 or newer and
 cgroup v2 on that host. It does not request system-manager or privileged unit
 creation. Host setup must keep the dedicated user manager available. The
 adapter process and manager must see the same cgroup hierarchy. Production host

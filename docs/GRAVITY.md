@@ -38,7 +38,7 @@ maintenance rules](../AGENTS.md#domain-language-maintenance).
 - **Type and status:** Constraint; confirmed product requirement and repository instructions.
 - **Rule:** Implement Rustward in Rust. Use the same execution core for ordinary
   commands and Ansible. Keep Ansible-specific behavior outside the core. Keep
-  production deployment in `the deployment repository`. Implementation does not authorize
+  production deployment in the deployment repository. Implementation does not authorize
   live tasks, migration, or deployment. Use synthetic inputs and credentials.
 - **Reason and cost:** Preserve a reusable execution model. Workloads need their
   own definitions and runtime preparation.
@@ -171,7 +171,7 @@ A change to definition ownership or identity requires a new user decision.
 ## Accepted telemetry scope
 
 On 2026-11-08, the user accepted structured service logs and private
-Prometheus-compatible `/metrics` for the monitoring service. Keep task output and sensitive
+Prometheus-compatible `/metrics` for monitoring. Keep task output and sensitive
 data out of service logs. Use bounded metric labels and keep the endpoint
 private and read-only. P06 governs state and task-log failures. Production
 collection belongs in the deployment repository.

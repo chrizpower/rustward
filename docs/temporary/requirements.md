@@ -3,7 +3,7 @@
 Rustward is a generic Rust task executor for one trusted administrator.
 The confirmed scope includes manual requests, UTC cron schedules, Git-managed
 TOML definitions, a web UI, and gap reporting without replay of missed occurrences.
-Ansible is the first workload. Rustward will replace Semaphore after separate
+Ansible is the first workload. Rustward will replace the existing scheduler after separate
 workload review, production preparation, and operator approval.
 
 Use these IDs in reviews. [Gravity](../GRAVITY.md) owns accepted architecture
@@ -118,10 +118,10 @@ dependencies, production secret and SSH handling, delivery of alerts, and
 independent backup freshness monitoring. Verify isolated restore and a usable
 rollback before cutover.
 
-Review a sanitized Semaphore workload export before claiming workload
+Review a sanitized workload export from the existing scheduler before claiming workload
 compatibility. Select a license and verify the supported CPU architecture and
 Linux baseline before release. Specify private web access, secret references,
 task environment and resource controls, metadata bounds, and backup and restore
 mechanisms. Production access, schedule migration, and deployment require
 separate authorization. Deployment configuration belongs in
-`the deployment repository`.
+the deployment repository.

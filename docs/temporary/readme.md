@@ -15,7 +15,7 @@ The [project overview](../../README.md#documentation) lists permanent documents.
 | [Operational contracts](operations.md) | Implemented scheduling, reload, web access, retention, restore, and service telemetry. Retire sections as work closes or transfers. Keep lasting policy in Gravity. |
 | [Acceptance suite](acceptance.md) | Implemented runner. Isolated test setup, commands, and case criteria. Remove once the runnable suite carries its required setup and checks and any open verification has an owner. |
 | [Acceptance evidence](acceptance-evidence.md) | Historical verification. Recorded bundle reviews and their limits. Remove after the required evidence is retained with its provenance and any open verification is resolved or transferred. |
-| [Migration](migration.md) | Open. Semaphore migration preparation. Remove after migration acceptance or cancellation and transfer of applicable records. |
+| [Migration](migration.md) | Open. Scheduler migration preparation. Remove after migration acceptance or cancellation and transfer of applicable records. |
 
 Remove this index when its last reference is retired. Keep accepted rules and
 contracts in force during every transfer.

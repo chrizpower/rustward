@@ -30,10 +30,10 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 
 ## Download Linux executables
 
-[Linux builds](https://github.com/chrizpower/rustward/actions/workflows/linux-builds.yml)
+[Linux builds](.github/workflows/linux-builds.yml)
 runs the project checks in the Debian 13 build container and the browser tests
 on the GitHub runner. It builds both Linux architectures on pull requests to
-`main` and pushes to `main`. Successful pushes upload private Actions artifacts
+`main` and pushes to `main`. Successful pushes upload Actions artifacts
 and create a version tag after verifying both archives.
 
 The version starts with the package version in `Cargo.toml`. For example,
@@ -59,14 +59,14 @@ download run URL. The lookup stays on the last completed build while a newer
 commit is still building.
 
 Choose the archive for your Linux server's architecture. Each archive contains
-`rustward`, `rustward-exec`, and `BUILD-INFO.json`. Both executables come from the
+`rustward`, `rustward-exec`, `LICENSE`, and `BUILD-INFO.json`. Both executables come from the
 same locked build. The build and smoke tests use the Debian 13 baseline.
 
 To download by exact source revision, sign in to GitHub CLI with repository
 read access and run the following. Set `arch` to `x86_64` or `aarch64`.
 
 ```sh
-repo=chrizpower/rustward
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 revision=REPLACE_WITH_FULL_COMMIT_SHA
 arch=aarch64
 run=$(gh run list --repo "$repo" --workflow linux-builds.yml --commit "$revision" \
@@ -83,8 +83,7 @@ that must be repeatable after the artifact expires.
 
 ## Development
 
-Use the Rustward devbox on the development host. Its checkout is `the checkout`.
-The image supplies stable Rust, rustfmt, Clippy, just, Python 3.11+, and build tools.
+Install stable Rust, rustfmt, Clippy, just, Python 3.11+, and build tools.
 Coverage checks also need `llvm-tools-preview` (selected in
 `rust-toolchain.toml`), and
 [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov).
@@ -184,9 +183,7 @@ The Docker suite requires rootful Docker and cgroup v2. It runs synthetic host
 tests and checks proxy authentication and a systemd run. It runs separately
 from `just check` and `just web-test`.
 
-No fleet access or private credentials are needed. The devbox uses
-`the build directory` for compiled output. Source, home,
-and build storage persist through container replacement; processes do not.
+No fleet access or private credentials are needed.
 
 `just coverage` runs all test targets and checks Rust line coverage. It excludes
 integration-test and example source files from the measurement. Coverage must
@@ -222,8 +219,7 @@ them. `just check` tests these rules with a synthetic Git repository. The tests
 clear inherited Git repository settings before creating fixtures. A regression
 test checks that inherited Git paths do not change the parent repository.
 
-Deployment configuration stays in
-[the deployment repository](deployment-repository). Do not copy fleet credentials
+Keep deployment configuration outside this repository. Do not copy fleet credentials
 or production inventory into this repository.
 
-The project license is not selected. Select it before publishing releases.
+Rustward is licensed under the [Apache License, Version 2.0](LICENSE).

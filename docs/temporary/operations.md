@@ -186,7 +186,7 @@ identity and set `X-Rustward-Monitor: 1` on the upstream request only after
 authorization. Clear that header on every other route. Preserve the configured
 Host. The Rust service also checks the Unix socket peer UID. A browser session
 alone cannot authorize a scrape. Production identity and route configuration for
-the monitoring service belong in `the deployment repository`.
+monitoring belong in the deployment repository.
 
 A scrape reads in-memory measurements. It does not use SQLite, enter the service
 request queue, or change controls. The web listener allows up to 16 concurrent
@@ -247,5 +247,5 @@ the restored service admits only a new occurrence after explicit resume.
 On separate state databases, keep schedule ownership exclusive by stopping the
 original before starting the replacement.
 
-the monitoring service's live scrape and delivery through the deployment relay require a separate
-deployment check in `the deployment repository`.
+Live metrics collection and delivery through the deployment relay require a separate
+deployment check in the deployment repository.
