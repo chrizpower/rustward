@@ -1,4 +1,4 @@
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use std::collections::BTreeMap;
 use toml::Value;

@@ -7,7 +7,7 @@ use std::{
     thread,
 };
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rusqlite::{Connection, params};
 use rustward::admission::{Admission, Cancellation, Error, RunPhase, RunResult, RunState, Store};
 use sha2::Sha256;
