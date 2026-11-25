@@ -30,56 +30,27 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 
 ## Download Linux executables
 
-[Linux builds](.github/workflows/linux-builds.yml)
-runs the project checks in the Debian 13 build container and the browser tests
-on the GitHub runner. It builds both Linux architectures on pull requests to
-`main` and pushes to `main`. Successful pushes upload Actions artifacts
-and create a version tag after verifying both archives.
-
-The version starts with the package version in `Cargo.toml`. For example,
-an artifact from package version `0.1.0` reports `0.1.0-dev.g<full-commit-sha>`.
-Both executables report that value with `--version`. The web console and
-`BUILD-INFO.json` show the same version, and the Git tag adds a leading `v`.
-The tag message links to the workflow run. Local Cargo builds report a
-`-dev.local` version. Change the package version in `Cargo.toml` and update
-`Cargo.lock` to select a new base version. Existing `build-<full-commit-sha>` tags
-still identify earlier artifacts.
-
-To find the newest completed versioned build on `main`, run from a checkout:
+Download the archive and matching `.sha256` file for your architecture from
+[GitHub Releases](https://github.com/chrizpower/rustward/releases). Downloads are public.
+Set `arch` to `x86_64` or `aarch64` and run these commands in the download directory:
 
 ```sh
-git fetch origin --tags
-tag=$(git describe --first-parent --tags --abbrev=0 --match 'v[0-9]*.g*' origin/main)
-printf '%s\n' "${tag#v}"
-git tag -ln "$tag"
-```
-
-The printed version matches `rustward --version`. The tag message contains the
-download run URL. The lookup stays on the last completed build while a newer
-commit is still building.
-
-Choose the archive for your Linux server's architecture. Each archive contains
-`rustward`, `rustward-exec`, `LICENSE`, and `BUILD-INFO.json`. Both executables come from the
-same locked build. The build and smoke tests use the Debian 13 baseline.
-
-To download by exact source revision, sign in to GitHub CLI with repository
-read access and run the following. Set `arch` to `x86_64` or `aarch64`.
-
-```sh
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-revision=REPLACE_WITH_FULL_COMMIT_SHA
 arch=aarch64
-run=$(gh run list --repo "$repo" --workflow linux-builds.yml --commit "$revision" \
-  --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run download "$run" --repo "$repo" --name "rustward-linux-$arch" --dir downloads
-cd downloads
 sha256sum --check "rustward-linux-$arch.tar.gz.sha256"
 tar -xzf "rustward-linux-$arch.tar.gz"
 ```
 
-GitHub Actions artifacts expire under the repository's retention policy.
-Keep a copy and its checksum with the pinned build inputs for server installations
-that must be repeatable after the artifact expires.
+Each archive contains `rustward`, `rustward-exec`, `LICENSE`, and `BUILD-INFO.json`.
+Both executables report the packaged version with `--version`.
+
+The [Linux build workflow](.github/workflows/linux-builds.yml) checks the project
+and browser console and builds both Linux architectures on the Debian 13 baseline.
+After a successful build on `main`, it verifies both archives against their
+checksums and source revision, tags the commit, and publishes a GitHub prerelease.
+Pull requests run the checks and builds. Earlier tags can have Actions artifacts only.
+
+Build tags use the package version and full commit ID, for example
+`v0.1.0-dev.g<full-commit-sha>`. Local builds report a `-dev.local` version.
 
 ## Development
 

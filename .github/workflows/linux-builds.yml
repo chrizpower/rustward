@@ -78,7 +78,7 @@ jobs:
 
   tag:
     if: github.ref == 'refs/heads/main'
-    name: Tag the build
+    name: Publish Linux prerelease
     needs: package
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -91,6 +91,7 @@ jobs:
           pattern: rustward-linux-*
           path: ${{ runner.temp }}/downloads
       - name: Tag the commit
+        id: version
         run: |
           tag="$(python3 -B scripts/package-linux.py --revision "$GITHUB_SHA" --tag-for "$RUNNER_TEMP/downloads")"
           ref="refs/tags/$tag"
@@ -104,4 +105,37 @@ jobs:
             git fetch --no-tags origin "$ref:$ref"
             test "$(git rev-parse "$ref^{commit}")" = "$GITHUB_SHA"
           fi
-          printf 'Linux executables for `%s` are available in this run’s artifacts.\n' "$tag" >> "$GITHUB_STEP_SUMMARY"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+      - name: Publish the verified archives
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          cd "$RUNNER_TEMP/downloads"
+          assets=()
+          for arch in x86_64 aarch64; do
+            bundle="rustward-linux-$arch/rustward-linux-$arch.tar.gz"
+            assets+=("$bundle" "$bundle.sha256")
+          done
+
+          if ! draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
+              --title "$TAG" --notes "Linux development build for commit $GITHUB_SHA."
+            draft=true
+          fi
+          if [[ "$draft" == true ]]; then
+            gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+
+          for asset in "${assets[@]}"; do
+            printf 'sha256:%s  %s\n' "$(sha256sum "$asset" | cut -d' ' -f1)" "${asset##*/}"
+          done | sort > expected.txt
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | "\(.digest)  \(.name)"' | sort > uploaded.txt
+          diff -u expected.txt uploaded.txt
+
+          if [[ "$draft" == true ]]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
