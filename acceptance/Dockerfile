@@ -13,6 +13,19 @@ COPY src ./src
 COPY examples ./examples
 COPY web ./web
 
+FROM source AS project-checks
+COPY .gitattributes Justfile ./
+COPY acceptance ./acceptance
+COPY scripts ./scripts
+COPY tests ./tests
+RUN useradd --create-home --uid 1000 checks && chown -R checks:checks /source
+USER checks
+ENV HOME=/home/checks
+RUN rustup component add rustfmt clippy llvm-tools-preview && \
+    cargo install --locked --version 1.59.0 just && \
+    cargo install --locked --version 0.9.1 cargo-llvm-cov
+RUN namei -l /source /usr/bin/env && just check
+
 FROM source AS release-build
 ARG RUSTWARD_SOURCE_REVISION
 RUN cargo build --locked --release --bin rustward --bin rustward-exec

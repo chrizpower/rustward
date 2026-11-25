@@ -28,24 +28,22 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Install check tools
-        run: |
-          rustup component add rustfmt clippy llvm-tools-preview
-          cargo install --locked --version 1.59.0 just
-          cargo install --locked --version 0.9.1 cargo-llvm-cov
       - name: Run project checks
-        env:
-          RUSTWARD_TEST_FIXTURE_ROOT: /opt/rustward-test-fixtures
         run: |
-          sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" "$RUSTWARD_TEST_FIXTURE_ROOT"
-          just check
+          context="$(mktemp -d "$RUNNER_TEMP/rustward-checks.XXXXXX")"
+          git archive HEAD -- .gitattributes Cargo.toml Cargo.lock Justfile build.rs \
+            acceptance examples scripts src tests web |
+            tar -xf - -C "$context"
+          docker build --progress=plain --target project-checks \
+            -f "$context/acceptance/Dockerfile" "$context"
       - name: Run browser tests
         env:
           RUSTWARD_WEB_CONTAINER: none
           RUSTWARD_SOURCE_REVISION: ${{ github.sha }}
         run: |
+          npm --prefix web ci --include=dev
           npm --prefix web exec -- playwright install --with-deps chromium
-          just web-test
+          python3 -B tests/web/run.py
 
   package:
     needs: checks

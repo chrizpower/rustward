@@ -31,9 +31,10 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 ## Download Linux executables
 
 [Linux builds](https://github.com/chrizpower/rustward/actions/workflows/linux-builds.yml)
-runs the project and browser checks and builds both Linux architectures on
-pull requests to `main` and pushes to `main`. Successful pushes upload private
-Actions artifacts and create a version tag after verifying both archives.
+runs the project checks in the Debian 13 build container and the browser tests
+on the GitHub runner. It builds both Linux architectures on pull requests to
+`main` and pushes to `main`. Successful pushes upload private Actions artifacts
+and create a version tag after verifying both archives.
 
 The version starts with the package version in `Cargo.toml`. For example,
 an artifact from package version `0.1.0` reports `0.1.0-dev.g<full-commit-sha>`.
