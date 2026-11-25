@@ -2,8 +2,7 @@
 
 `rustward serve` starts the local service. `rustward ctl` sends one command to
 that service. The service runs the controller with the dedicated systemd user
-manager. See [acceptance evidence](acceptance-evidence.md) for the scope of
-recorded host passes.
+manager.
 
 ## Local service
 
@@ -189,120 +188,24 @@ by the existing contract. The local service drives this drain.
 
 ## Bounded output capture
 
-### Interface and files
+The controller creates private per-run logs and starts both readers before
+launch. Setup failure prevents launch. After the start call, the controller
+drops its local writer descriptors, including after an uncertain reply.
 
-`capture::Capture::create(root, &run_id, options)` creates a new directory named
-with the admitted `supervision::RunId` under an existing protected log root. It
-creates `stdout.log` and `stderr.log` with exclusive creation. Directory mode is
-0700. File mode is 0600, subject to a more restrictive process umask. Existing
-paths are never reused, truncated, or overwritten. A setup failure can leave
-partial files for review. No automatic deletion or retry is provided.
+Both streams share one retained-byte limit. Each reader keeps its own byte
+order and continues draining after the limit. Truncation starts with the first
+observed byte beyond the allowance. Process exit alone does not establish EOF.
+The controller polls for completion while the workers drain and synchronize
+the files. A storage failure closes the shared safety gate and starts emergency
+stopping even if an earlier capture failure was already recorded.
 
-Setup synchronizes the empty log files, new directory, and parent directory
-before returning. Setup failures are `AlreadyExists`, `Storage`, or `Resources`.
-Diagnostics omit paths, output, and underlying error messages. The caller must
-stop setup before starting any program if capture cannot be created.
+Recovery verifies and synchronizes the surviving files. Their lengths establish
+retained bytes. Historical observed counts and truncation can remain unknown.
+The controller records incomplete recovered output as failed. The [capture
+library](../../src/capture/mod.rs), [recovery checks](../../src/capture/recovery.rs),
+and [capture tests](../../tests/capture.rs) maintain the interface and failure cases.
 
-`Options::default()` sets a shared 10 MiB retained-byte limit. The caller can set
-`retained_bytes` for each capture without changing service TOML version 2. A zero limit
-keeps no output and still drains both streams. Successful empty output is not
-truncation, even at a zero limit. Filling the limit exactly is not truncation.
-Additional observed bytes establish truncation.
-
-Creation returns a `Capture` and `OutputWriters`. `OutputWriters::output()`
-borrows stdout and stderr descriptors in the existing `supervision::Output`
-interface. The manager must duplicate those descriptors when accepting a start.
-The caller must drop its local writers after the start call, including when
-its response is rejected or uncertain. Remote copies can remain with the program and manager. A manager reference
-can outlive its processes. Callers must not assume that process exit alone
-closes every writer.
-
-The descriptors use Unix stream socket pairs. The two workers start before the
-caller can launch a program. Each worker reads one stream with a fixed 8 KiB
-buffer and writes raw bytes to its own file. There is no line buffering, text
-decoding, event queue, or output-sized allocation. Kernel socket buffers are
-finite and are separate from the two application read buffers. Active captures
-must be bounded by dispatch capacity. The controller owns a bounded active-run registry.
-
-### Limit and stream ordering
-
-Workers claim bytes from one atomic remaining allowance before writing. They
-handle partial writes and interrupted I/O without exceeding the allowance. A
-report counts only bytes actually written as retained. The sum of retained bytes
-across both files cannot exceed the configured limit. Read counters saturate at
-`u64::MAX` rather than overflowing.
-
-Each file retains a prefix of its own stream. Scheduling determines which stream
-uses the shared allowance first. The library promises no fairness or total order
-between streams. A stream that loses bytes because the allowance is exhausted
-is marked truncated. Truncation is normal limit handling. Both workers continue
-draining to EOF after truncation, without more output writes. Slow storage can
-cause backpressure before the limit. This library does not promise fixed drain
-latency or protect against a storage call that never returns.
-
-### Completion and failure
-
-`Capture::report()` reads live, monotonic byte counters and stream truncation/EOF
-flags. It is not a synchronized final snapshot. EOF means the output writer
-closed, not that the program exited, local cleanup completed, or log storage was
-synchronized. Capturing output does not prove an external outcome.
-
-`Capture::failure()` reports the first failure through shared atomic state,
-without waiting for EOF or taking a storage lock. The signal has fixed size and
-cannot grow with output. It remains set even when later operations succeed.
-Failures distinguish stream read, log write, flush, synchronization, worker
-panic, and abandonment. `Failure::is_storage()` identifies write, flush, and
-synchronization faults. A storage fault is not converted to truncation.
-
-After a failure, workers stop starting output writes and continue draining
-readable streams. An already pending write can finish. A failed read ends that
-stream's worker without asserting EOF. A worker panic is caught and reported.
-Its reader closes. On stream completion or a read error, each worker flushes
-and synchronizes its retained prefix. These operations cannot clear an earlier
-failure. Partial successful writes remain counted as retained evidence.
-
-`Capture::finish()` waits for both workers and returns a final `Report` only
-when both streams ended and the log operations succeeded. On failure, it returns
-`CaptureError` with the first failure and partial report. All local and remote
-output writers must close before normal completion can finish. For the systemd
-adapter, first confirm cleanup and durably retain exit/cleanup evidence, then
-release the unit reference before waiting for capture EOF. Record final run
-completion only after successful capture synchronization. Callers must
-check failure while work is active rather than waiting for `finish()` to detect
-a fault that requires stopping the program. The controller records final
-Evidence and retained-byte accounting atomically with run completion.
-
-Under P06, the service must close admission and dispatch and stop all
-active local work on storage failure. It must preserve uncertainty for review.
-`SetupError::Storage` also invokes P06 while other work is active. This library
-exposes failures without requiring a database write. It does
-not implement those controls alone. The [controller](#execution-controller) connects monitors to an independent emergency stop worker and the shared Safety gate. Read and worker failures also mean
-capture is incomplete. They must not support a successful execution result.
-
-Dropping an unfinished `Capture` marks it abandoned, shuts down both readers,
-and joins the workers. Producers can then receive a broken-pipe error. This
-releases idle readers without detached drain threads, but does not stop a
-systemd unit or confirm cleanup. Drop can wait for a storage operation already
-in progress. Abandonment provides no durable-success claim and is not a
-substitute for supervising and stopping active work.
-
-### Nonblocking observation and recovery
-
-`Capture::monitor()` returns a cloned atomic Monitor. It reports the first
-failure, live counters, and a sticky storage_failed signal. A later storage
-fault remains visible even if a read or worker failure was recorded first.
-`try_finish` returns None while a worker is active, including during log sync.
-It never waits on active I/O. Once all workers end it returns the final report
-or failure. The controller uses this method instead of joining live workers.
-
-After durable cleanup and manager release, `capture::recover` checks existing
-private per-run files without following symlinks and synchronizes retained
-prefixes. It rejects unsafe modes, ownership, hard links, and oversized output.
-Recovered Evidence keeps retained lengths but leaves historical observed counts
-and truncation unknown. The controller marks unfinished recovered output failed.
-Current synchronization cannot establish complete capture before a crash.
-
-### Schedule controls
+## Schedule controls
 
 Use `reload` to activate the complete definition set at the service's startup
 path. Use `schedule_pause` or `schedule_resume` with an optional `schedule_id`.
@@ -315,13 +218,13 @@ Gap bounds use an exclusive `after_ms` and inclusive `through_ms`.
 A null `after_ms` or `missed_count` indicates an unknown value.
 See the [scheduling and reload contracts](operations.md#scheduling).
 
-### Web console
+## Web console
 
 The optional web listener uses the service's existing queue and controls.
 See [private web access](operations.md#private-web-access) for the proxy
 contract, preview, and browser tests.
 
-### Verification
+## Verification
 
 Synthetic tests exercise the service through its control interface, controller
 ordering and failure paths with synthetic supervisors, and output capture with

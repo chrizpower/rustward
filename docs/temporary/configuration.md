@@ -1,87 +1,12 @@
 # Configuration
 
-## Accepted file layout
+## File layout and loading
 
-Source: User decisions in the configuration discussion on 2026-11-08. These
-rules replace the single-document layout and explicit task IDs. The user accepted
-the exact schema, compatibility, loading, and revision choices below during the
-implementation discussion on the same date.
-
-### Files and ownership
-
-Use one `rustward.toml` for service configuration, one TOML file per task,
-and one TOML file per schedule. Allow nested folders under both definition roots:
-
-```text
-rustward.toml
-tasks/
-  backup/
-    database.toml
-    files.toml
-schedules/
-  backup/
-    database-nightly.toml
-```
-
-Service configuration owns definition locations, state and log paths, global
-execution and queue limits, and retention settings. Task files own executable,
-working directory, arguments, label, and input schema. Schedule files select a
-task, fixed inputs, and UTC times. Several schedules can select the same task.
-The implemented schemas below define the keys, fields, defaults, and version.
-
-Git-managed TOML is the sole source of task and schedule definitions. The web UI
-does not create or edit these definitions. SQLite retains runtime state,
-including occurrence records, evaluation state, and schedule pause state. It is
-not a second source of schedule definitions. Operational controls remain
-separate from definition editing.
-
-### Path identity
-
-Derive each task or schedule ID from its path relative to its definition root.
-Remove the final `.toml` suffix and use `/` between path components. Do not put a
-second ID field in the definition file. Task and schedule IDs have separate
-scopes. IDs must be unique within each complete set.
-
-Every folder name and filename stem must match `[a-z][a-z0-9-]*`: start with a
-lowercase ASCII letter, then use only lowercase ASCII letters, digits, or
-hyphens. Use the lowercase `.toml` suffix. Empty components, `.` and `..`,
-uppercase letters, underscores, and backslashes are not valid ID components.
-Symlinks are not allowed for definition files or folders. Discovery must not
-follow them. Input IDs remain single names under the current input rules.
-
-| Definition file | ID |
-| --- | --- |
-| `tasks/backup/database.toml` | Task `backup/database` |
-| `tasks/maintenance/database.toml` | Task `maintenance/database` |
-| `schedules/backup/database-nightly.toml` | Schedule `backup/database-nightly` |
-
-A schedule selects the exact task ID, for example `backup/database`. Moving a
-whole definition root preserves IDs. Renaming or moving a file within its root
-changes its ID and means removal plus addition. Moving a folder changes every
-ID below it. Update affected references in the same configuration update.
-Folders group definitions. They do not introduce inherited task settings.
-
-### Validation and retained work
-
-Validate the complete candidate set before activation, including unique IDs,
-path rules, task definitions, schedule task references, and fixed input values.
-Reject an invalid update as a whole and retain the previous active set. Do not
-silently omit an invalid definition or activate only the valid files. The service
-loads the complete set at startup and on an explicit `reload` request.
-See the [operational contract](operations.md#live-reload).
-
-Queued and active runs retain their accepted definitions and original identities
-after edits, moves, or removal. Keep existing request-key comparison rules: a
-retry with the original task ID can return its original run after removal.
-Changing the task ID changes the request payload.
-
-A renamed schedule is a new schedule. Do not automatically transfer pause state
-or occurrence history to its new ID. Preserve the old records under their
-original identity. Apply first-installation behavior to the new schedule and
-never replay missed occurrences. Editing a schedule at the same path preserves its ID
-and must not make a handled occurrence eligible again.
-
-### Loading and evidence
+The [configuration ownership rules](../GRAVITY.md#accepted-configuration-ownership-and-identity)
+define file ownership, path-derived IDs, rename behavior, and complete-set
+validation. For example, `tasks/backup/database.toml` defines task
+`backup/database`. A schedule refers to that exact ID. Folders group files
+without introducing inherited settings. Input IDs are single names.
 
 `config::load(path)` and `rustward validate <rustward.toml>` implement the layout.
 The service file must be named `rustward.toml`. Relative definition and storage
@@ -145,7 +70,7 @@ argument generation rules do not change. YAML remains unsupported.
 
 The file format change leaves older admission records, run snapshots, arguments,
 runtime IDs, fingerprints, and revisions intact. New configuration revisions use
-the encoding below. See the [admission storage contract](execution-internals.md#storage-and-transactions)
+the encoding below. See the [SQLite schema and migrations](../../src/admission/schema.rs)
 for the current database schema.
 
 ## Service schema
@@ -295,7 +220,8 @@ year ends, and leap days. These tests do not implement a scheduler or prove
 persistent occurrence handling, missed-work policy, or dispatch.
 
 Unsupported cron files fail complete-set loading. Existing admitted work and
-stored revision bytes are unchanged. Runtime evaluation remains unimplemented.
+stored revision bytes are unchanged. The service evaluates active schedules as described in
+[scheduling](operations.md#scheduling).
 
 ## Normalization and revisions
 

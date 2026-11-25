@@ -2,8 +2,10 @@
 
 Use this suite to verify the generic execution path with a synthetic Ansible
 workload and an ordinary command. Run on an isolated Linux host. Results apply
-to the recorded fixture and source revision. See [acceptance evidence](acceptance-evidence.md)
-for recorded results and limits.
+to the recorded fixture and source revision. Keep bundle provenance and review records with the test artifacts.
+Use the local Docker suite for scheduler and console checks and the SSH suite
+for A03–A10. An earlier service bundle lacked the database and logs needed for
+independent review. Rootless Podman with delegated cgroup v2 remains unverified.
 
 ## Docker command and isolation
 
@@ -157,10 +159,8 @@ output, matching byte accounting, and both stdout/stderr markers. Completion
 must survive database reopen. Start markers prove one workload invocation.
 Process markers include PID and Linux start time to handle PID reuse.
 
-The recovery path reacquires one systemd unit reference before stopping an
-existing execution. RefUnit never starts a missing unit. The adapter checks
-identity before and after acquisition, then retains the unit until cleanup and
-release. See the [systemd reference interface](https://www.freedesktop.org/software/systemd/man/257/org.freedesktop.systemd1.html).
+Recovery checks the unit identity before and after RefUnit and holds the reference
+until cleanup. A missing unit cannot trigger a start.
 
 Before the suite, the host runner waits up to 30 seconds for a read-only
 `acceptance probe-manager` response. It uses the native UserBus authentication

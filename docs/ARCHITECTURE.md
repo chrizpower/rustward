@@ -107,6 +107,10 @@ repeat a start for an unfinished dispatched run.
 
 The systemd adapter uses one transient service and cgroup per run. Release
 requires evidence that the unit ended and its local processes are gone.
+The adapter binds observations to the systemd invocation ID and cgroup path.
+It compares fresh unit snapshots around a cgroup read. If the identity changes
+or the evidence stays inconsistent, cleanup remains uncertain. The controller
+records cleanup before releasing the unit reference.
 Output handling must finish before the service records completion. A storage
 fault initiates local stopping without a successful database write.
 See [Gravity](GRAVITY.md#rules).
@@ -129,4 +133,6 @@ Local cleanup and the run result describe local execution. An uncertain
 external outcome blocks new starts. After local completion, an administrator
 can acknowledge one run against its current evidence. Acknowledgement records
 the checks, remaining uncertainty, and reason to resume. The run result and
-other gates retain their original effect. See [P02](GRAVITY.md#p02-preserve-accepted-work-and-stop-on-uncertainty).
+other gates retain their original effect. The service commits the note and the
+release of that run’s review block together. Retrying the same acknowledgement
+ID with the same evidence and note returns the original record. See [P02](GRAVITY.md#p02-preserve-accepted-work-and-stop-on-uncertainty).
