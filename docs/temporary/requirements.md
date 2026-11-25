@@ -88,27 +88,17 @@ Cancellation cannot prove that a remote operation stopped or restored a service.
 The UI and runbook must state this limit. For backup cancellation, confirm the
 affected service and remote lock state before acknowledging interruption.
 
-## Retained mechanism proposals
+## Open proposals and verification
 
-These proposals require review before implementation. The accepted rules in
-Gravity and the operational contracts govern overlapping behavior.
+The service implements UTC scheduling, bounded output polling, explicit reload,
+and offline backup and restore. See [operations](operations.md) for their
+interfaces and failure handling.
 
-- **P01:** Evaluate one internal scheduler or systemd timers against the
-  accepted occurrence, admission, and missed-work rules. Consider server-sent
-  events or bounded polling for web output.
-- **P02:** Consider showing queued runs before resuming. Any task-specific
-  waiver of uncertainty blocking needs explicit review against P02.
-- **P03:** Consider showing the selected runtime revision. Define checks for
-  dependency updates, failed preparation, and safe retirement.
-- **P04:** Consider a local command to trigger reload. Specify durable
-  checkpoint and pause storage. Report the lack of a checkpoint on first
-  installation and test clock changes without replay.
-- **P05:** Evaluate a supported SQLite backup with consistent logs and runtime
-  references. Report missing logs. Test per-run restore decisions, exclusion of
-  a second executor or schedule owner, and schema rollback compatibility.
-- **Web and operations:** Test invalid inputs, output escaping, access checks,
-  CSRF, reconnects, and notification failures. Measure resource and latency
-  targets before acceptance.
+- Review any proposed task-specific exception to uncertainty blocking against P02.
+- Evaluate visibility of queued runs and runtime revisions before resume.
+- Define safe runtime retirement and verify dependency updates and failed preparation.
+- Verify rollback compatibility and recovery with missing logs. Verify alert
+  delivery and measure resource use and latency before release.
 
 ## Release and workload gates
 
@@ -119,9 +109,8 @@ independent backup freshness monitoring. Verify isolated restore and a usable
 rollback before cutover.
 
 Review a sanitized workload export from the existing scheduler before claiming workload
-compatibility. Select a license and verify the supported CPU architecture and
-Linux baseline before release. Specify private web access, secret references,
-task environment and resource controls, metadata bounds, and backup and restore
-mechanisms. Production access, schedule migration, and deployment require
+compatibility. Verify the supported CPU architecture and
+Linux baseline before release. Verify private web access and restore on the deployment host. Resolve
+production secret references, task resource controls, and metadata bounds. Production access, schedule migration, and deployment require
 separate authorization. Deployment configuration belongs in
 the deployment repository.

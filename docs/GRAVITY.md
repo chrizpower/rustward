@@ -234,7 +234,7 @@ from old generations. Normal restart preserves the issuer generation.
 
 ## Release and production boundaries
 
-License selection is a release gate. Workload compatibility, production access,
+The project uses the [Apache License, Version 2.0](../LICENSE). Workload compatibility, production access,
 and migration require separate evidence and authorization. Distributed execution
 and other scope extensions are not authorized.
 

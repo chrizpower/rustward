@@ -21,7 +21,7 @@ recovery, and the default timeout on 2026-11-08.
 Results distinguish success, failure, cancellation, timeout, and interruption.
 Use exit code 0 for success. Nonzero exit codes and unexpected signals mean
 failure unless a prior stop decision applies. Use a task wrapper for a different
-exit convention. The [systemd adapter](execution-internals.md#supervision-interface-and-systemd-adapter)
+exit convention. The [systemd adapter](../ARCHITECTURE.md#execution-boundary)
 owns the local process boundary. Tasks must leave no local daemons.
 
 ## Boundary and prerequisites
@@ -76,7 +76,7 @@ together. After an interruption, already absent files can be handled again
 without releasing capacity twice. A removal failure invokes P06. Run history,
 admission records, and historical capture evidence stay available. The current
 log charge can be zero even when historical evidence records captured bytes.
-Age-based cleanup remains open. See [retention](operations.md#age-based-retention).
+For age-based cleanup, see [retention](operations.md#age-based-retention).
 
 ## State and evidence
 
@@ -111,7 +111,7 @@ reconstruct a permit or call start for recovered work, including a crash after
 intent commit but before the original start call.
 
 A review block survives later observations, cleanup, completion, and reopen.
-[Acknowledgement](execution-internals.md#administrator-review-and-acknowledgement) records one note for one completed run and its
+[Acknowledgement](../ARCHITECTURE.md#administrator-review-and-acknowledgement) records one note for one completed run and its
 reviewed evidence, then clears that run’s block. Pausing
 or resuming dispatch cannot clear review. Absence of a systemd unit alone does
 not release a slot. Recovery polling stops uncertain local work. The service must obtain cleanup
@@ -232,7 +232,7 @@ The local service wires each store to the same gate.
 confirmation that output workers have ended and partial evidence was handled.
 It cannot claim synchronized lost bytes or Success. Both retain the review block,
 check retained bytes against the reservation, and release the slot only on commit.
-[Administrator acknowledgement](execution-internals.md#administrator-review-and-acknowledgement) can then clear that run’s review
+[Administrator acknowledgement](../ARCHITECTURE.md#administrator-review-and-acknowledgement) can then clear that run’s review
 block with one note and the unchanged reviewed evidence.
 A storage-closed handle cannot complete a run.
 
@@ -252,5 +252,5 @@ Synthetic tests cover exclusive ownership, FIFO and capacity, cancellation races
 crashes on both sides of launch intent and supervisor acceptance, rollback,
 uncertain replies and identity, timeout boundaries, graceful and force stopping,
 and restart without a second start. They also cover log reclamation under
-capacity pressure, partial deletion, and database rollback. Review
-[isolated-host evidence](acceptance-evidence.md) separately.
+capacity pressure, partial deletion, and database rollback. The [isolated-host suite](acceptance.md) checks local process cleanup.
+Host power-loss durability still requires separate verification.

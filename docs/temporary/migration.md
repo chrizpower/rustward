@@ -16,8 +16,7 @@ explicit cancellation. Remove the temporary folder if it is then empty.
 ## Acceptance gates
 
 These gates retain the original migration sequence and proposed evidence.
-The [acceptance evidence](acceptance-evidence.md) records synthetic results
-that cover part of phase 4. The isolated pilot rehearsal checks monitoring and
+The [acceptance suite](acceptance.md) covers the synthetic cases in phase 4. The isolated pilot rehearsal checks monitoring and
 recovery before phase 5. Use `just pilot-test` for synthetic alert delivery and
 `just acceptance-container` for the local systemd restore rehearsal. Workload
 review, live monitoring, and cutover gates remain open.
