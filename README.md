@@ -202,9 +202,10 @@ intended changes present. Before a push, run them on the commit to be pushed.
 Each checkout needs `just hooks-install` to set the local Git `core.hooksPath`
 to `.githooks`.
 
-Dependabot opens weekly update pull requests for Rust, npm, GitHub Actions,
-and pinned Docker images. Update pull requests use the same CI checks as
-other pull requests.
+Dependabot groups weekly version updates into one pull request each for Cargo,
+npm, GitHub Actions, and Docker when updates are available. Each group includes
+major, minor, and patch updates. Debian major image updates are excluded.
+Update pull requests use the same CI checks as other pull requests.
 
 The file size check reads only added, copied, modified, renamed, or type-changed
 files in the Git index. Each file must be at most 5,000 tokens, where tokens equal
