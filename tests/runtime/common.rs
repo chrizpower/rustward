@@ -22,9 +22,12 @@ impl RuntimeFixture {
     pub fn new() -> Self {
         // The real metadata describes a preparation user. A different numeric
         // execution UID tests the policy without launching or changing users.
+        let base = std::env::var_os("RUSTWARD_TEST_FIXTURE_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
         let outer = tempfile::Builder::new()
             .prefix(".runtime-fixture-")
-            .tempdir_in(env!("CARGO_MANIFEST_DIR"))
+            .tempdir_in(base)
             .unwrap();
         mode(outer.path(), 0o755);
         let preparation_uid = fs::metadata(outer.path()).unwrap().uid();

@@ -99,6 +99,12 @@ just hooks-install
 just check
 ```
 
+The prepared-runtime tests check directory ownership and permissions. If the
+checkout path fails those checks, set `RUSTWARD_TEST_FIXTURE_ROOT` to an
+existing absolute directory owned by your user. The directory and its parents
+must allow traversal by all users and deny group and other write access.
+The parents must belong to your user or root. The path must be free of symlinks.
+
 Rustward runs tasks on Linux with systemd on x86-64 and ARM64. On macOS,
 build and test the shared code with Rust and Apple’s Command Line Tools:
 

@@ -14,9 +14,12 @@ pub(crate) struct Native {
 }
 impl Native {
     pub(crate) fn new(host_ref: bool) -> Self {
+        let base = std::env::var_os("RUSTWARD_TEST_FIXTURE_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
         let outer = tempfile::Builder::new()
             .prefix(".runtime-fixture-controller-")
-            .tempdir_in(env!("CARGO_MANIFEST_DIR"))
+            .tempdir_in(base)
             .unwrap();
         mode(outer.path(), 0o755);
         let uid = rustix::process::geteuid().as_raw();
