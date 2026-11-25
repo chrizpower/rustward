@@ -8,16 +8,16 @@ default-run = "rustward"
 
 [dependencies]
 rustix = { version = "1.1", features = ["fs"] }
-getrandom = "0.3"
+getrandom = "0.4"
 hex = "0.4"
-hmac = "0.12"
-rusqlite = { version = "0.40", features = ["bundled"] }
+hmac = "0.13"
+rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 toml = { version = "1.2.1", features = ["serde"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
-croner = { version = "4.0.3", default-features = false, features = ["chrono"] }
+croner = { version = "5.0.0", default-features = false, features = ["chrono"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { version = "1.1", features = ["net", "process"] }
 zbus = { version = "5", features = ["blocking-api"] }
