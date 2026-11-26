@@ -240,6 +240,7 @@ reference them.
 
 **Writable run directory**: A separate writable directory for one run outside its
 prepared runtime. It does not replace the task's configured working directory.
+Age-based retention removes it when the run expires.
 The Rust interface calls it runtime::WorkDirectory. The user accepted this
 relationship on 2026-11-09.
 

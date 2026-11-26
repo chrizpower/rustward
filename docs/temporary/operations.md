@@ -94,7 +94,10 @@ Queued runs, active runs, unresolved reviews and their output, and permanent
 admission records are preserved. Schedule occurrence decisions and review
 acknowledgements also remain. An expired run no longer has a link in schedule
 history. A matching manual request retry returns `history_removed` with the
-original run ID. Log files are removed before history is committed. A storage
+original run ID. Log files and the writable run directory are removed before
+history is committed. Cleanup does not follow symbolic links or cross mounts
+inside a writable run directory. An unreadable directory, mount, or excessive
+nesting stops cleanup for operator inspection. A storage
 failure closes the service under [Gravity P06](../GRAVITY.md); after repair and
 restart, retention can retry a file removal that already succeeded. Capacity
 based log reclamation continues to run before dispatch as needed. Global

@@ -130,8 +130,8 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
             emergency,
         })
     }
-    pub(crate) fn remove_retained_logs(&self, id: &RunId) -> Result<(), admission::Error> {
-        self.preparation.remove_logs(id)
+    pub(crate) fn remove_expired_files(&self, id: &RunId) -> Result<(), admission::Error> {
+        self.preparation.remove_expired_files(id)
     }
 
     pub fn set_paused(&mut self, paused: bool) -> Result<(), Error> {
@@ -167,7 +167,7 @@ impl<S: Supervisor + Clone + Send + 'static> Controller<S> {
     pub fn start_next(&mut self) -> Result<Start, Error> {
         let permit = match self
             .session
-            .claim_with_reclamation(|id| self.preparation.remove_logs(id))
+            .claim_with_reclamation(|id| self.preparation.remove_expired_files(id))
             .map_err(Error::State)?
         {
             Claim::Blocked(block) => return Ok(Start::Blocked(block)),

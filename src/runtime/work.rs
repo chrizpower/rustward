@@ -1,6 +1,11 @@
-use rustix::fs::{Mode, mkdirat};
+use rustix::{
+    fs::{AtFlags, Dir, FileType, Mode, OFlags, ResolveFlags, mkdirat, openat2, statat, unlinkat},
+    io::Errno,
+};
 use std::{
+    ffi::CStr,
     fs::File,
+    io,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::Arc,
@@ -57,6 +62,14 @@ impl WorkRoot {
         Ok(&self.root)
     }
 
+    pub(crate) fn remove_expired(&self, id: &RunId) -> Result<(), Error> {
+        let root = self.checked_directory()?;
+        let name = std::ffi::CString::new(id.as_str()).map_err(|_| Error::WorkStorage)?;
+        remove_tree(root, &name, 0, self.owner)
+            .and_then(|()| root.sync_all())
+            .map_err(|_| Error::WorkStorage)
+    }
+
     pub fn create(&self, run_id: &RunId) -> Result<WorkDirectory, Error> {
         self.create_checked(run_id, || {})
     }
@@ -87,6 +100,47 @@ impl WorkRoot {
             path: self.path.join(run_id.as_str()),
         })
     }
+}
+
+fn remove_tree(parent: &File, name: &CStr, depth: u8, owner: u32) -> io::Result<()> {
+    if depth == 128 {
+        return Err(Errno::LOOP.into());
+    }
+    let directory = match openat2(
+        parent,
+        name,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+        ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_XDEV,
+    ) {
+        Ok(fd) => File::from(fd),
+        Err(Errno::NOENT) => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    let meta = directory.metadata()?;
+    if meta.uid() != owner {
+        return Err(Errno::PERM.into());
+    }
+    for entry in Dir::read_from(&directory)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if matches!(name.to_bytes(), b"." | b"..") {
+            continue;
+        }
+        let stat = statat(&directory, name, AtFlags::SYMLINK_NOFOLLOW)?;
+        if FileType::from_raw_mode(stat.st_mode) == FileType::Directory {
+            remove_tree(&directory, name, depth + 1, owner)?;
+        } else {
+            unlinkat(&directory, name, AtFlags::empty())?;
+        }
+    }
+    directory.sync_all()?;
+    let current = statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
+    if current.st_dev != meta.dev() || current.st_ino != meta.ino() {
+        return Err(Errno::STALE.into());
+    }
+    unlinkat(parent, name, AtFlags::REMOVEDIR)?;
+    Ok(())
 }
 impl WorkDirectory {
     pub fn path(&self) -> &Path {

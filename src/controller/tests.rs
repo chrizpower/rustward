@@ -200,7 +200,7 @@ impl Preparation for Prepare {
             failure,
         }
     }
-    fn remove_logs(&self, id: &RunId) -> Result<(), admission::Error> {
+    fn remove_expired_files(&self, id: &RunId) -> Result<(), admission::Error> {
         let root = File::open(&self.logs).unwrap();
         capture::remove_logs(&root, id).map_err(|_| admission::Error::Storage)
     }

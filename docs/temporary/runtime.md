@@ -110,8 +110,8 @@ partial evidence. Dropping a handle never deletes data.
 
 A run's writable directory is outside the catalog and does not replace its
 working_directory. These directories separate run data. They are not a security
-boundary between hostile tasks running as the same user. Removal and retention
-remain future work. Work-storage errors set the shared failure gate when consumed
+boundary between hostile tasks running as the same user. Age-based retention
+removes these directories for eligible runs. Work-storage errors set the shared failure gate when consumed
 by dispatch. Invalid or reused paths record a definite pre-launch failure.
 
 ## Dispatch interface
@@ -244,6 +244,32 @@ Synthetic tests cover manifest normalization, protected paths, command paths,
 selection changes between admissions, and revalidation before launch. The
 [suite](acceptance.md) runs the opt-in runtime permission test and A08 with
 pinned A and B selections. Runtime publication, dependency completeness, and
-preserving referenced versions remain preparation responsibilities. Safe
-removal of writable run directories and prepared-runtime retirement need
-operational procedures.
+preserving referenced versions remain preparation responsibilities.
+
+### Retire a prepared runtime
+
+Pause dispatch, drain active runs, and stop every service that uses the catalog.
+Keep them stopped and suspend publication and restore operations until retirement
+finishes. As the service account, run this command for each state database and
+each backup you intend to restore:
+
+```sh
+rustward state runtime-references /absolute/path/to/state.db
+```
+
+The command takes the offline database lock and prints a JSON array of distinct
+runtime IDs for queued runs, active runs, and unresolved reviews. Keep every
+reported runtime and its host manifest. Also keep every runtime selected by a
+service startup configuration or rollback procedure. If any inspection fails or
+you cannot account for a catalog consumer, stop retirement.
+
+The preparation account can then move unreferenced runtimes out of the catalog.
+Keep a rollback copy until you verify the remaining catalog and the service
+restart. Apply the same checks before retiring host manifests.
+
+### Existing writable run directories
+
+Age-based retention uses the run record to authorize deletion. For directories
+left by older releases after their run records expired, use offline maintenance.
+Stop the service and confirm local cleanup and the directory's run ID from
+retained evidence before deletion. Keep unknown directories for investigation.

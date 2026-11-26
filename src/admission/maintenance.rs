@@ -43,11 +43,27 @@ pub(crate) fn snapshot(source: &Path, destination: &Path) -> Result<(), Error> {
         .map_err(storage)
 }
 
+pub(crate) fn runtime_references(path: &Path) -> Result<Vec<String>, Error> {
+    let db =
+        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(storage)?;
+    let mut query = db
+        .prepare(
+            "SELECT DISTINCT runtime_id FROM runs LEFT JOIN launches USING(run_id)
+             WHERE phase!='completed' OR review_required=1 ORDER BY runtime_id",
+        )
+        .map_err(storage)?;
+    query
+        .query_map([], |row| row.get(0))
+        .map_err(storage)?
+        .collect::<Result<_, _>>()
+        .map_err(storage)
+}
+
 impl Store {
     pub(crate) fn expire(
         &mut self,
         cutoff: i64,
-        mut remove_logs: impl FnMut(&RunId) -> Result<(), Error>,
+        mut remove_files: impl FnMut(&RunId) -> Result<(), Error>,
     ) -> Result<usize, Error> {
         self.perform(|db| {
             let tx = db
@@ -70,7 +86,7 @@ impl Store {
                     .map_err(storage)?
             };
             for id in &ids {
-                remove_logs(&RunId::new(id).map_err(|_| Error::Storage)?)?;
+                remove_files(&RunId::new(id).map_err(|_| Error::Storage)?)?;
                 tx.execute("DELETE FROM launches WHERE run_id=?1", [id])
                     .map_err(storage)?;
                 tx.execute("DELETE FROM runs WHERE run_id=?1", [id])

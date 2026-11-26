@@ -13,7 +13,7 @@ use super::{check_database, state_error};
 use crate::{
     admission::{
         Store,
-        maintenance::{Decision, snapshot},
+        maintenance::{Decision, runtime_references, snapshot},
     },
     config,
     runtime::WorkRoot,
@@ -28,7 +28,8 @@ const USAGE: &str = "Usage:
   rustward state restore <backup-directory> <new-state-directory>
   rustward state reviews <state-directory>
   rustward state decide <state-directory> <run-id> <keep|cancel|interrupt> <note>
-  rustward state release <state-directory>";
+  rustward state release <state-directory>
+  rustward state runtime-references <state-database>";
 
 pub fn command(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     use crate::telemetry::{Event, Telemetry};
@@ -89,6 +90,13 @@ fn execute(args: &[OsString]) -> Result<(), String> {
         [action, dir] if action == "release" => {
             let (_lock, mut store) = open_existing(&absolute(dir)?.join(DATABASE))?;
             store.release_restore().map_err(state_error)
+        }
+        [action, database] if action == "runtime-references" => {
+            let database = absolute(database)?;
+            let _lock = lock_database(&database)?;
+            let references = runtime_references(&database).map_err(state_error)?;
+            println!("{}", serde_json::to_string(&references).map_err(message)?);
+            Ok(())
         }
         _ => Err(usage()),
     }

@@ -7,7 +7,8 @@ reload. The private web console uses the same admission and execution controls.
 Vite builds the Svelte console during the Linux Rust build. The Rust service
 embeds and serves these assets in the same process.
 
-The service expires eligible completed runs and their logs in bounded batches.
+The service expires eligible completed runs, their logs, and their writable
+run directories in bounded batches.
 Offline state commands preserve SQLite and retained output in a checked backup.
 Restore creates a new state directory and keeps the service closed until the
 operator reviews its unfinished runs and releases the restored state.

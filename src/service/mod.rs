@@ -425,7 +425,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         let cutoff = admission::utc_ms()? - age_ms;
         let delay = match self
             .store
-            .expire(cutoff, |id| self.controller.remove_retained_logs(id))
+            .expire(cutoff, |id| self.controller.remove_expired_files(id))
         {
             Ok(0) => 60,
             Ok(count) => {

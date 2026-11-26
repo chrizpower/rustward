@@ -62,7 +62,7 @@ impl Preparation for Prepare {
         prepared
     }
 
-    fn remove_logs(&self, id: &RunId) -> Result<(), admission::Error> {
+    fn remove_expired_files(&self, id: &RunId) -> Result<(), admission::Error> {
         let directory = self
             .0
             .checked_directory()

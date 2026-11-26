@@ -238,14 +238,27 @@ fn removal_checks_the_pinned_root_and_retries_absent_output() {
     .unwrap();
     drop(writers);
     drop(capture);
-    fixture.roots.remove_logs(&id).unwrap();
-    fixture.roots.remove_logs(&id).unwrap();
+    let work = fixture.roots.work.create(&id).unwrap();
+    let nested = work.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join("output"), "synthetic").unwrap();
+    std::os::unix::fs::symlink(&fixture.path, nested.join("linked-runtime")).unwrap();
+    fixture.roots.remove_expired_files(&id).unwrap();
+    assert!(!work.path().exists());
+    assert!(fixture.path.join("bin/task").is_file());
+    fixture.roots.remove_expired_files(&id).unwrap();
+    std::os::unix::fs::symlink(&fixture.path, work.path()).unwrap();
+    assert_eq!(
+        fixture.roots.remove_expired_files(&id),
+        Err(admission::Error::Storage)
+    );
+    fs::remove_file(work.path()).unwrap();
     let logs = fixture.roots.logs.path();
     fs::rename(logs, logs.with_extension("old")).unwrap();
     fs::create_dir(logs).unwrap();
     mode(logs, 0o700);
     assert_eq!(
-        fixture.roots.remove_logs(&id),
+        fixture.roots.remove_expired_files(&id),
         Err(admission::Error::Storage)
     );
 }

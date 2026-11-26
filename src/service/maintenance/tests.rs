@@ -443,3 +443,37 @@ fn backup_does_not_upgrade_the_source_database() {
     let mut backup = Store::open(archive.join(DATABASE)).unwrap();
     assert_eq!(backup.restore_phase().unwrap().as_deref(), Some("backup"));
 }
+
+#[test]
+fn retirement_lists_unfinished_runs_and_unresolved_reviews() {
+    let fixture = Fixture::new();
+    let path = fixture.path(DATABASE);
+    let mut store = Store::open(&path).unwrap();
+    let (_, queued) = fixture.queue(&mut store);
+    let (_, active) = fixture.queue(&mut store);
+    let (_, review) = fixture.queue(&mut store);
+    let (_, finished) = fixture.queue(&mut store);
+    store.cancel_queued(&finished).unwrap();
+    drop(store);
+    let db = Connection::open(&path).unwrap();
+    db.execute(
+        "UPDATE runs SET runtime_id='queued' WHERE run_id=?1",
+        [&queued],
+    )
+    .unwrap();
+    db.execute(
+        "UPDATE runs SET runtime_id='active',phase='running',dispatched=1 WHERE run_id=?1",
+        [&active],
+    )
+    .unwrap();
+    db.execute("UPDATE runs SET runtime_id='review',phase='completed',result='interruption',dispatched=1 WHERE run_id=?1", [&review]).unwrap();
+    db.execute("INSERT INTO launches (run_id,start_state,cleanup_confirmed,review_required,log_bytes) VALUES (?1,'accepted',1,1,0)", [&review]).unwrap();
+    let lock = lock_database(&path).unwrap();
+    assert!(execute(&["runtime-references".into(), path.clone().into_os_string()]).is_err());
+    drop(lock);
+    execute(&["runtime-references".into(), path.clone().into_os_string()]).unwrap();
+    assert_eq!(
+        runtime_references(&path).unwrap(),
+        ["active", "queued", "review"]
+    );
+}

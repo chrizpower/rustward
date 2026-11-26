@@ -91,7 +91,7 @@ impl Preparation for PanicPreparation {
     fn prepare(&self, _: dispatch::Permit, _: u64, _: &Registry) -> Prepared {
         panic!("synthetic preparation panic")
     }
-    fn remove_logs(&self, _: &RunId) -> Result<(), admission::Error> {
+    fn remove_expired_files(&self, _: &RunId) -> Result<(), admission::Error> {
         unreachable!()
     }
 
