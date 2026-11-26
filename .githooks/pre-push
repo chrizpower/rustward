@@ -1,4 +1,5 @@
 #!/bin/sh
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-exec just check
+just check
+exec just acceptance-nspawn

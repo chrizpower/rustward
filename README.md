@@ -143,16 +143,22 @@ just pilot-test
 The rehearsal uses Podman or Docker and sends test mail to a loopback SMTP
 sink. The full Docker suite also rehearses a backup and restore with systemd.
 
-Run the Docker integration suite from the checkout on your laptop with Docker
-Desktop running in Linux container mode, or on an isolated Linux Docker host:
+Run the local systemd integration suite from a Linux checkout:
 
 ```sh
 just acceptance-container
 ```
 
-The Docker suite requires rootful Docker and cgroup v2. It runs synthetic host
-tests and checks proxy authentication and a systemd run. It runs separately
-from `just check` and `just web-test`.
+This command builds the current source and runs the existing local acceptance
+cases in an unprivileged `systemd-nspawn` container. A prepared Debian 13 runner
+needs cgroup v2, active BPF LSM, and the systemd mount and namespace helpers.
+Set `RUSTWARD_NSPAWN_BASE_IMAGE` to the runner's prepared GPT image. A Linux
+checkout without a local runner can set `RUSTWARD_NSPAWN_RUNNER` to an
+executable that forwards input and output to `acceptance/nspawn-runner.sh`.
+See the [runner setup](#prepare-an-integration-runner).
+
+Run `just acceptance-docker` for the explicit rootful Docker backend, or
+`just acceptance-ssh` for the additional synthetic SSH scenarios.
 
 No fleet access or private credentials are needed.
 
@@ -166,12 +172,45 @@ The hooks divide the checks as follows:
 | Hook | Checks | Manual command |
 | --- | --- | --- |
 | Pre-commit | Staged file size and whitespace errors, rustfmt, and Clippy with warnings treated as errors | `just check-file-size`, `git diff --cached --check`, and `just check-commit` |
-| Pre-push | rustfmt, Clippy, all test targets, and the 95% line coverage minimum | `just check` |
+| Pre-push | Rust checks, the 95% line coverage minimum, and local systemd acceptance | `just check && just acceptance-nspawn` |
 
 Rust checks use the working tree. For a partial commit, run them with only the
 intended changes present. Before a push, run them on the commit to be pushed.
 Each checkout needs `just hooks-install` to set the local Git `core.hooksPath`
 to `.githooks`.
+
+### Prepare an integration runner
+
+Use a dedicated Linux runner with Debian 13 and systemd 257. Install
+`systemd-container` and make the `systemd-mountfsd.socket` and
+`systemd-nsresourced.socket` units available. The host kernel must have active
+BPF LSM and cgroup v2. Enable linger for a dedicated runner account. Run the
+acceptance command as that account.
+
+Prepare a Debian 13 root filesystem with systemd as PID 1. Install `dbus`,
+`dbus-user-session`, `libpam-systemd`, `ansible-core`, `openssh-client`,
+`python3`, `python3-prometheus-client`, `python3-aiosmtpd`, `nginx`, `openssl`,
+`prometheus`, and `prometheus-alertmanager`. Create the non-root `rustward`
+account and enable linger. For that account's `user@UID.service`, set
+`NoNewPrivileges=yes` and clear `CapabilityBoundingSet` and
+`AmbientCapabilities`. Mask the default Nginx, Prometheus, and Alertmanager
+services. The suite starts its own instances in the private network namespace.
+
+Put the filesystem in a GPT image with a Linux root partition for the runner's
+architecture. Keep this base image read-only to the runner account. Create a
+separate ordinary file at `/var/lib/machines/rwtest.raw` and an adjacent lock
+file named `.#rwtest.raw.lck`. Give the runner account write access to those
+two files and traversal access to the directory. The runner overwrites this
+image slot from the base before each test. Keep the machine directory owned by
+the administrator. On this dedicated runner, set
+`SYSTEMD_MOUNTFSD_TRUSTED_DIRECTORIES=1` in a service drop-in for
+`systemd-mountfsd.service` to allow the staged image. The same constraints
+apply to an alternate slot selected with `RUSTWARD_NSPAWN_IMAGE_SLOT`.
+
+The Rust build requires the development tools above and `strip` from binutils.
+Keep the build distribution compatible with Debian 13. The hook fails if the
+runner is unavailable or the test does not produce complete pass evidence.
+Logs and evidence go under `~/artifacts/rustward/nspawn/`.
 
 Dependabot groups weekly version updates into one pull request each for Cargo,
 npm, GitHub Actions, and Docker when updates are available. Each group includes

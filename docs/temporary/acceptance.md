@@ -3,8 +3,7 @@
 Use this suite to verify the generic execution path with a synthetic Ansible
 workload and an ordinary command. Run on an isolated Linux host. Results apply
 to the recorded fixture and source revision. Keep bundle provenance and review records with the test artifacts.
-Use the local Docker suite for scheduler and console checks and the SSH suite
-for A03–A10. An earlier service bundle lacked the database and logs needed for
+Use nspawn for local scheduler and console checks. Use SSH for A03–A10. An earlier service bundle lacked the database and logs needed for
 independent review. Rootless Podman with delegated cgroup v2 remains unverified.
 
 ## Docker command and isolation
@@ -12,7 +11,7 @@ independent review. Rootless Podman with delegated cgroup v2 remains unverified.
 Run on an isolated Linux Docker host, preferably a disposable VM:
 
 ```sh
-just acceptance-container
+just acceptance-docker
 ```
 
 The build runs synthetic retention, restore, and telemetry tests before host acceptance.

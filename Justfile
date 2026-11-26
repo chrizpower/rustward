@@ -18,8 +18,13 @@ check-file-size:
 hooks-install:
     git config --local core.hooksPath .githooks
 
-# These commands use synthetic data on an isolated Docker host or prepared VM.
-acceptance-container:
+# These commands use synthetic data on a prepared nspawn or Docker runner.
+acceptance-container: acceptance-nspawn
+
+acceptance-nspawn:
+    python3 -I -B -c 'import sys; sys.path.insert(0, "acceptance"); import nspawn; sys.exit(nspawn.main())'
+
+acceptance-docker:
     python3 -I -B acceptance/container.py
 
 acceptance-ssh:

@@ -21,7 +21,7 @@ def excluded(path):
     return path.name == "__pycache__" or path.suffix == ".pyc"
 
 
-def snapshot(repository, destination):
+def snapshot(repository, destination, extra_files=()):
     destination.mkdir()
     files = []
 
@@ -42,7 +42,7 @@ def snapshot(repository, destination):
         else:
             raise ValueError("build context source contains a special file")
 
-    for name in ("Cargo.toml", "Cargo.lock", "build.rs", "src", "acceptance"):
+    for name in ("Cargo.toml", "Cargo.lock", "build.rs", "src", "acceptance", *extra_files):
         copy(repository / name, Path(name))
     (destination / "web").mkdir()
     for name in ("package.json", "package-lock.json", "vite.config.ts", "tsconfig.json", "index.html", "src"):
