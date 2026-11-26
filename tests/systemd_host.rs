@@ -1,12 +1,14 @@
 #![cfg(target_os = "linux")]
 
 use rustward::{
+    config::RunResources,
     supervision::*,
     systemd::{CgroupFs, Manager, Systemd, UserBus},
 };
 use std::{
-    fs::File,
+    fs::{self, File},
     os::fd::AsFd,
+    path::Path,
     thread,
     time::{Duration, Instant},
 };
@@ -46,8 +48,13 @@ fn wait_for(
 #[ignore = "requires an isolated Debian 13 host with a dedicated systemd user manager and cgroup v2"]
 fn confirms_child_cleanup_and_concurrent_unit_isolation() {
     let manager = UserBus::connect().expect("connect to the authenticated user manager");
-    let mut supervisor =
-        Systemd::new(manager, CgroupFs::default()).expect("verify the systemd baseline");
+    let mut supervisor = Systemd::new(manager, CgroupFs::default())
+        .expect("verify the systemd baseline")
+        .with_run_resources(RunResources {
+            memory_max_bytes: 67_108_864_u64.try_into().ok(),
+            tasks_max: 32_u32.try_into().ok(),
+            cpu_quota_percent: 50_u32.try_into().ok(),
+        });
     let directory = tempfile::tempdir().unwrap();
     let output = tempfile::tempfile().unwrap();
     let error = File::options().write(true).open("/dev/null").unwrap();
@@ -113,6 +120,16 @@ fn confirms_child_cleanup_and_concurrent_unit_isolation() {
     };
     assert_ne!(first.invocation, second.invocation);
     assert_ne!(first.control_group, second.control_group);
+    let group = Path::new("/sys/fs/cgroup").join(second.control_group.trim_start_matches('/'));
+    let limit = |name| fs::read_to_string(group.join(name)).unwrap();
+    assert_eq!(limit("memory.max").trim(), "67108864");
+    assert_eq!(limit("pids.max").trim(), "32");
+    let cpu: Vec<u64> = limit("cpu.max")
+        .split_whitespace()
+        .map(|field| field.parse().unwrap())
+        .collect();
+    assert_eq!(cpu.len(), 2);
+    assert_eq!(cpu[0] * 2, cpu[1]);
     assert_eq!(
         supervisor.stop(&ids[0], &first, StopMode::Graceful),
         Ok(StopOutcome::Accepted)

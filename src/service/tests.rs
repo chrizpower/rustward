@@ -193,7 +193,7 @@ fn startup_checks_private_state_and_prepared_runtime() {
     fs::remove_file(path.with_extension("duplicate")).unwrap();
     options.runtime_id = native.id.clone();
     let fixture = Fixture::new();
-    let mut service = open(options, protection, |path, roots, limits, safety| {
+    let mut service = open(options, protection, |path, roots, limits, _, safety| {
         assert_eq!(roots.logs.path(), base.join("logs"));
         assert_eq!(limits.log_bytes_per_run, 10 * 1024 * 1024);
         Ok(fixture.controller_at(path, limits, safety))
@@ -452,10 +452,12 @@ fn reload_preserves_active_schedules_after_invalid_candidate() {
     );
     assert_eq!(ok(daemon.request(request_history())), prior);
     fs::write(&schedule, valid).unwrap();
-    fs::write(&path, format!("{settings}\n[limits]\nqueued_runs=1\n")).unwrap();
-    assert!(
-        matches!(daemon.request(Request::Reload), Response::Error(message) if message == "InvalidConfiguration")
-    );
+    for change in ["[limits]\nqueued_runs=1", "[run_resources]\ntasks_max=32"] {
+        fs::write(&path, format!("{settings}\n{change}\n")).unwrap();
+        assert!(
+            matches!(daemon.request(Request::Reload), Response::Error(message) if message == "InvalidConfiguration")
+        );
+    }
     fs::write(&path, settings).unwrap();
 
     let minute = prior["checkpoint_ms"].as_i64().unwrap();

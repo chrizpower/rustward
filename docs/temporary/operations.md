@@ -38,7 +38,7 @@ remains queued. The same queue limit applies to both kinds of admission.
 
 Send `{"command":"reload"}` through `rustward ctl`. The service reads the same
 configuration path it used at startup and validates the entire candidate.
-Storage, limit, and retention setting changes require a restart. The service
+Storage, limit, run resource, and retention setting changes require a restart. The service
 keeps the previous configuration if loading, validation, or activation fails.
 Accepted runs and handled occurrences are retained. Activation applies the new
 definitions to future minutes.

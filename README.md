@@ -199,6 +199,8 @@ account and enable linger. For that account's `user@UID.service`, set
 Alertmanager services and the SSH socket. The suite starts its own instances
 in the private network namespace. Its SSH targets use separate PID and mount
 namespaces and listen only on loopback addresses.
+The user manager needs the cgroup v2 memory, PID, and CPU controllers.
+The systemd tests read the limits from the run's cgroup.
 
 Put the filesystem in a GPT image with a Linux root partition for the runner's
 architecture. Keep this base image read-only to the runner account. Create a

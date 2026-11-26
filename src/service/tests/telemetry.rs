@@ -54,7 +54,7 @@ fn configuration_requires_a_proxy_and_does_not_echo_invalid_values() {
                 preparation_uid: 1,
                 execution_uid: 2,
             },
-            |_, _, _, _| panic!("Invalid configuration reached the controller"),
+            |_, _, _, _, _| panic!("Invalid configuration reached the controller"),
         )
         .err()
         .unwrap()

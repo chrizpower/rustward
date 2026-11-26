@@ -108,6 +108,8 @@ repeat a start for an unfinished dispatched run.
 
 The systemd adapter uses one transient service and cgroup per run. Release
 requires evidence that the unit ended and its local processes are gone.
+The service can set a memory limit, task count limit, and CPU quota on each
+transient unit.
 The adapter binds observations to the systemd invocation ID and cgroup path.
 It compares fresh unit snapshots around a cgroup read. If the identity changes
 or the evidence stays inconsistent, cleanup remains uncertain. The controller

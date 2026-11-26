@@ -98,6 +98,12 @@ retained_log_bytes = 1073741824
 [retention] # The table and field can be omitted.
 days = 30
 
+# Optional settings. No Rustward-specific cap applies to an omitted field.
+[run_resources]
+memory_max_bytes = 67108864
+tasks_max = 32
+cpu_quota_percent = 50
+
 [telemetry] # The table and field can be omitted.
 metrics = false
 ```
@@ -105,6 +111,11 @@ metrics = false
 Limits and retention are nonnegative integers. Run counts and days fit `u32`.
 Byte limits fit `u64` but must also fit TOML's signed 64-bit integer syntax.
 A retention age of zero makes eligible runs expire as soon as they complete.
+Run resource limits are positive integers and apply to each run at dispatch.
+The memory limit is in bytes, the task limit counts processes and threads, and
+the CPU quota is a percentage of one logical CPU. A quota of 150 can use the
+equivalent of one and a half CPUs. Changes require a service restart and apply
+to runs dispatched after the restart, including runs already queued.
 The loader validates settings and the service applies them. Task files contain
 no service settings, environment/secret policy, or prepared runtime selection.
 

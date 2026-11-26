@@ -11,7 +11,7 @@ mod service;
 pub(crate) use files::SERVICE_FILENAME_ERROR;
 pub use files::load;
 pub use schedule::Schedule;
-pub use service::{Definitions, Limits, Retention, Service, Storage};
+pub use service::{Definitions, Limits, Retention, RunResources, Service, Storage};
 
 #[derive(Debug)]
 pub struct Config {

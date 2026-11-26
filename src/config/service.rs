@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    num::{NonZeroU32, NonZeroU64},
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -14,7 +17,17 @@ pub struct Service {
     #[serde(default)]
     pub retention: Retention,
     #[serde(default)]
+    pub run_resources: RunResources,
+    #[serde(default)]
     pub telemetry: Telemetry,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct RunResources {
+    pub memory_max_bytes: Option<NonZeroU64>,
+    pub tasks_max: Option<NonZeroU32>,
+    pub cpu_quota_percent: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -100,5 +113,33 @@ impl Service {
             }
         }
         Ok(service)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_resource_limits_are_optional_positive_integers() {
+        let source = "version=2\n[storage]\nstate_database='state'\nlog_directory='logs'\n";
+        let parse = |extra: &str| Service::parse(&format!("{source}{extra}"), Path::new("/"));
+        assert_eq!(parse("").unwrap().run_resources, RunResources::default());
+        let limits = parse(
+            "[run_resources]\nmemory_max_bytes=67108864\ntasks_max=32\ncpu_quota_percent=150",
+        )
+        .unwrap()
+        .run_resources;
+        assert_eq!(limits.memory_max_bytes.unwrap().get(), 67_108_864);
+        assert_eq!(limits.tasks_max.unwrap().get(), 32);
+        assert_eq!(limits.cpu_quota_percent.unwrap().get(), 150);
+        for invalid in [
+            "memory_max_bytes=0",
+            "tasks_max=-1",
+            "cpu_quota_percent=0",
+            "unknown=1",
+        ] {
+            assert!(parse(&format!("[run_resources]\n{invalid}")).is_err());
+        }
     }
 }

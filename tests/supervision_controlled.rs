@@ -1,12 +1,13 @@
 #![cfg(target_os = "linux")]
 
-use rustward::{supervision::*, systemd::*};
+use rustward::{config::RunResources, supervision::*, systemd::*};
 use std::{fs::File, os::fd::AsFd, path::Path, time::Duration};
 use zbus::zvariant::Value;
 struct ManagerFake {
     uid: u32,
     names: Vec<String>,
     calls: usize,
+    resources: bool,
 }
 impl Manager for ManagerFake {
     fn version(&mut self) -> Result<String, ManagerError> {
@@ -23,6 +24,15 @@ impl Manager for ManagerFake {
         assert_eq!(get("NoNewPrivileges"), &Value::from(true));
         assert_eq!(get("CapabilityBoundingSet"), &Value::from(0u64));
         assert_eq!(get("AmbientCapabilities"), &Value::from(0u64));
+        if self.resources {
+            assert_eq!(get("MemoryMax"), &Value::from(67_108_864_u64));
+            assert_eq!(get("TasksMax"), &Value::from(32_u64));
+            assert_eq!(get("CPUQuotaPerSecUSec"), &Value::from(1_500_000_u64));
+        } else {
+            for name in ["MemoryMax", "TasksMax", "CPUQuotaPerSecUSec"] {
+                assert!(!properties.iter().any(|(key, _)| *key == name));
+            }
+        }
         assert_eq!(
             get("ExecStartEx"),
             &Value::new(vec![(
@@ -86,26 +96,51 @@ fn controlled_start_pins_uid_drops_privileges_and_preserves_command_arguments() 
         cleanup_grace: Duration::from_secs(30),
     };
     let file = File::open("/dev/null").unwrap();
-    for (uid, names, expected) in [
+    for (uid, names, resources, expected) in [
         (
             1000,
             vec!["SYNTHETIC_INHERITED".into()],
+            true,
             Ok(StartOutcome::Accepted),
         ),
-        (1001, vec![], Err(Error::IdentityMismatch)),
-        (1000, vec!["bad=name".into()], Err(Error::InvalidRequest)),
-        (1000, vec!["".into()], Err(Error::InvalidRequest)),
-        (1000, vec!["a".into(); 4097], Err(Error::InvalidRequest)),
+        (
+            1000,
+            vec!["SYNTHETIC_INHERITED".into()],
+            false,
+            Ok(StartOutcome::Accepted),
+        ),
+        (1001, vec![], false, Err(Error::IdentityMismatch)),
+        (
+            1000,
+            vec!["bad=name".into()],
+            false,
+            Err(Error::InvalidRequest),
+        ),
+        (1000, vec!["".into()], false, Err(Error::InvalidRequest)),
+        (
+            1000,
+            vec!["a".into(); 4097],
+            false,
+            Err(Error::InvalidRequest),
+        ),
     ] {
         let mut adapter = Systemd::new(
             ManagerFake {
                 uid,
                 names,
                 calls: 0,
+                resources,
             },
             Groups,
         )
         .unwrap();
+        if resources {
+            adapter = adapter.with_run_resources(RunResources {
+                memory_max_bytes: 67_108_864_u64.try_into().ok(),
+                tasks_max: 32_u32.try_into().ok(),
+                cpu_quota_percent: 150_u32.try_into().ok(),
+            });
+        }
         assert_eq!(
             adapter.start_controlled(
                 &launch,

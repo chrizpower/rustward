@@ -4,7 +4,7 @@ mod cgroup;
 pub use bus::UserBus;
 pub use cgroup::CgroupFs;
 
-use crate::supervision::*;
+use crate::{config::RunResources, supervision::*};
 use std::path::{Component, Path};
 use zbus::zvariant::{Fd, Value};
 
@@ -66,6 +66,7 @@ pub trait Cgroups {
 pub struct Systemd<M, C> {
     manager: M,
     cgroups: C,
+    run_resources: RunResources,
 }
 
 impl<M: Manager, C: Cgroups> Systemd<M, C> {
@@ -78,7 +79,16 @@ impl<M: Manager, C: Cgroups> Systemd<M, C> {
         if major.parse::<u32>().ok().is_none_or(|v| v < 257) {
             return Err(Error::IncompatibleManager);
         }
-        Ok(Self { manager, cgroups })
+        Ok(Self {
+            manager,
+            cgroups,
+            run_resources: RunResources::default(),
+        })
+    }
+
+    pub fn with_run_resources(mut self, limits: RunResources) -> Self {
+        self.run_resources = limits;
+        self
     }
 
     fn identity(
@@ -204,6 +214,16 @@ impl<M: Manager, C: Cgroups> Systemd<M, C> {
                 Value::from(Fd::from(output.stderr)),
             ),
         ];
+        if let Some(memory) = self.run_resources.memory_max_bytes {
+            properties.push(("MemoryMax", Value::from(memory.get())));
+        }
+        if let Some(tasks) = self.run_resources.tasks_max {
+            properties.push(("TasksMax", Value::from(u64::from(tasks.get()))));
+        }
+        if let Some(percent) = self.run_resources.cpu_quota_percent {
+            let usec_per_second = u64::from(percent.get()) * 10_000;
+            properties.push(("CPUQuotaPerSecUSec", Value::from(usec_per_second)));
+        }
         let unset = if profile.is_some() {
             let mut names = self
                 .manager

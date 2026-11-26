@@ -49,7 +49,8 @@ was partial, the remaining mechanisms and targets are proposals.
 | N12 | Supported platform | Run on Linux x86-64 and ARM64 with systemd. Build shared code and run shared unit tests on macOS. Validate the production baseline before release. Development tests must not need fleet access or private Vault credentials. |
 
 P07 accepts the queue and log defaults listed under N05, with the permanent-key
-exception. N02/N03 performance figures remain proposed measurement targets. None
+exception. Optional per-run memory, task count, and CPU limits are implemented
+with systemd. N02/N03 performance figures remain proposed measurement targets. None
 of these figures is evidence of measured behavior.
 
 ## First-version exclusions
@@ -110,6 +111,7 @@ rollback before cutover.
 Review a sanitized workload export from the existing scheduler before claiming workload
 compatibility. Verify the supported CPU architecture and
 Linux baseline before release. Verify private web access and restore on the deployment host. Resolve
-production secret references, task resource controls, and metadata bounds. Production access, schedule migration, and deployment require
+production secret references and metadata bounds. Verify configured resource
+limits on the deployment host. Production access, schedule migration, and deployment require
 separate authorization. Deployment configuration belongs in
 the deployment repository.

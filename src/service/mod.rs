@@ -125,15 +125,20 @@ pub fn serve(options: Options) -> Result<(), String> {
         execution_uid: geteuid().as_raw(),
     };
     let web_options = options.web.clone();
-    let service = open(options, protection, |path, roots, limits, safety| {
-        let supervisor = Systemd::new(
-            UserBus::connect().map_err(|error| format!("user bus: {error:?}"))?,
-            CgroupFs::default(),
-        )
-        .map_err(|error| format!("systemd: {error:?}"))?;
-        Controller::open(path, roots, limits, supervisor, safety)
-            .map_err(|error| format!("controller: {error:?}"))
-    })?;
+    let service = open(
+        options,
+        protection,
+        |path, roots, limits, resources, safety| {
+            let supervisor = Systemd::new(
+                UserBus::connect().map_err(|error| format!("user bus: {error:?}"))?,
+                CgroupFs::default(),
+            )
+            .map_err(|error| format!("systemd: {error:?}"))?
+            .with_run_resources(resources);
+            Controller::open(path, roots, limits, supervisor, safety)
+                .map_err(|error| format!("controller: {error:?}"))
+        },
+    )?;
     let web = web_options
         .map(|options| {
             let logs = WorkRoot::open(&service.config.service().storage.log_directory)
@@ -166,7 +171,13 @@ pub fn serve(options: Options) -> Result<(), String> {
 fn open<S: Supervisor + Clone + Send + 'static>(
     options: Options,
     protection: runtime::Protection,
-    open_controller: impl FnOnce(&Path, Roots, Limits, Safety) -> Result<Controller<S>, String>,
+    open_controller: impl FnOnce(
+        &Path,
+        Roots,
+        Limits,
+        config::RunResources,
+        Safety,
+    ) -> Result<Controller<S>, String>,
 ) -> Result<Service<S>, String> {
     let telemetry = Telemetry::stderr().map_err(|error| format!("Service log worker: {error}"))?;
     let config = config::load(&options.config).map_err(|error| {
@@ -196,7 +207,7 @@ fn open<S: Supervisor + Clone + Send + 'static>(
         retained_log_bytes: settings.limits.retained_log_bytes,
     };
     let safety = Safety::observed(telemetry.clone());
-    let controller = open_controller(path, roots, limits, safety.clone())?;
+    let controller = open_controller(path, roots, limits, settings.run_resources, safety.clone())?;
     let store = Store::open_with_safety(path, safety.clone()).map_err(state_error)?;
     let mut service =
         Service::new(config, options.runtime_id, store, controller, safety).map_err(state_error)?;
@@ -488,6 +499,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         let new = candidate.service();
         if new.storage != old.storage
             || new.limits != old.limits
+            || new.run_resources != old.run_resources
             || new.retention != old.retention
             || new.telemetry != old.telemetry
         {
