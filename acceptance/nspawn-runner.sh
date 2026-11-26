@@ -33,7 +33,8 @@ cp --reflink=auto --sparse=always -- "$base" "$image"
 container() {
     deadline=$1 console=$2
     shift 2
-    systemd-run --user --wait --pipe --collect --property=Delegate=yes \
+    systemd-run --user --wait --pipe --collect \
+        --property=Delegate=yes --property=DelegateSubgroup=supervisor \
         /usr/bin/timeout --kill-after=15s "$deadline" /usr/bin/systemd-nspawn \
         --image="$image" --machine=rwtest --settings=no --register=no --keep-unit \
         --private-network --console="$console" "$@"
