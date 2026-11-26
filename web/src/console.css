@@ -27,6 +27,7 @@ h2 { font-size: 1.1rem; }
 .panel, .entry { background: white; border: 1px solid var(--border); border-radius: .55rem; padding: 1rem; }
 .entry { display: flex; align-items: center; gap: .55rem 1rem; flex-wrap: wrap; margin: .45rem 0; }
 .entry a { font-weight: 650; overflow-wrap: anywhere; }
+.run-runtime { min-width: 0; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 form { max-width: 35rem; }
 .field { display: grid; gap: .35rem; margin: 0 0 1rem; }

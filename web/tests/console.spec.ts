@@ -171,6 +171,7 @@ test('keyboard submission respects dispatch pause and the queued runs filter', a
   await page.getByRole('link', { name: 'Queued runs' }).press('Enter');
   await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'ordinary', exact: true })).toHaveCount(1);
+  await expect(page.getByText('Runtime: synthetic', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Resume dispatch' }).press('Enter');
   await page.goto(run);

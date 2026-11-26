@@ -18,7 +18,7 @@ pub(super) fn runs(store: &mut Store, before: Option<i64>, queued: bool) -> Resu
     store.perform(|db| {
         let mut query = db
             .prepare(
-                "SELECT sequence,runs.run_id,task_id,phase,result,schedule_id,due_ms
+                "SELECT sequence,runs.run_id,task_id,phase,result,schedule_id,due_ms,runtime_id
              FROM runs LEFT JOIN occurrences USING(run_id)
              WHERE sequence<?1 AND (?2=0 OR phase='queued') ORDER BY sequence DESC LIMIT 20",
             )
@@ -27,7 +27,7 @@ pub(super) fn runs(store: &mut Store, before: Option<i64>, queued: bool) -> Resu
             "sequence":r.get::<_, i64>(0)?, "run_id":r.get::<_, String>(1)?,
             "task_id":r.get::<_, String>(2)?, "phase":r.get::<_, String>(3)?,
             "result":r.get::<_, Option<String>>(4)?, "schedule_id":r.get::<_, Option<String>>(5)?,
-            "due_ms":r.get::<_, Option<i64>>(6)?,
+            "due_ms":r.get::<_, Option<i64>>(6)?, "runtime_id":r.get::<_, String>(7)?,
         }))).map_err(storage)?.collect::<Result<Vec<_>,_>>().map_err(storage)?;
         Ok(json!(rows))
     })

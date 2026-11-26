@@ -125,7 +125,7 @@ fn serves_assets_and_bounded_operations_with_origin_checks() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["run_id"] == id)
+            .any(|row| row["run_id"] == id && row["runtime_id"] == "runtime-1")
     );
     let output =
         || api(json!({"operation":"output","run_id":id,"stdout":0,"stderr":0})).1["ok"].clone();

@@ -29,6 +29,7 @@ type RunRow = {
   result: Lowercase<Result> | null;
   schedule_id: string | null;
   due_ms: number | null;
+  runtime_id: string;
 };
 type Admission = {
   status: 'admitted' | 'already_admitted' | 'history_removed';

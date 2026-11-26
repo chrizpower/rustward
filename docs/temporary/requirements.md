@@ -95,7 +95,6 @@ and offline backup and restore. See [operations](operations.md) for their
 interfaces and failure handling.
 
 - Review any proposed task-specific exception to uncertainty blocking against P02.
-- Evaluate visibility of queued runs and runtime revisions before resume.
 - Verify runtime dependency updates and failed preparation.
 - Verify rollback compatibility and recovery with missing logs. Verify alert
   delivery and measure resource use and latency before release.

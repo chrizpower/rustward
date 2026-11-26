@@ -81,6 +81,9 @@
               <a href={href('run', run.run_id)}>{run.task_id}</a>
               <span class="status">{label(run.result ?? run.phase)}</span>
               <span class="muted">{run.schedule_id ? `${run.schedule_id} · ${utc(run.due_ms)}` : 'Manual'}</span>
+              {#if run.phase === 'queued'}
+                <span class="muted run-runtime">Runtime: <code>{run.runtime_id}</code></span>
+              {/if}
             </div>
           {/snippet}
         </PagedList>

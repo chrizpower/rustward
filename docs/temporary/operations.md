@@ -72,6 +72,8 @@ keys. It polls each output stream in 16 KiB chunks and renders it as text.
 The console reconnects using the run ID and limits the displayed tail per
 stream. It shows a truncation or reclamation notice when stored evidence
 records it. Queue, run history, and schedule results use bounded pages.
+Queued rows show the pinned runtime ID so the administrator can check the
+selected runtime before resuming dispatch.
 
 `just web-preview` uses a disposable database, synthetic tasks, and a fake
 supervisor. On macOS the preview uses a Linux container and publishes its
