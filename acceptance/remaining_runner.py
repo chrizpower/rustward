@@ -1,7 +1,5 @@
 """Run the remaining isolated acceptance cases on a fresh SSH target."""
 import json
-from pathlib import Path
-import time
 from stopping_runner import Stopping, expected_inputs
 
 CASES = {"A06": {"root":"/opt/rustward-a06", "mode":"recovery", "kind":"recovery"},
@@ -18,23 +16,7 @@ class Remaining(Stopping):
 
     def run(self, revision):
         self.created = True
-        docker = self.remote.docker
-        docker.call(["run", "--detach", "--pull=never", "--name", self.target,
-                     "--network", self.remote.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755", self.remote.target_image])
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            code, output = self.target_call("metadata", checked=False)
-            if code == 0:
-                metadata = json.loads(output)
-                break
-            time.sleep(0.2)
-        else:
-            raise RuntimeError("remaining target metadata deadline")
-        _, output = docker.call(["inspect", self.target])
-        metadata["address"] = json.loads(output)[0]["NetworkSettings"]["Networks"][self.remote.network]["IPAddress"]
-        (self.remote.evidence / "remaining-target-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        self.target_call("authorize", input_data=self.remote.public_key.encode())
-        self.remote.inside("pin-remaining", input_data=json.dumps(metadata).encode())
+        self.remote.prepare_target(self.target, "remaining-target-metadata.json", "pin-remaining")
         for case, settings in CASES.items():
             self.started.append(case)
             self.remote.inside("scenario", case, revision, timeout=600)

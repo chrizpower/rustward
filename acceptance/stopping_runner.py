@@ -1,7 +1,5 @@
 """Own the fresh A05 SSH target and collect independent remote evidence."""
 import json
-from pathlib import Path
-import time
 
 ROOTS = {"cancel": "/opt/rustward-a05-cancel", "timeout": "/opt/rustward-a05-timeout"}
 
@@ -18,8 +16,7 @@ class Stopping:
         self.started = []
 
     def target_call(self, operation, *arguments, **keywords):
-        return self.remote.docker.call(["exec", "-i", self.target, "/usr/bin/python3", "-I", "-B",
-                                       "/opt/ssh_target.py", operation, *arguments], **keywords)
+        return self.remote.target_call(self.target, operation, *arguments, **keywords)
 
     def observe(self, kind, label):
         _, output = self.target_call("hold-state", kind)
@@ -40,23 +37,7 @@ class Stopping:
 
     def run(self, revision):
         self.created = True
-        docker = self.remote.docker
-        docker.call(["run", "--detach", "--pull=never", "--name", self.target,
-                     "--network", self.remote.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755", self.remote.target_image])
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            code, output = self.target_call("metadata", checked=False)
-            if code == 0:
-                metadata = json.loads(output)
-                break
-            time.sleep(0.2)
-        else:
-            raise RuntimeError("stopping target metadata deadline")
-        _, output = docker.call(["inspect", self.target])
-        metadata["address"] = json.loads(output)[0]["NetworkSettings"]["Networks"][self.remote.network]["IPAddress"]
-        (self.remote.evidence / "stopping-target-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        self.target_call("authorize", input_data=self.remote.public_key.encode())
-        self.remote.inside("pin-stopping", input_data=json.dumps(metadata).encode())
+        self.remote.prepare_target(self.target, "stopping-target-metadata.json", "pin-stopping")
         self.observe("queued", "queued-before")
         for kind in ROOTS:
             self.started.append(kind)

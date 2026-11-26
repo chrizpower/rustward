@@ -3,8 +3,7 @@
 Use this suite to verify the generic execution path with a synthetic Ansible
 workload and an ordinary command. Run on an isolated Linux host. Results apply
 to the recorded fixture and source revision. Keep bundle provenance and review records with the test artifacts.
-Use nspawn for local scheduler and console checks. Use SSH for A03–A10. An earlier service bundle lacked the database and logs needed for
-independent review. Rootless Podman with delegated cgroup v2 remains unverified.
+Use nspawn for A01–A10, including SSH. Rootless Podman remains unverified.
 
 ## Docker command and isolation
 

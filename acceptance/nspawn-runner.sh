@@ -40,6 +40,10 @@ container() {
 }
 
 container 120s pipe /bin/sh -ec '
+    if ! test -x /usr/sbin/sshd; then
+        echo "Install openssh-server in the test image." >&2
+        exit 2
+    fi
     mkdir /opt/rustward-test
     tar --no-same-owner -xf - -C /opt/rustward-test
     cat > /etc/systemd/system/rustward-acceptance.service <<EOF_UNIT
@@ -53,7 +57,7 @@ ExecStart=/usr/bin/python3 -B /opt/rustward-test/acceptance/nspawn-guest.py
 ExecStopPost=/usr/bin/systemctl --no-block poweroff
 StandardOutput=journal+console
 StandardError=journal+console
-TimeoutStartSec=1200
+TimeoutStartSec=3300
 
 [Install]
 WantedBy=multi-user.target
@@ -62,14 +66,32 @@ EOF_UNIT
 ' >&2
 
 status=0
-container 1250s read-only --boot >&2 || status=$?
+container 3350s read-only --boot >&2 || status=$?
 
-container 120s pipe /bin/sh -ec '
-    cd /opt/rustward-test
-    set --
-    for path in result.json fixture/fixture.json fixture/evidence; do
-        if test -e "$path"; then set -- "$@" "$path"; fi
-    done
-    tar -cf - "$@"
-'
-exit "$status"
+export_image() {
+    container 120s pipe /bin/sh -ec '
+        cd /opt/rustward-test
+        set --
+        for path in result.json fixture/fixture.json fixture/evidence ssh; do
+            if test -e "$path"; then set -- "$@" "$path"; fi
+        done
+        tar -cf - "$@"
+    '
+}
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/rustward-export.XXXXXX")
+trap 'rm -rf -- "$scratch"' EXIT
+# The namespace helper can reject a new allocation while it releases the boot container.
+for delay in 1 2 4 8 16 0; do
+    if export_image >"$scratch/bundle.tar" 2>"$scratch/export.log"; then
+        cat "$scratch/export.log" >&2
+        cat "$scratch/bundle.tar"
+        exit "$status"
+    fi
+    cat "$scratch/export.log" >&2
+    if test "$delay" -eq 0 || test -s "$scratch/bundle.tar" ||
+        ! grep -q 'Failed to allocate user namespace.*Invalid request descriptor' "$scratch/export.log"; then
+        exit 1
+    fi
+    sleep "$delay"
+done

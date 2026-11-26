@@ -52,9 +52,11 @@ def probe(account, runtime, evidence, mode="success"):
 
 
 def check_commands(account, runtime, evidence, mode="success"):
-    result = checked(user_command(account, [runtime / "bin/python3", "-I", "-B",
-                     runtime / "ssh_commands.py", evidence / "ssh-commands", mode]),
-                     capture_output=True, timeout=30)
+    result = invoke(user_command(account, [runtime / "bin/python3", "-I", "-B",
+                    runtime / "ssh_commands.py", evidence / "ssh-commands", mode],
+                    {"ANSIBLE_HOME": str(evidence / "ansible-home")}), timeout=30, capture=True)
+    if result.returncode:
+        raise RuntimeError(f"Ansible SSH command check failed: {result.stderr.strip()}")
     report = json.loads(result.stdout)
     if report.get("status") != "passed":
         raise RuntimeError("Ansible SSH command check did not pass")
@@ -128,7 +130,8 @@ def main():
     if os.geteuid() != 0:
         raise PermissionError("SSH fixture setup requires root")
     if operation == "client-key":
-        print(json.dumps(client_key()))
+        account = pwd.getpwnam("rustward")
+        print(json.dumps(client_key(account.pw_uid, account.pw_gid)))
     elif operation in ("pin-stopping", "pin-remaining"):
         directory = CREDENTIALS / ("stopping" if operation == "pin-stopping" else "remaining")
         directory.mkdir(mode=0o755)
@@ -172,3 +175,7 @@ def main():
     else:
         raise ValueError("unknown SSH fixture operation")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

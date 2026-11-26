@@ -30,9 +30,34 @@ class Remote:
             "import sys;sys.path.insert(0,'/opt/rustward-acceptance-source');"
             "from ssh_inside import main;sys.exit(main())", operation, *arguments], **keywords)
 
-    def target_call(self, operation, **keywords):
-        return self.docker.call(["exec", "-i", self.target, "/usr/bin/python3", "-I", "-B",
-                                 "/opt/ssh_target.py", operation], **keywords)
+    def target_call(self, target, operation, *arguments, **keywords):
+        return self.docker.call(["exec", "-i", target, "/usr/bin/python3", "-I", "-B",
+                                 "/opt/ssh_target.py", operation, *arguments], **keywords)
+
+    def start_target(self, target):
+        self.docker.call(["run", "--detach", "--pull=never", "--name", target,
+                          "--network", self.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
+                          self.target_image])
+
+    def target_address(self, target):
+        _, output = self.docker.call(["inspect", target])
+        return json.loads(output)[0]["NetworkSettings"]["Networks"][self.network]["IPAddress"]
+
+    def prepare_target(self, target, metadata_file, pin):
+        self.start_target(target)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            code, output = self.target_call(target, "metadata", checked=False)
+            if code == 0:
+                metadata = json.loads(output)
+                break
+            time.sleep(0.2)
+        else:
+            raise RuntimeError("SSH target metadata deadline")
+        metadata["address"] = self.target_address(target)
+        (self.evidence / metadata_file).write_text(json.dumps(metadata, indent=2) + "\n")
+        self.target_call(target, "authorize", input_data=self.public_key.encode())
+        self.inside(pin, input_data=json.dumps(metadata).encode())
 
     def run(self, context, debian_image, revision):
         if self.public_key is None:
@@ -50,31 +75,19 @@ class Remote:
             raise RuntimeError("create the internal network before starting the controller")
         self.target_image = image
         self.target_created = True
-        self.docker.call(["run", "--detach", "--pull=never", "--name", self.target,
-            "--network", self.network, "--tmpfs", "/run:rw,nosuid,nodev,mode=755", image])
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            code, output = self.target_call("metadata", checked=False)
-            if code == 0:
-                metadata = json.loads(output)
-                break
-            time.sleep(0.2)
-        else:
-            raise RuntimeError("SSH target metadata deadline")
-        _, output = self.docker.call(["inspect", self.target])
-        metadata["address"] = json.loads(output)[0]["NetworkSettings"]["Networks"][self.network]["IPAddress"]
-        (self.evidence / "target-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        self.target_call("authorize", input_data=self.public_key.encode())
-        self.inside("pin", input_data=json.dumps(metadata).encode())
+        self.run_cases(revision)
+
+    def run_cases(self, revision):
+        self.prepare_target(self.target, "target-metadata.json", "pin")
         self.fixture_started = True
         self.inside("run", revision, timeout=480)
-        _, output = self.target_call("result")
+        _, output = self.target_call(self.target, "result")
         expected = {"text": 'He said "hello"; it\'s a test', "count": 7, "enabled": True}
         if json.dumps(json.loads(output), sort_keys=True) != json.dumps(expected, sort_keys=True):
             raise RuntimeError("independent SSH target result differs")
         (self.evidence / "target-check.json").write_text(json.dumps({"status": "passed", "value": expected}) + "\n")
         self.inside("failure", "task", timeout=240)
-        _, output = self.target_call("failure-result")
+        _, output = self.target_call(self.target, "failure-result")
         if json.dumps(json.loads(output), sort_keys=True) != json.dumps(expected, sort_keys=True):
             raise RuntimeError("independent remote failure proof differs")
         (self.evidence / "failure-target-check.json").write_text(json.dumps({"status": "passed", "value": expected}) + "\n")

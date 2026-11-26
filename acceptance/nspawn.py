@@ -1,4 +1,4 @@
-"""Build current Rustward sources and run local acceptance through nspawn."""
+"""Build current Rustward sources and run acceptance through nspawn."""
 import argparse
 from datetime import datetime, timezone
 import json
@@ -10,6 +10,7 @@ import tarfile
 import uuid
 
 from container import ROOT, snapshot, validate_bundle
+from ssh_runner import validate as validate_ssh
 
 
 def build_tools(context, evidence):
@@ -62,16 +63,20 @@ def execute(evidence, runner):
         with (evidence / "input.tar").open("rb") as staged, \
                 (evidence / "output.tar").open("wb") as retained, \
                 (evidence / "runner.log").open("wb") as log:
-            result = subprocess.run([runner], stdin=staged, stdout=retained, stderr=log, timeout=1900)
+            result = subprocess.run([runner], stdin=staged, stdout=retained, stderr=log, timeout=3900)
+        if (evidence / "output.tar").stat().st_size == 0:
+            result.check_returncode()
         with tarfile.open(evidence / "output.tar", "r:") as archive:
             archive.extractall(evidence / "container", filter="data")
         result.check_returncode()
         result_file = evidence / "container/result.json"
         expected = {"status": "passed", "source_revision": source["revision"]}
         if json.loads(result_file.read_text()) != expected:
-            raise ValueError("local acceptance failed; see container/result.json and runner.log")
+            raise ValueError("acceptance failed; see container/result.json and runner.log")
         validate_bundle(evidence / "container/fixture", require_daemon=True, require_scheduler=True,
                         require_web=True, require_pilot=True)
+        ssh = evidence / "container/ssh"
+        validate_ssh(ssh / "ssh-fixture", ssh)
         status.update(status="passed", phase="complete")
     except (OSError, ValueError, KeyError, RuntimeError, tarfile.TarError, subprocess.SubprocessError) as error:
         status["reason"] = str(error)

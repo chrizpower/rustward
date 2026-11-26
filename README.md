@@ -143,22 +143,23 @@ just pilot-test
 The rehearsal uses Podman or Docker and sends test mail to a loopback SMTP
 sink. The full Docker suite also rehearses a backup and restore with systemd.
 
-Run the local systemd integration suite from a Linux checkout:
+Run the integration suite from a Linux checkout:
 
 ```sh
 just acceptance-container
 ```
 
-This command builds the current source and runs the existing local acceptance
-cases in an unprivileged `systemd-nspawn` container. A prepared Debian 13 runner
-needs cgroup v2, active BPF LSM, and the systemd mount and namespace helpers.
+This command builds the current source and runs A01–A10, including the local
+systemd and SSH cases, in an unprivileged `systemd-nspawn` container. The
+Debian 13 runner needs cgroup v2, active BPF LSM, and the systemd mount and
+namespace helpers.
 Set `RUSTWARD_NSPAWN_BASE_IMAGE` to the runner's prepared GPT image. A Linux
 checkout without a local runner can set `RUSTWARD_NSPAWN_RUNNER` to an
 executable that forwards input and output to `acceptance/nspawn-runner.sh`.
 See the [runner setup](#prepare-an-integration-runner).
 
-Run `just acceptance-docker` for the explicit rootful Docker backend, or
-`just acceptance-ssh` for the additional synthetic SSH scenarios.
+Run `just acceptance-docker` for the local cases on Docker. Run
+`just acceptance-ssh` for all cases on Docker.
 
 No fleet access or private credentials are needed.
 
@@ -172,7 +173,7 @@ The hooks divide the checks as follows:
 | Hook | Checks | Manual command |
 | --- | --- | --- |
 | Pre-commit | Staged file size and whitespace errors, rustfmt, and Clippy with warnings treated as errors | `just check-file-size`, `git diff --cached --check`, and `just check-commit` |
-| Pre-push | Rust checks, the 95% line coverage minimum, and local systemd acceptance | `just check && just acceptance-nspawn` |
+| Pre-push | Rust checks, the 95% line coverage minimum, and A01–A10 acceptance | `just check && just acceptance-nspawn` |
 
 Rust checks use the working tree. For a partial commit, run them with only the
 intended changes present. Before a push, run them on the commit to be pushed.
@@ -188,13 +189,16 @@ BPF LSM and cgroup v2. Enable linger for a dedicated runner account. Run the
 acceptance command as that account.
 
 Prepare a Debian 13 root filesystem with systemd as PID 1. Install `dbus`,
-`dbus-user-session`, `libpam-systemd`, `ansible-core`, `openssh-client`,
+`dbus-user-session`, `libpam-systemd`, `ansible-core`, `openssh-client`, `openssh-server`,
 `python3`, `python3-prometheus-client`, `python3-aiosmtpd`, `nginx`, `openssl`,
-`prometheus`, and `prometheus-alertmanager`. Create the non-root `rustward`
+`prometheus`, `prometheus-alertmanager`, `mount`, and `util-linux`. Create the
+non-root `rustward`
 account and enable linger. For that account's `user@UID.service`, set
 `NoNewPrivileges=yes` and clear `CapabilityBoundingSet` and
-`AmbientCapabilities`. Mask the default Nginx, Prometheus, and Alertmanager
-services. The suite starts its own instances in the private network namespace.
+`AmbientCapabilities`. Mask the default SSH, Nginx, Prometheus, and
+Alertmanager services and the SSH socket. The suite starts its own instances
+in the private network namespace. Its SSH targets use separate PID and mount
+namespaces and listen only on loopback addresses.
 
 Put the filesystem in a GPT image with a Linux root partition for the runner's
 architecture. Keep this base image read-only to the runner account. Create a

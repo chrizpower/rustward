@@ -10,15 +10,15 @@ PRIVILEGE_DIRECTORY = Path("/run/sshd")
 RESULT = Path("/home/rustward-target/result.json")
 
 
-def serve():
-    ROOT.mkdir(mode=0o755)
+def serve(address="0.0.0.0"):
+    ROOT.mkdir(mode=0o755, exist_ok=True)
     subprocess.run(["/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "",
                     "-f", str(ROOT / "host_key")], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (ROOT / "authorized_keys").write_text("")
     (ROOT / "authorized_keys").chmod(0o644)
     configuration = "\n".join([
-        "Port 2222", "ListenAddress 0.0.0.0", f"HostKey {ROOT / 'host_key'}",
+        "Port 2222", f"ListenAddress {address}", f"HostKey {ROOT / 'host_key'}",
         f"AuthorizedKeysFile {ROOT / 'authorized_keys'}", "AuthenticationMethods publickey",
         "PasswordAuthentication no", "KbdInteractiveAuthentication no", "PermitRootLogin no",
         "PermitEmptyPasswords no", "UsePAM no", "StrictModes yes", "AllowUsers rustward-target",
@@ -37,7 +37,9 @@ def serve():
 
 def command(arguments):
     if arguments == ["serve"]:
-        serve()
+        serve("0.0.0.0")
+    elif len(arguments) == 2 and arguments[0] == "serve" and arguments[1] in ("127.0.0.2", "127.0.0.3", "127.0.0.4"):
+        serve(arguments[1])
     elif arguments == ["metadata"]:
         print((ROOT / "ready.json").read_text(), end="")
     elif arguments == ["authorize"]:
