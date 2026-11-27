@@ -59,13 +59,29 @@ Nginx worker. Give the service ownership of the socket directory and allow
 the proxy to traverse it. Remove an old socket after a crash only after
 confirming the previous service has stopped.
 
-Nginx must authenticate every console route and preserve the browser's Host
-header. Set the backend to the Unix socket and clear the Authorization header
-before forwarding. Rustward checks the peer UID, the exact Host header, and,
-for API requests, the configured Origin and `X-Rustward-CSRF: 1` header.
-The web socket has no TCP listener. This enforces proxy access even when
-another account can connect locally. Deployment configuration stays in
-the deployment repository.
+For a plain HTTP TCP backend, append
+`--web-tcp 0.0.0.0:8080 https://rustward.example /run/secrets/rustward-proxy-token`.
+Use a numeric address and a nonzero port. Put IPv6 addresses in brackets.
+Set the public origin to the scheme, host, and optional port the browser uses.
+The TCP backend supports public HTTP and HTTPS origins. Nginx terminates TLS
+when the public origin uses HTTPS. Keep the backend on a private network shared
+only with Nginx and do not publish its port to the host.
+
+Generate a token with `openssl rand -hex 32`. Store it as one line in a regular
+file owned by the Rustward service UID with mode 0400 or 0600. Mount that file
+into the Rustward container. Store the same value in protected Nginx configuration
+and set `X-Rustward-Proxy-Token` on every proxied route. Nginx must replace any
+client value for that header. Rustward rejects missing, incorrect, and repeated
+tokens before routing TCP requests, including requests for static files and
+monitoring. Restart Rustward when the token changes.
+
+Nginx must authenticate every console route and use separate monitoring access
+rules. Preserve the browser's Host header and clear the Authorization header
+before forwarding. Strip `X-Rustward-Monitor` on console routes and set it to
+`1` on authenticated monitoring routes. Rustward checks the exact Host header
+and requires the configured Origin and `X-Rustward-CSRF: 1` for API requests.
+The Unix mode verifies the peer UID. Deployment configuration stays in the
+deployment repository.
 
 The console uses embedded assets, typed task forms, and durable manual request
 keys. It polls each output stream in 16 KiB chunks and renders it as text.
@@ -80,9 +96,9 @@ supervisor. On macOS the preview uses a Linux container and publishes its
 port on host loopback. Run `just web-test` on Linux to test the embedded
 production assets in headless Chromium. It tests request retries, reconnecting,
 input validation, text rendering, cancellation, schedule controls, and review.
-Run `just acceptance-container` on the isolated Docker host for the web case.
-It checks Nginx authentication, proxy peer enforcement, origin checks, and a real
-systemd run. It records `fixture/evidence/web.json`.
+Run `just acceptance-container` for the web cases. They check Nginx authentication,
+proxy peer or token enforcement, origin checks, and a real systemd run for each
+transport. They record `fixture/evidence/web.json` and `fixture/evidence/web-tcp.json`.
 
 ## Age-based retention
 

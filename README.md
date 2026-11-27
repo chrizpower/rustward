@@ -92,6 +92,18 @@ Cargo installs the locked frontend dependencies and embeds the Vite production
 build. The Linux service runs with Rust alone. Native macOS Cargo builds do
 not build the console.
 
+For deployment behind Nginx, append
+`--web-tcp <ip:port> <public-origin> <proxy-token-file>` to `rustward serve`
+for a plain HTTP backend. For example, bind to `0.0.0.0:8080` inside a
+container and use the browser-facing origin `https://rustward.example`.
+Keep the backend port on a private network shared only with Nginx. Nginx
+authenticates clients, preserves the original Host header, and replaces
+`X-Rustward-Proxy-Token` on each proxied route with the value from the
+service's private token file. Generate that value with `openssl rand -hex 32`
+and make the file readable only by the service UID. The existing
+`--web <socket> <https-origin> <proxy-uid>` option serves the console over a
+Unix socket.
+
 Start the synthetic web console:
 
 ```sh

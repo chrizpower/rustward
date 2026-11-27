@@ -101,7 +101,7 @@ class CleanupTests(unittest.TestCase):
                     if complete and harness_code:
                         (output / "A01.json").write_text('{"status":"failed"}')
                     elif complete:
-                        for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host", "daemon", "scheduler", "web"):
+                        for name in ("A01", "A02", "local-recovery", "host-runner", "legacy-host", "daemon", "scheduler", "web", "web-tcp"):
                             (output / f"{name}.json").write_text('{"status":"passed"}')
                         (output / "pilot-monitoring").mkdir()
                         for name in ("pilot-recovery", "pilot-monitoring/pilot-alerts"):

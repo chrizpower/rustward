@@ -65,7 +65,8 @@ fn usage() -> String {
     "Usage:
   rustward --version
   rustward validate <rustward.toml>
-  rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid> [--web <socket> <https-origin> <proxy-uid>]
+  rustward serve <rustward.toml> <name> <runtime-catalog> <host-catalog> <work-directory> <runtime-id> <preparation-uid>
+    [--web <socket> <https-origin> <proxy-uid> | --web-tcp <ip:port> <public-origin> <proxy-token-file>]
   rustward state <backup|restore|reviews|decide|release|runtime-references> ...
   rustward ctl <name> < request.json".into()
 }

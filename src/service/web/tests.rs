@@ -27,6 +27,127 @@ fn post(host: &str, origin: &str, body: &str, csrf: bool) -> String {
 }
 
 #[test]
+fn serve_options_select_one_web_transport() {
+    let parse = |flags: &[&str]| {
+        crate::service::Options::parse(
+            [
+                "rustward.toml",
+                "service",
+                "/runtimes",
+                "/hosts",
+                "/work",
+                "runtime",
+                "1",
+            ]
+            .into_iter()
+            .chain(flags.iter().copied())
+            .map(Into::into),
+        )
+    };
+    let tcp = ["--web-tcp", "[::]:8080", "http://rustward.test", "/token"];
+    let unix = ["--web", "/web.sock", "https://rustward.test", "33"];
+    assert!(
+        matches!(parse(&tcp).unwrap().web, Some(Options::Tcp { address, .. }) if address.port() == 8080)
+    );
+    assert!(matches!(
+        parse(&unix).unwrap().web,
+        Some(Options::Unix { .. })
+    ));
+    assert!(parse(&["--web-tcp", "[::]:0", "http://rustward.test", "/token"]).is_none());
+    assert!(parse(&tcp[..3]).is_none());
+    assert!(parse(&[tcp, unix].concat()).is_none());
+}
+
+#[test]
+fn tcp_web_requires_one_proxy_token_on_every_route() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let logs = WorkRoot::open(root.path()).unwrap();
+    let token_file = root.path().join("proxy-token");
+    let token = "a1".repeat(32);
+    let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = probe.local_addr().unwrap();
+    let options = |origin: &str| Options::Tcp {
+        address,
+        origin: origin.into(),
+        token_file: token_file.clone(),
+    };
+    let origin = "https://rustward.test:8443";
+    assert!(Web::bind(options(origin), logs.clone(), None).is_err());
+    std::fs::write(&token_file, format!("{token}\n")).unwrap();
+    let mode = |bits| {
+        std::fs::set_permissions(&token_file, std::fs::Permissions::from_mode(bits)).unwrap()
+    };
+    mode(0o644);
+    assert!(Web::bind(options(origin), logs.clone(), None).is_err());
+    mode(0o600);
+    std::fs::write(&token_file, token.to_uppercase()).unwrap();
+    assert!(Web::bind(options(origin), logs.clone(), None).is_err());
+    std::fs::write(&token_file, format!("{token}\n")).unwrap();
+    assert!(Web::bind(options("https://rustward.test/path"), logs.clone(), None).is_err());
+    assert!(Web::bind(options(origin), logs.clone(), None).is_err());
+    drop(probe);
+    let _web = Web::bind(
+        options(origin),
+        logs,
+        Some(crate::telemetry::Telemetry::stderr().unwrap()),
+    )
+    .unwrap();
+    let host = "rustward.test:8443";
+    let header = format!("X-Rustward-Proxy-Token: {token}\r\n");
+    let wrong = format!("X-Rustward-Proxy-Token: {}\r\n", "b2".repeat(32));
+    let get = |path: &str, host: &str, headers: &str| {
+        http(
+            TcpStream::connect(address).unwrap(),
+            format!("GET {path} HTTP/1.1\r\nHost: {host}\r\n{headers}\r\n"),
+        )
+        .0
+    };
+    for path in [
+        "/",
+        "/console.js",
+        "/console.css",
+        "/metrics",
+        "/healthz",
+        "/readyz",
+        "/unknown",
+    ] {
+        assert_eq!(get(path, host, "X-Rustward-Monitor: 1\r\n"), 403);
+    }
+    assert_eq!(get("/", host, &wrong), 403);
+    assert_eq!(get("/", host, &header.repeat(2)), 403);
+    assert_eq!(get("/", "wrong.test", &header), 403);
+    assert_eq!(get("/", host, &header), 200);
+    assert_eq!(get("/metrics", host, &header), 403);
+    assert_eq!(
+        get(
+            "/metrics",
+            host,
+            &format!("{header}X-Rustward-Monitor: 1\r\n")
+        ),
+        200
+    );
+    assert_eq!(
+        http(
+            TcpStream::connect(address).unwrap(),
+            post(host, origin, "{}", true)
+        )
+        .0,
+        403
+    );
+    let submit = |origin: &str, csrf| {
+        let request =
+            post(host, origin, "{}", csrf).replacen("\r\n\r\n", &format!("\r\n{header}\r\n"), 1);
+        http(TcpStream::connect(address).unwrap(), request).0
+    };
+    assert_eq!(submit("http://rustward.test:8443", true), 403);
+    assert_eq!(submit(origin, false), 403);
+    assert_eq!(submit(origin, true), 400);
+}
+
+#[test]
 fn serves_assets_and_bounded_operations_with_origin_checks() {
     let fixture = Fixture::new();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -165,7 +286,7 @@ fn unix_web_socket_rejects_the_wrong_peer_and_removes_its_path() {
     let socket = root.path().join("proxy.sock");
     let logs = WorkRoot::open(root.path()).unwrap();
     let uid = rustix::process::geteuid().as_raw();
-    let options = |origin: &str, proxy_uid| Options {
+    let options = |origin: &str, proxy_uid| Options::Unix {
         socket: socket.clone(),
         origin: origin.into(),
         proxy_uid,

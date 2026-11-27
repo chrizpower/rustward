@@ -72,9 +72,10 @@ flowchart TB
 
 Green marks implemented components. The proxy, systemd, task processes, and
 runtime preparation operate outside the service. The proxy provides private
-browser access and authenticates the administrator. The web listener accepts
-only the configured proxy UID on a Unix socket. The local control interface
-uses the service account. Both paths use the same execution core.
+browser access and authenticates the administrator. The Unix listener checks
+the proxy UID. The production TCP listener requires the proxy token on every
+request and belongs on a private network shared with the proxy. The local
+control interface uses the service account. Both paths use the same execution core.
 
 ## Definitions and retained state
 

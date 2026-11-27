@@ -1,12 +1,12 @@
-#[cfg(any(test, feature = "web-preview"))]
-use std::net::TcpListener;
 mod http;
+mod proxy_token;
 #[cfg(test)]
 mod tests;
 mod view;
 
 use std::{
     collections::BTreeMap,
+    net::{SocketAddr, TcpListener},
     os::unix::fs::{FileTypeExt, MetadataExt},
     os::unix::net::UnixListener,
     path::PathBuf,
@@ -32,16 +32,22 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub(super) struct Options {
-    pub socket: PathBuf,
-    pub origin: String,
-    pub proxy_uid: u32,
+pub(super) enum Options {
+    Unix {
+        socket: PathBuf,
+        origin: String,
+        proxy_uid: u32,
+    },
+    Tcp {
+        address: SocketAddr,
+        origin: String,
+        token_file: PathBuf,
+    },
 }
 
 pub(super) enum Listener {
     Proxy(UnixListener, u32),
-    #[cfg(any(test, feature = "web-preview"))]
-    Preview(TcpListener),
+    Tcp(TcpListener),
 }
 
 #[derive(Deserialize)]
@@ -146,14 +152,37 @@ impl Web {
         logs: WorkRoot,
         metrics: Option<crate::telemetry::Telemetry>,
     ) -> Result<Self, String> {
+        let (socket, origin, proxy_uid) = match options {
+            Options::Unix {
+                socket,
+                origin,
+                proxy_uid,
+            } => (socket, origin, proxy_uid),
+            Options::Tcp {
+                address,
+                origin,
+                token_file,
+            } => {
+                let scheme = if origin.starts_with("http://") {
+                    "http"
+                } else {
+                    "https"
+                };
+                let mut site = http::Site::new(&origin, scheme)?;
+                site.proxy_token = Some(proxy_token::ProxyToken::read(&token_file)?);
+                site.metrics = metrics;
+                let listener =
+                    TcpListener::bind(address).map_err(|err| format!("Web TCP bind: {err}"))?;
+                return Self::start(Listener::Tcp(listener), site, logs, None);
+            }
+        };
         use std::os::unix::fs::PermissionsExt;
-        let mut site = http::Site::new(&options.origin, "https")?;
+        let mut site = http::Site::new(&origin, "https")?;
         site.metrics = metrics;
-        if options.proxy_uid == rustix::process::geteuid().as_raw() {
+        if proxy_uid == rustix::process::geteuid().as_raw() {
             return Err("The web proxy must use a separate UID".into());
         }
-        let parent = options
-            .socket
+        let parent = socket
             .parent()
             .filter(|path| path.is_absolute())
             .ok_or("Web socket requires an absolute path")?;
@@ -164,16 +193,11 @@ impl Web {
         {
             return Err("The web socket directory must be owned by the service and protected from other writers".into());
         }
-        let listener = UnixListener::bind(&options.socket).map_err(|err| err.to_string())?;
-        let path = SocketPath::new(options.socket).map_err(|err| err.to_string())?;
+        let listener = UnixListener::bind(&socket).map_err(|err| err.to_string())?;
+        let path = SocketPath::new(socket).map_err(|err| err.to_string())?;
         std::fs::set_permissions(&path.path, std::fs::Permissions::from_mode(0o666))
             .map_err(|err| err.to_string())?;
-        Self::start(
-            Listener::Proxy(listener, options.proxy_uid),
-            site,
-            logs,
-            Some(path),
-        )
+        Self::start(Listener::Proxy(listener, proxy_uid), site, logs, Some(path))
     }
 
     #[cfg(any(test, feature = "web-preview"))]
@@ -188,7 +212,7 @@ impl Web {
         );
         let mut site = http::Site::new(&origin, "http")?;
         site.metrics = metrics;
-        Self::start(Listener::Preview(listener), site, logs, None)
+        Self::start(Listener::Tcp(listener), site, logs, None)
     }
 
     fn start(

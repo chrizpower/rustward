@@ -63,13 +63,24 @@ impl Options {
             web: None,
         };
         if let Some(flag) = args.next() {
-            if flag != "--web" {
-                return None;
-            }
-            options.web = Some(web::Options {
-                socket: args.next()?.into(),
-                origin: args.next()?.into_string().ok()?,
-                proxy_uid: args.next()?.to_str()?.parse().ok()?,
+            options.web = Some(match flag.to_str()? {
+                "--web" => web::Options::Unix {
+                    socket: args.next()?.into(),
+                    origin: args.next()?.into_string().ok()?,
+                    proxy_uid: args.next()?.to_str()?.parse().ok()?,
+                },
+                "--web-tcp" => {
+                    let address: std::net::SocketAddr = args.next()?.to_str()?.parse().ok()?;
+                    if address.port() == 0 {
+                        return None;
+                    }
+                    web::Options::Tcp {
+                        address,
+                        origin: args.next()?.into_string().ok()?,
+                        token_file: args.next()?.into(),
+                    }
+                }
+                _ => return None,
             });
         }
         args.next().is_none().then_some(options)

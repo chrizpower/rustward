@@ -93,7 +93,7 @@ def validate_bundle(fixture, require_daemon=False, require_scheduler=False, requ
     if require_scheduler:
         reports.append("scheduler")
     if require_web:
-        reports.append("web")
+        reports.extend(("web", "web-tcp"))
     if require_pilot:
         reports.extend(("pilot-recovery", "pilot-monitoring/pilot-alerts"))
     for name in reports:

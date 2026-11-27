@@ -24,7 +24,7 @@ use tokio::{
     time::timeout,
 };
 
-use super::{Call, Listener, Operation, Response};
+use super::{Call, Listener, Operation, Response, proxy_token::ProxyToken};
 
 const REQUEST_LIMIT: usize = 128 * 1024;
 const RESPONSE_LIMIT: usize = 512 * 1024;
@@ -33,6 +33,7 @@ const TIME_LIMIT: Duration = Duration::from_secs(3);
 pub(super) struct Site {
     origin: String,
     host: String,
+    pub(super) proxy_token: Option<ProxyToken>,
     pub(super) metrics: Option<crate::telemetry::Telemetry>,
 }
 
@@ -49,6 +50,7 @@ impl Site {
         Ok(Self {
             origin: origin.into(),
             host: host.into(),
+            proxy_token: None,
             metrics: None,
         })
     }
@@ -78,6 +80,13 @@ async fn route(
     sender: &mpsc::SyncSender<Call>,
 ) -> HttpResponse<Full<Bytes>> {
     let headers = request.headers();
+    if site
+        .proxy_token
+        .as_ref()
+        .is_some_and(|token| !token.accepts(headers))
+    {
+        return error(StatusCode::FORBIDDEN, "Web proxy authentication required");
+    }
     if headers.get(HOST).and_then(|value| value.to_str().ok()) != Some(site.host.as_str()) {
         return error(StatusCode::FORBIDDEN, "Wrong host");
     }
@@ -215,8 +224,7 @@ pub(super) fn start(
 ) -> io::Result<std::thread::JoinHandle<()>> {
     match &listener {
         Listener::Proxy(listener, _) => listener.set_nonblocking(true)?,
-        #[cfg(any(test, feature = "web-preview"))]
-        Listener::Preview(listener) => listener.set_nonblocking(true)?,
+        Listener::Tcp(listener) => listener.set_nonblocking(true)?,
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -241,8 +249,7 @@ pub(super) fn start(
                                 continue;
                             }
                         }
-                        #[cfg(any(test, feature = "web-preview"))]
-                        Listener::Preview(listener) => {
+                        Listener::Tcp(listener) => {
                             if let Ok((stream, _)) = listener.accept()
                                 && stream.set_nonblocking(true).is_ok()
                                 && let Ok(stream) = tokio::net::TcpStream::from_std(stream)

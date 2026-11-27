@@ -165,6 +165,7 @@ def run(root, tools, user, revision):
             stop_fixture_units(root / "daemon", account)
             stop_fixture_units(root / "scheduled", account)
             stop_fixture_units(root / "web", account)
+            stop_fixture_units(root / "web-tcp", account)
             stop_fixture_units(root / "pilot-original", account)
             stop_fixture_units(root / "pilot-restored", account, state="state/restored/state.db")
         finally:
