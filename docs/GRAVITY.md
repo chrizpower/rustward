@@ -144,6 +144,13 @@ decision on 2026-11-20.
 - **Revisit:** Change defaults using workload evidence. The plan's 64 MiB idle
   RSS and latency figures remain proposed measurement targets.
 
+## Accepted console design rules
+
+The [console design rules](DESIGN.md) are binding. When adding or changing a
+console feature, follow the applicable rules for interaction, visual style,
+accessibility, and review. Check the affected views in light and dark modes
+before completing the change.
+
 ## Accepted configuration ownership and identity
 
 The user accepted these rules on 2026-11-08.

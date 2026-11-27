@@ -25,6 +25,7 @@ loads the complete set at startup and supports explicit reload. See the [synthet
 | --- | --- |
 | [Architecture](docs/ARCHITECTURE.md) | System structure, responsibilities, and execution boundaries |
 | [Gravity](docs/GRAVITY.md) | Long-term direction, accepted constraints, and decisions |
+| [Console design](docs/DESIGN.md) | Interaction, visual style, and accessibility rules for the private web console |
 | [Glossary](docs/GLOSSARY.md) | Shared domain definitions |
 | [Agent instructions](AGENTS.md) | Repository work and documentation rules |
 
