@@ -92,7 +92,8 @@ def main():
     options = parser.parse_args()
     name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     evidence = options.artifacts or Path.home() / "artifacts/rustward/nspawn" / name
-    runner = os.environ.get("RUSTWARD_NSPAWN_RUNNER", str(ROOT / "acceptance/nspawn-runner.sh"))
+    default = "qemu-runner.py" if os.environ.get("RUSTWARD_QEMU_STATE_DIR") else "nspawn-runner.sh"
+    runner = os.environ.get("RUSTWARD_NSPAWN_RUNNER", str(ROOT / "acceptance" / default))
     print(f"Acceptance evidence: {evidence}", flush=True)
     return execute(evidence.resolve(), runner)
 

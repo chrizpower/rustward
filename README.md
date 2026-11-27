@@ -158,6 +158,24 @@ checkout without a local runner can set `RUSTWARD_NSPAWN_RUNNER` to an
 executable that forwards input and output to `acceptance/nspawn-runner.sh`.
 See the [runner setup](#prepare-an-integration-runner).
 
+To use a prepared disposable QEMU runner on x86-64 Linux, install
+`qemu-system-x86` and give the current user access to `/dev/kvm`. Set the path
+to the persistent runner directory and run the same command:
+
+```sh
+export RUSTWARD_QEMU_STATE_DIR=/absolute/path/to/runner
+just acceptance-container
+```
+
+The same setting works with the pre-push hook. The launcher uses KVM and
+shuts down the VM after the test. The directory must contain the writable
+Debian runner disk `runner.qcow2`, its cloud-init seed `seed.iso`, the
+synthetic SSH identity `access-key`, and the pinned guest key in
+`known-hosts` under the alias `rustward-qemu`. It forwards only local
+port 22286 to SSH. The guest uses the `nspawn-runner` account and the
+read-only base image `/var/lib/rustward-runner/debian-13-base.raw`.
+The launcher sends the current nspawn runner script to the guest.
+
 Run `just acceptance-docker` for the local cases on Docker. Run
 `just acceptance-ssh` for all cases on Docker.
 
