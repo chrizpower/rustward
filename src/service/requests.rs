@@ -14,6 +14,22 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
         }
     }
 
+    pub(super) fn submit(
+        &mut self,
+        key: &str,
+        task_id: &str,
+        inputs: &std::collections::BTreeMap<String, toml::Value>,
+    ) -> Result<Admission, admission::Error> {
+        self.store.admit_with_gate(
+            key,
+            &self.config,
+            task_id,
+            inputs,
+            &self.runtime_id,
+            self.shutdown,
+        )
+    }
+
     pub(super) fn handle(&mut self, request: Request) -> Result<Value, admission::Error> {
         use admission::Error;
         let paused = matches!(&request, Request::SchedulePause { .. });
@@ -28,22 +44,7 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
                 key,
                 task_id,
                 inputs,
-            } => {
-                let result = self.store.admit_with_gate(
-                    &key,
-                    &self.config,
-                    &task_id,
-                    &inputs,
-                    &self.runtime_id,
-                    self.shutdown,
-                )?;
-                let (status, run_id) = match result {
-                    Admission::Admitted { run_id } => ("admitted", run_id),
-                    Admission::AlreadyAdmitted { run_id } => ("already_admitted", run_id),
-                    Admission::HistoryRemoved { run_id } => ("history_removed", run_id),
-                };
-                Ok(json!({"status": status, "run_id": run_id}))
-            }
+            } => Ok(submission_response(self.submit(&key, &task_id, &inputs)?)),
             Request::Status { run_id } => {
                 RunId::new(&run_id).map_err(|_| Error::InvalidInputs)?;
                 Ok(json!(self.store.run_state(&run_id)?))
@@ -135,4 +136,13 @@ impl<S: Supervisor + Clone + Send + 'static> Service<S> {
             }
         }
     }
+}
+
+pub(super) fn submission_response(result: Admission) -> Value {
+    let (status, run_id) = match result {
+        Admission::Admitted { run_id } => ("admitted", run_id),
+        Admission::AlreadyAdmitted { run_id } => ("already_admitted", run_id),
+        Admission::HistoryRemoved { run_id } => ("history_removed", run_id),
+    };
+    json!({"status": status, "run_id": run_id})
 }

@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api, control } from './api';
   import ActionButton from './ActionButton.svelte';
   import PagedList from './PagedList.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
+  import RunTable from './RunTable.svelte';
   import RunDetails from './RunDetails.svelte';
   import ScheduleDetails from './ScheduleDetails.svelte';
   import ServiceStatus from './ServiceStatus.svelte';
+  import ThemeControl from './ThemeControl.svelte';
   import TaskForm from './TaskForm.svelte';
   import { errorMessage, href, label, utc, type Actions } from './view';
 
@@ -20,6 +22,10 @@
   let id = $state('');
   let version = $state(0);
   let error = $state('');
+  let dispatchPaused = $state(false);
+  let feedback = $state('');
+  let main: HTMLElement;
+  let admittedRun: string | undefined;
   let service: ReturnType<typeof ServiceStatus>;
   const serviceActions: Actions = {
     clearError: () => { error = ''; },
@@ -39,6 +45,20 @@
     }
   }
 
+  function navigate() {
+    render();
+    if (section !== 'run' || id !== admittedRun) feedback = '';
+    admittedRun = undefined;
+    main.focus();
+  }
+
+  function finish(at: number, message: string) {
+    if (at !== version) return;
+    feedback = message;
+    render();
+    void tick().then(() => main.focus());
+  }
+
   function viewActions(at: number): Actions {
     return {
       clearError: () => { if (at === version) serviceActions.clearError(); },
@@ -48,11 +68,15 @@
 
   onMount(() => {
     render();
-    window.addEventListener('hashchange', render);
-    return () => window.removeEventListener('hashchange', render);
+    window.addEventListener('hashchange', navigate);
+    return () => window.removeEventListener('hashchange', navigate);
   });
 </script>
 
+<a class="skip-link" href="#content" onclick={event => {
+  event.preventDefault();
+  main.focus();
+}}>Skip to content</a>
 <header class="top">
   <a class="brand" href="#tasks">Rustward</a>
   <nav aria-label="Console">
@@ -60,31 +84,41 @@
       <a href={href(item.id)} aria-current={activeSection === item.id ? 'page' : undefined}>{item.label}</a>
     {/each}
   </nav>
-  <ServiceStatus bind:this={service} actions={serviceActions} />
+  <ThemeControl />
+  <ServiceStatus bind:this={service} bind:paused={dispatchPaused} actions={serviceActions} />
 </header>
-<main>
-  <p id="error" role="alert" hidden={!error}>{error}</p>
-  <section id="content" aria-label="Current view">
+<main id="content" tabindex="-1" bind:this={main}>
+  <div class:visually-hidden={!feedback} class="feedback" role="status">{feedback}</div>
+  <div id="error" role="alert" class:visually-hidden={!error}>{error}</div>
+  <section aria-label="Current view">
     {#key version}
       {@const at = version}
       {@const actions = viewActions(at)}
-      {@const reload = () => { if (at === version) render(); }}
       {#if section === 'task'}
-        <TaskForm {id} {actions} openRun={runId => { if (at === version) location.hash = href('run', runId); }} />
+        <TaskForm {id} {actions} openRun={run => {
+          if (at !== version) return;
+          if (run.status === 'history_removed') {
+            feedback = `Request accepted. Run ${run.run_id} has expired from history.`;
+            return;
+          }
+          admittedRun = run.run_id;
+          feedback = 'Request accepted.';
+          location.hash = href('run', run.run_id);
+        }} />
       {:else if section === 'runs'}
         {@const queued = id === 'queued'}
-        <h1>{queued ? 'Queue' : 'Run history'}</h1>
+        <div class="page-heading">
+          <h1>{queued ? 'Queue' : 'Runs'}</h1>
+          <a class="button primary" href={href('tasks')}>Choose task</a>
+        </div>
+        {#if dispatchPaused}
+          <p class="notice"><strong>Dispatch paused.</strong> Queued runs will wait.</p>
+        {/if}
+        {#if !queued}<h2>Run history</h2>{/if}
         <div class="actions"><a href={href('runs', queued ? 'all' : 'queued')}>{queued ? 'All runs' : 'Queued runs'}</a></div>
-        <PagedList {actions} load={(before?: number) => api('runs', { queued, before })} cursor={run => run.sequence}>
-          {#snippet row(run)}
-            <div class="entry">
-              <a href={href('run', run.run_id)}>{run.task_id}</a>
-              <span class="status">{label(run.result ?? run.phase)}</span>
-              <span class="muted">{run.schedule_id ? `${run.schedule_id} · ${utc(run.due_ms)}` : 'Manual'}</span>
-              {#if run.phase === 'queued'}
-                <span class="muted run-runtime">Runtime: <code>{run.runtime_id}</code></span>
-              {/if}
-            </div>
+        <PagedList {actions} load={(before?: number) => api('runs', { queued, before })} cursor={run => run.sequence} empty={queued ? "No queued runs." : "No runs yet."}>
+          {#snippet list(runs)}
+            <RunTable {runs} {queued} />
           {/snippet}
         </PagedList>
       {:else if section === 'run'}
@@ -92,31 +126,56 @@
       {:else if section === 'schedules'}
         <h1>Schedules</h1>
         <div class="actions">
-          <ActionButton {actions} action={async () => { await control('schedule_pause', {}); reload(); }}>Pause all schedules</ActionButton>
-          <ActionButton {actions} action={async () => { await control('schedule_resume', {}); reload(); }}>Resume all schedules</ActionButton>
+          <ActionButton {actions} describedBy="schedules-effect" action={async () => {
+            await control('schedule_pause', {});
+            finish(at, 'All schedules paused.');
+          }}>Pause all schedules</ActionButton>
+          <ActionButton {actions} describedBy="schedules-effect" action={async () => {
+            await control('schedule_resume', {});
+            finish(at, 'All schedules resumed.');
+          }}>Resume all schedules</ActionButton>
         </div>
+        <p id="schedules-effect" class="muted">A schedule pause stops new scheduled requests. Queued runs can still start.</p>
         <PagedList {actions} load={(after?: string) => api('schedules', { after })} cursor={schedule => schedule.id}>
-          {#snippet row(schedule)}
-            <div class="entry">
-              <a href={href('schedule', schedule.id)}>{schedule.id}</a>
-              <span class="muted">{schedule.cron} UTC</span>
-              <span class="status">{schedule.paused ? 'Paused' : 'Enabled'}</span>
-              <span class="muted">Last: {utc(schedule.last_ms)}</span>
-              <span>Next: {utc(schedule.next_ms)}</span>
+          {#snippet list(schedules)}
+            <!-- Keyboard users need to focus the scroll region at narrow widths. -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+            <div class="table-frame" role="region" aria-label="Schedule list" tabindex="0">
+              <table aria-label="Schedules">
+                <thead>
+                  <tr><th scope="col">Schedule</th><th scope="col">Task</th><th scope="col">State</th>
+                    <th scope="col">Last occurrence (UTC)</th><th scope="col">Next due (UTC)</th></tr>
+                </thead>
+                <tbody>
+                  {#each schedules as schedule (schedule.id)}
+                    <tr>
+                      <td><a href={href('schedule', schedule.id)}>{schedule.id}</a>
+                        <code class="table-secondary">{schedule.cron} UTC</code></td>
+                      <td>{schedule.task_id}</td>
+                      <td><span class="status" class:attention={schedule.paused}>{schedule.paused ? 'Paused' : 'Enabled'}</span></td>
+                      <td><code>{utc(schedule.last_ms)}</code></td>
+                      <td><code>Next: {utc(schedule.next_ms)}</code></td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
             </div>
           {/snippet}
         </PagedList>
       {:else if section === 'schedule'}
-        <ScheduleDetails {id} {actions} {reload} />
+        <ScheduleDetails {id} {actions} updated={message => finish(at, message)} />
       {:else if section === 'reviews'}
         <h1>Review</h1>
         <PagedList {actions} empty="No pending reviews." more="Show more reviews" pageSize={10}
           load={(after?: string) => control('reviews', { after: after ?? null })} cursor={review => review.run_id}>
           {#snippet row(review)}
-            <ReviewPanel {review} {actions} acknowledged={async () => { await service.refresh(); reload(); }} />
+            <ReviewPanel {review} {actions} acknowledged={async () => {
+              finish(at, 'Review acknowledged.');
+              await service.refresh().catch(serviceActions.showError);
+            }} />
           {/snippet}
         </PagedList>
-      {:else if section !== ''}
+      {:else if section === 'tasks'}
         <h1>Tasks</h1>
         <PagedList {actions} load={(after?: string) => api('tasks', { after })} cursor={task => task.id}>
           {#snippet row(task)}
@@ -126,6 +185,9 @@
             </div>
           {/snippet}
         </PagedList>
+      {:else}
+        <h1>View unavailable</h1>
+        <a href={href('tasks')}>Return to tasks</a>
       {/if}
     {/key}
   </section>

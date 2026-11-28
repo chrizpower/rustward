@@ -21,7 +21,7 @@ export type Task = TaskCard & { inputs: Input[] };
 type Phase = 'Queued' | 'Launching' | 'Running' | 'CleaningUp' | 'Completed';
 type Result = 'Cancellation' | 'Success' | 'Failure' | 'Interruption' | 'Timeout';
 type RunState = { phase: Phase; result: Result | null };
-type RunRow = {
+export type RunRow = {
   sequence: number;
   run_id: string;
   task_id: string;
@@ -29,9 +29,13 @@ type RunRow = {
   result: Lowercase<Result> | null;
   schedule_id: string | null;
   due_ms: number | null;
+  admitted_ms: number | null;
+  dispatched_ms: number | null;
+  completed_ms: number | null;
+  review_required: boolean;
   runtime_id: string;
 };
-type Admission = {
+export type Admission = {
   status: 'admitted' | 'already_admitted' | 'history_removed';
   run_id: string;
 };
@@ -60,6 +64,7 @@ type Launch = {
 };
 type Chunk = { next: number; bytes: number[]; more: boolean };
 type Output = {
+  submitted_inputs: string | null;
   state: RunState;
   record: Launch | null;
   streams: Record<StreamName, Chunk | null>;
@@ -116,7 +121,7 @@ type Operations = {
   submit: [{ key: string; task_id: string; inputs: Inputs }, Admission];
   runs: [{ queued: boolean; before?: number }, RunRow[]];
   schedules: [{ after?: string }, Schedule[]];
-  output: [{ run_id: string } & Record<StreamName, number>, Output];
+  output: [{ run_id: string; include_inputs?: boolean } & Record<StreamName, number>, Output];
 };
 type Commands = {
   issue_key: [Record<never, never>, { key: string }];
@@ -136,10 +141,10 @@ export type ApiRequest = {
   operation: 'control';
   request: { [K in keyof Commands]: { command: K } & Commands[K][0] }[keyof Commands];
 };
-export type ApiResponse<T> = { ok: T } | { error: string };
+export type ApiResponse<T> = { ok: T } | { error: string; fields?: Record<string, string> };
 
 export class ApiError extends Error {
-  constructor(message: string, readonly serviceError = false) {
+  constructor(message: string, readonly serviceError = false, readonly fields?: Record<string, string>) {
     super(message);
   }
 }
@@ -152,7 +157,7 @@ async function request<T>(body: object): Promise<T> {
   });
   if (response.headers.get('content-type')?.startsWith('application/json')) {
     const value: ApiResponse<T> = await response.json();
-    if ('error' in value) throw new ApiError(value.error, true);
+    if ('error' in value) throw new ApiError(value.error, true, value.fields);
     return value.ok;
   }
   throw new ApiError(await response.text() || `Request failed (${response.status})`);

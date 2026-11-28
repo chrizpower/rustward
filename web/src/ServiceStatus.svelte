@@ -4,7 +4,7 @@
   import ActionButton from './ActionButton.svelte';
   import type { Actions } from './view';
 
-  let { actions }: { actions: Actions } = $props();
+  let { actions, paused = $bindable(false) }: { actions: Actions; paused?: boolean } = $props();
   let status = $state<ServiceStatus>();
   let unavailable = $state(false);
 
@@ -19,6 +19,7 @@
 
   export async function refresh() {
     status = await control('service_status', {});
+    paused = status.paused;
     unavailable = false;
   }
 
@@ -30,6 +31,7 @@
         await refresh();
       } catch {
         status = undefined;
+        paused = false;
         unavailable = true;
       } finally {
         if (active) timer = setTimeout(poll, 1200);
@@ -40,18 +42,21 @@
   });
 </script>
 
-<div id="service" aria-live="polite">
+<div id="service">
   {#if status}
     {@const current = status}
     <span class="service-version">Version {current.version}</span>
-    <span>{describe(current)}</span>
-    <ActionButton {actions} disabled={current.failed || current.draining} action={async () => {
+    <span role="status" class:attention={current.paused || current.draining || current.dispatch_block} class:failure={current.failed} class="status">{describe(current)}</span>
+    <ActionButton {actions} describedBy="dispatch-effect" disabled={current.failed || current.draining} action={async () => {
       await control(current.paused ? 'resume' : 'pause', {});
       await refresh();
     }}>
       {current.paused ? 'Resume dispatch' : 'Pause dispatch'}
     </ActionButton>
+    <span id="dispatch-effect" class="service-version">{current.paused
+      ? 'Queued runs can start when dispatch blocks clear.'
+      : 'Queued runs wait. Active runs continue.'}</span>
   {:else if unavailable}
-    Service unavailable
+    <span role="status">Service unavailable</span>
   {/if}
 </div>

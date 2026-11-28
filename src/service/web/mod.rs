@@ -17,14 +17,11 @@ use std::{
     },
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use super::{
-    Service,
-    control::{Request, Response},
-};
+use super::{Service, control::Request};
 use crate::{
     admission::Error,
     runtime::WorkRoot,
@@ -76,6 +73,8 @@ enum Operation {
         run_id: String,
         stdout: u64,
         stderr: u64,
+        #[serde(default)]
+        include_inputs: bool,
     },
     Control {
         request: Request,
@@ -105,6 +104,19 @@ impl FormValue {
             Self::Boolean(value) => toml::Value::Boolean(value),
         })
     }
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Response {
+    Ok {
+        ok: Value,
+    },
+    Error {
+        error: String,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        fields: BTreeMap<String, &'static str>,
+    },
 }
 
 type Call = (Operation, oneshot::Sender<Response>);
@@ -238,9 +250,13 @@ impl Web {
         if let Ok((request, reply)) = self.calls.try_recv()
             && !reply.is_closed()
         {
-            let result = match self.handle(service, request) {
-                Ok(value) => Response::Ok(value),
-                Err(error) => Response::Error(format!("{error:?}")),
+            let mut fields = BTreeMap::new();
+            let result = match self.handle(service, request, &mut fields) {
+                Ok(ok) => Response::Ok { ok },
+                Err(error) => Response::Error {
+                    error: format!("{error:?}"),
+                    fields,
+                },
             };
             let _ = reply.send(result);
         }
@@ -250,6 +266,7 @@ impl Web {
         &self,
         service: &mut Service<S>,
         operation: Operation,
+        field_errors: &mut BTreeMap<String, &'static str>,
     ) -> Result<Value, Error> {
         match operation {
             Operation::Tasks { after } => Ok(json!(
@@ -266,18 +283,24 @@ impl Web {
             } => {
                 let inputs = inputs
                     .into_iter()
-                    .map(|(id, value)| Ok((id, value.typed()?)))
+                    .map(|(id, value)| match value.typed() {
+                        Ok(value) => Ok((id, value)),
+                        Err(error) => {
+                            field_errors.insert(id, "Enter a signed 64-bit whole number.");
+                            Err(error)
+                        }
+                    })
                     .collect::<Result<_, Error>>()
                     .inspect_err(|error| {
                         if let Some(telemetry) = service.safety.telemetry() {
                             telemetry.rejected(error);
                         }
                     })?;
-                service.handle(Request::Submit {
-                    key,
-                    task_id,
-                    inputs,
-                })
+                let result = service.submit(&key, &task_id, &inputs);
+                if matches!(result, Err(Error::InvalidInputs)) {
+                    *field_errors = service.config.input_errors(&task_id, &inputs);
+                }
+                Ok(super::requests::submission_response(result?))
             }
             Operation::Runs { before, queued } => view::runs(&mut service.store, before, queued),
             Operation::Schedules { after } => {
@@ -311,6 +334,7 @@ impl Web {
                 run_id,
                 stdout,
                 stderr,
+                include_inputs,
             } => {
                 let id = RunId::new(&run_id).map_err(|_| Error::InvalidInputs)?;
                 let state = service
@@ -323,7 +347,14 @@ impl Web {
                     .map_err(super::controller_error)?;
                 let streams = view::output(&self.logs, &id, stdout, stderr)
                     .map_err(|_| Error::OutputUnavailable)?;
-                Ok(json!({"state":state,"record":record,"streams":streams}))
+                let inputs = if include_inputs {
+                    view::run_inputs(&mut service.store, &run_id)?
+                } else {
+                    None
+                };
+                Ok(
+                    json!({"state":state,"record":record,"streams":streams,"submitted_inputs":inputs}),
+                )
             }
             Operation::Control {
                 request: Request::Shutdown | Request::Reload,

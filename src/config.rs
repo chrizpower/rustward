@@ -99,6 +99,19 @@ impl InputDeclaration {
         Ok(())
     }
 
+    fn resolve<'a>(
+        &'a self,
+        submitted: Option<&'a Value>,
+    ) -> Result<Option<&'a Value>, &'static str> {
+        let value = submitted.or(self.default.as_ref());
+        if let Some(value) = value {
+            self.validate_value(value)?;
+        } else if self.required {
+            return Err("missing required input");
+        }
+        Ok(value)
+    }
+
     fn accepts_type(&self, value: &Value) -> bool {
         match self.kind {
             InputType::String => value.as_str().is_some_and(|text| !text.contains('\0')),
@@ -260,6 +273,29 @@ impl Config {
         Some(serde_json::json!({"id":task.id,"label":task.label,"inputs":inputs}))
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn input_errors(
+        &self,
+        id: &str,
+        submitted: &BTreeMap<String, Value>,
+    ) -> BTreeMap<String, &'static str> {
+        let Some(task) = self.tasks.iter().find(|task| task.id == id) else {
+            return BTreeMap::new();
+        };
+        task.inputs
+            .iter()
+            .filter_map(|input| {
+                let error = input.resolve(submitted.get(&input.id)).err()?;
+                let message = match error {
+                    "missing required input" => "Enter a value.",
+                    "value is not a declared choice" => "Select one of the available values.",
+                    _ => "Enter a value of the required type without any NUL characters.",
+                };
+                Some((input.id.clone(), message))
+            })
+            .collect()
+    }
+
     pub fn service(&self) -> &Service {
         &self.service
     }
@@ -291,14 +327,12 @@ impl TaskDefinition {
         let mut input_values = BTreeMap::new();
         for input in &self.inputs {
             let fail = |message| format!("task {task_id}: input {}: {message}", input.id);
-            let Some(value) = submitted_values.get(&input.id).or(input.default.as_ref()) else {
-                if input.required {
-                    return Err(fail("missing required input"));
-                }
-                continue;
-            };
-            input.validate_value(value).map_err(fail)?;
-            input_values.insert(input.id.as_str(), value);
+            if let Some(value) = input
+                .resolve(submitted_values.get(&input.id))
+                .map_err(fail)?
+            {
+                input_values.insert(input.id.as_str(), value);
+            }
         }
         Ok(input_values)
     }

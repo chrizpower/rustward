@@ -429,7 +429,8 @@ fn backup_does_not_upgrade_the_source_database() {
     source
         .execute_batch(
             "DROP TABLE restore_reviews; DROP TABLE restore_control;
-        DROP INDEX runs_completed; PRAGMA user_version=8;",
+        DROP INDEX runs_completed; ALTER TABLE runs DROP COLUMN admitted_at;
+        PRAGMA user_version=8;",
         )
         .unwrap();
     let archive = fixture.path("backup");

@@ -18,10 +18,11 @@ export function errorMessage(error: unknown) {
 }
 
 export function utc(ms: number | null) {
-  return ms === null ? 'Unknown' : new Date(ms).toISOString().replace('.000Z', ' UTC');
+  return ms === null ? 'Unknown' : new Date(ms).toISOString().replace('T', ' ').replace(/(?:\.000)?Z$/, ' UTC');
 }
 
 export function label(value: string) {
+  if (value === 'CleaningUp') return 'Cleaning up';
   return value.replaceAll('_', ' ').replace(/^[a-z]/, char => char.toUpperCase());
 }
 

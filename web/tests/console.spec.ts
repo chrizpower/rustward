@@ -89,6 +89,10 @@ test('form validation and request protection reject invalid submissions', async 
   await page.getByLabel('name', {exact: true}).clear();
   await page.getByRole('button', {name: 'Run task'}).click();
   await expect(page).toHaveURL(/#task\/ordinary$/);
+  const summary = page.getByRole('group', { name: 'Correct the task inputs' });
+  await expect(summary).toBeFocused();
+  await summary.getByRole('link', { name: 'name. Enter a value.' }).press('Enter');
+  await expect(page.getByLabel('name', { exact: true })).toBeFocused();
   expect(await page.getByLabel('name', {exact: true}).evaluate((node: HTMLInputElement) => node.validity.valueMissing)).toBe(true);
   await page.getByLabel('name', {exact: true}).fill('sample');
   await page.route('**/api', route => {
@@ -97,14 +101,16 @@ test('form validation and request protection reject invalid submissions', async 
     return route.continue({postData: JSON.stringify(data)});
   });
   await page.getByRole('button', {name: 'Run task'}).click();
-  await expect(page.getByRole('alert')).toContainText('do not match');
+  await expect(summary.getByRole('link', { name: 'mode. Select one of the available values.' })).toBeVisible();
+  await expect(page.getByLabel('mode', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByLabel('name', { exact: true })).toHaveValue('sample');
   const rejected = await page.evaluate(async () => (await fetch('/api', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({operation: 'control', request: {command: 'pause'}}),
   })).status);
   expect(rejected).toBe(403);
   await page.getByRole('link', {name: 'Runs', exact: true}).click();
-  await expect(page.getByText('No items.')).toBeVisible();
+  await expect(page.getByText('No runs yet.')).toBeVisible();
 });
 
 test('output is text and acknowledging a review releases the successor', async ({ page, consoleUrl }) => {
@@ -147,6 +153,8 @@ test('the form preserves signed 64-bit integer input', async ({ page, consoleUrl
   if (data.operation !== 'submit') throw new Error('Expected a submission request.');
   expect(data.inputs.count).toEqual({type: 'integer', value: '9223372036854775807'});
   await expect(page.getByText('Completed · Success')).toBeVisible();
+  await page.getByText('Submitted inputs', { exact: true }).click();
+  await expect(page.locator('details pre')).toContainText('9223372036854775807');
 });
 
 test('completed output shows when capture was truncated', async ({ page, consoleUrl }) => {
@@ -169,9 +177,26 @@ test('keyboard submission respects dispatch pause and the queued runs filter', a
   await runs.press('Enter');
   await expect(runs).toHaveAttribute('aria-current', 'page');
   await page.getByRole('link', { name: 'Queued runs' }).press('Enter');
-  await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Queue', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'ordinary', exact: true })).toHaveCount(1);
   await expect(page.getByText('Runtime: synthetic', { exact: true })).toBeVisible();
+
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('Theme').selectOption(theme);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect(page.getByText('Queued runs will wait.', { exact: false })).toBeVisible();
+    const table = page.getByRole('table', { name: 'Queued runs' });
+    await expect(table.getByText('Queued', { exact: true })).toBeVisible();
+    await expect(table.getByText('Admitted', { exact: true })).toBeVisible();
+    await expect(table.locator('time')).toContainText('UTC');
+    await table.getByRole('link', { name: 'ordinary', exact: true }).press('Enter');
+    await expect(page).toHaveURL(run);
+    await page.getByText('Submitted inputs', { exact: true }).click();
+    await expect(page.locator('details pre').getByText(/"name":\s*"sample"/)).toBeVisible();
+    await page.goBack();
+  }
+  await page.reload();
+  await expect(page.getByLabel('Theme')).toHaveValue('dark');
 
   await page.getByRole('button', { name: 'Resume dispatch' }).press('Enter');
   await page.goto(run);
@@ -192,7 +217,7 @@ test('a failed output poll reports the error and retries', async ({ page, consol
   await expect(page.getByRole('alert')).toHaveText('OutputUnavailable');
   await expect(page.getByLabel('stdout')).toContainText('Task started');
   await page.getByRole('button', { name: 'Cancel run' }).click();
-  await expect(page.getByRole('alert')).toBeHidden();
+  await expect(page.getByRole('alert')).toBeEmpty();
   await expect(page.getByText('Completed · Cancellation')).toBeVisible();
 });
 
@@ -211,3 +236,53 @@ test('the console shows the version reported by the service', async ({ page, con
   expect(version).toMatch(/^\d+\.\d+\.\d+-/);
   await expect(page.getByText(`Version ${version}`, { exact: true })).toHaveText(`Version ${version}`);
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`all console views fit a narrow screen in ${theme} mode`, async ({ page, consoleUrl }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto(consoleUrl);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('main')).toBeFocused();
+
+    async function checkView(heading: string) {
+      await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    }
+
+    await checkView('Tasks');
+    await page.getByRole('link', { name: 'Interrupted task', exact: true }).press('Enter');
+    await checkView('Interrupted task');
+    await page.getByLabel('name', { exact: true }).fill('screen review');
+    await page.getByRole('button', { name: 'Run task', exact: true }).press('Enter');
+    await expect(page.getByText('Completed · Interruption · Review required')).toBeVisible();
+    await checkView('Run details');
+    await expect(page.getByRole('region', { name: 'stdout' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Runs', exact: true }).press('Enter');
+    await expect(page.getByRole('table', { name: 'Run history' }).getByText('Review required')).toBeVisible();
+    await checkView('Runs');
+    await page.getByRole('link', { name: 'Review', exact: true }).press('Enter');
+    await checkView('Review');
+    await page.getByRole('button', { name: 'Acknowledge review' }).press('Enter');
+    await expect(page.getByText('Enter a review note.')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeFocused();
+    await page.getByRole('textbox').fill('Reviewed the synthetic effect.');
+    await page.getByRole('button', { name: 'Acknowledge review' }).press('Enter');
+    await expect(page.getByText('Review acknowledged.', { exact: true })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Schedules', exact: true }).press('Enter');
+    await expect(page.getByRole('table', { name: 'Schedules' })).toBeVisible();
+    await checkView('Schedules');
+    await page.getByRole('link', { name: 'example', exact: true }).press('Enter');
+    await checkView('example');
+    await expect(page.getByRole('button', { name: 'Pause schedule', exact: true }))
+      .toHaveAccessibleDescription(/Queued runs can still start/);
+    await expect(page.getByRole('button', { name: 'Pause dispatch', exact: true }))
+      .toHaveAccessibleDescription(/Active runs continue/);
+  });
+}

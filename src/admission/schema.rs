@@ -135,3 +135,12 @@ pub(super) fn migrate_maintenance(transaction: &Transaction<'_>) -> Result<(), E
         )
         .map_err(storage)
 }
+
+pub(super) fn migrate_admission_time(transaction: &Transaction<'_>) -> Result<(), Error> {
+    transaction
+        .execute_batch(
+            "ALTER TABLE runs ADD COLUMN admitted_at INTEGER;
+         PRAGMA user_version=10;",
+        )
+        .map_err(storage)
+}

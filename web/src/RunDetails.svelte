@@ -2,14 +2,19 @@
   import { onMount } from 'svelte';
   import { api, control, type StreamName } from './api';
   import ActionButton from './ActionButton.svelte';
-  import type { Actions } from './view';
+  import { href, label, type Actions } from './view';
 
   let { id, actions }: { id: string; actions: Actions } = $props();
   const names: StreamName[] = ['stdout', 'stderr'];
   const limit = 262144;
   const stream = () => ({ offset: 0, decoder: new TextDecoder(), text: '', info: '' });
   let streams = $state({ stdout: stream(), stderr: stream() });
+  let inputs = $state<string | null>(null);
+  let failed = $state(false);
+  let needsReview = $state(false);
+  let result = $state('');
   let phase = $state('Loading run');
+  let pollError = false;
   let canCancel = $state(false);
 
   onMount(() => {
@@ -18,11 +23,18 @@
     async function poll() {
       try {
         const run = await api('output', {
-          run_id: id, stdout: streams.stdout.offset, stderr: streams.stderr.offset,
+          run_id: id, include_inputs: inputs === null, stdout: streams.stdout.offset, stderr: streams.stderr.offset,
         });
         if (!active) return;
+        if (pollError) {
+          actions.clearError();
+          pollError = false;
+        }
         const completed = run.state.phase === 'Completed';
-        phase = [run.state.phase, run.state.result, run.record?.review_required ? 'Review required' : null]
+        if (run.submitted_inputs !== null) inputs = run.submitted_inputs;
+        needsReview = run.record?.review_required ?? false;
+        failed = run.state.result === 'Failure' || run.state.result === 'Timeout';
+        phase = [label(run.state.phase), run.state.result, run.record?.review_required ? 'Review required' : null]
           .filter(Boolean).join(' · ');
         canCancel = !completed;
         let more = false;
@@ -47,6 +59,7 @@
         timer = setTimeout(poll, more ? 40 : completed ? 3000 : 700);
       } catch (error) {
         if (!active) return;
+        pollError = true;
         actions.showError(error);
         timer = setTimeout(poll, 1500);
       }
@@ -57,19 +70,39 @@
 </script>
 
 <h1>Run details</h1>
-<p class="muted">{id}</p>
-<p class="status" aria-live="polite">{phase}</p>
+<p class="muted run-id">{id}</p>
+<p class="status" class:attention={needsReview} class:failure={failed} role="status">{phase}</p>
+{#if needsReview}<a href={href('reviews')}>Open pending reviews</a>{/if}
+<p class:visually-hidden={!result} role="status">{result}</p>
 <div class="actions">
   {#if canCancel}
-    <ActionButton {actions} action={() => control('cancel', { run_id: id })}>Cancel run</ActionButton>
+    <ActionButton {actions} destructive action={async () => {
+      const reply = await control('cancel', { run_id: id });
+      result = ({
+        Recorded: 'Cancellation requested. Rustward is stopping the local processes.',
+        Cancelled: 'Run cancelled.',
+        AlreadyCancelled: 'The run was already cancelled.',
+        AlreadyEnded: 'The run already ended.',
+        NotActive: 'The run is no longer active.',
+        NotFound: 'Rustward could not find the run.',
+      } as Record<string, string>)[reply.status] ?? reply.status;
+    }}>Cancel run</ActionButton>
   {/if}
 </div>
+{#if inputs !== null}
+  <details class="panel">
+    <summary>Submitted inputs</summary>
+    <pre>{inputs}</pre>
+  </details>
+{/if}
 <div class="output">
   {#each names as name}
     <div>
       <h2>{name}</h2>
       <p class="muted">{streams[name].info}</p>
-      <pre aria-label={name}>{streams[name].text}</pre>
+      <!-- Keyboard users need to scroll retained output. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <pre role="region" aria-label={name} tabindex="0">{streams[name].text}</pre>
     </div>
   {/each}
 </div>

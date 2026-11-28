@@ -180,7 +180,7 @@ async fn route(
                     "Response exceeds the size limit",
                 );
             }
-            let status = if matches!(reply, Response::Error(_)) {
+            let status = if matches!(reply, Response::Error { .. }) {
                 StatusCode::UNPROCESSABLE_ENTITY
             } else {
                 StatusCode::OK

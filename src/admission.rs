@@ -273,7 +273,7 @@ impl Store {
                     params![random_bytes()?.as_slice(), random_bytes()?.as_slice()],
                 )
                 .map_err(storage)?;
-        } else if !(1..=9).contains(&version) {
+        } else if !(1..=10).contains(&version) {
             return Err(Error::UnsupportedSchema);
         }
         if version == 0 || version == 1 {
@@ -327,6 +327,9 @@ impl Store {
         }
         if version < 9 {
             schema::migrate_maintenance(&transaction)?;
+        }
+        if version < 10 {
+            schema::migrate_admission_time(&transaction)?;
         }
         transaction.commit().map_err(storage)?;
         Ok(Self {
@@ -498,9 +501,9 @@ fn insert_run(
     }
     let run_id = hex::encode(random_bytes()?);
     transaction.execute(
-        "INSERT INTO runs (run_id, task_id, task_snapshot, task_revision, config_revision, submitted_inputs, arguments, runtime_id, phase)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued')",
-        params![run_id, task_id, snapshot, revision(b"rustward-definition-v1", &snapshot), revision(b"rustward-configuration-v2", &config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id]
+        "INSERT INTO runs (run_id, task_id, task_snapshot, task_revision, config_revision, submitted_inputs, arguments, runtime_id, phase, admitted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued', ?9)",
+        params![run_id, task_id, snapshot, revision(b"rustward-definition-v1", &snapshot), revision(b"rustward-configuration-v2", &config_snapshot), serde_json::to_string(submitted_values).unwrap(), arguments, runtime_id, utc_ms()?]
     ).map_err(storage)?;
     Ok(run_id)
 }

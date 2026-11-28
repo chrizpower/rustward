@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { api, ApiError, control, inputChoices, type Input, type Inputs, type Task } from './api';
+  import { onMount, tick } from 'svelte';
+  import { api, ApiError, control, inputChoices, type Admission, type Input, type Inputs, type Task } from './api';
   import TaskInput from './TaskInput.svelte';
   import { readSession, type Actions } from './view';
 
@@ -9,12 +9,29 @@
   let { id, actions, openRun }: {
     id: string;
     actions: Actions;
-    openRun: (id: string) => void;
+    openRun: (run: Admission) => void;
   } = $props();
   let task = $state<Task>();
   let fields = $state<Field[]>([]);
   let pending = $state(false);
   let busy = $state(false);
+  let errors = $state<{ id: string; message: string }[]>([]);
+  let summary = $state<HTMLDivElement>();
+
+  function validate({ input, value, empty }: Field) {
+    if (empty) return '';
+    const choices = inputChoices(input);
+    if (!value) {
+      if (input.required && input.default === null) return choices ? 'Select a value.' : 'Enter a value.';
+    } else if (input.type === 'integer' && !choices) {
+      if (!/^-?\d+$/.test(value)) return 'Enter a whole number.';
+      const number = BigInt(value);
+      if (number < -(2n ** 63n) || number >= 2n ** 63n) {
+        return 'Enter a whole number from −9223372036854775808 to 9223372036854775807.';
+      }
+    }
+    return '';
+  }
   const stash = $derived('rustward-submit-' + id);
   const finalErrors = ['InvalidInputs', 'QueueFull', 'TooLarge', 'InvalidKey', 'PayloadConflict'];
 
@@ -36,11 +53,24 @@
     }).catch(actions.showError);
   });
 
+  async function focusErrors() {
+    await tick();
+    summary?.focus();
+  }
+
   async function submit(event: SubmitEvent) {
     event.preventDefault();
     if (busy || !task) return;
-    busy = true;
     actions.clearError();
+    errors = fields.flatMap(field => {
+      const message = validate(field);
+      return message ? [{ id: field.input.id, message }] : [];
+    });
+    if (errors.length) {
+      await focusErrors();
+      return;
+    }
+    busy = true;
     try {
       const inputs: Inputs = Object.create(null);
       for (const { input, value, empty } of fields) {
@@ -54,9 +84,6 @@
         if (input.type === 'boolean' && typeof selected === 'boolean') {
           inputs[input.id] = { type: 'boolean', value: selected };
         } else if (input.type !== 'boolean' && typeof selected === 'string') {
-          if (input.type === 'integer' && !/^-?\d+$/.test(selected)) {
-            throw new ApiError('Enter a whole number.');
-          }
           inputs[input.id] = { type: input.type, value: selected };
         }
       }
@@ -70,13 +97,20 @@
       }
       const run = await api('submit', { key: saved.key, task_id: id, inputs: saved.inputs });
       sessionStorage.removeItem(stash);
-      openRun(run.run_id);
+      openRun(run);
     } catch (error) {
       if (error instanceof ApiError && error.serviceError && finalErrors.includes(error.message)) {
         sessionStorage.removeItem(stash);
       }
       pending = sessionStorage.getItem(stash) !== null;
-      actions.showError(error);
+      if (error instanceof ApiError && error.fields) {
+        const fieldErrors = error.fields;
+        errors = fields.flatMap(({ input }) => Object.hasOwn(fieldErrors, input.id)
+          ? [{ id: input.id, message: fieldErrors[input.id] }]
+          : []);
+        if (errors.length) await focusErrors();
+      }
+      if (!errors.length) actions.showError(error);
     } finally {
       busy = false;
     }
@@ -85,13 +119,28 @@
 
 {#if task}
   <h1>{task.label}</h1>
-  <form class="panel" onsubmit={submit}>
+  <form class="panel" novalidate onsubmit={submit}>
+    {#if errors.length}
+      <div class="error-summary" role="group" aria-labelledby="input-error-heading" tabindex="-1" bind:this={summary}>
+        <h2 id="input-error-heading">Correct the task inputs</h2>
+        <ul>
+          {#each errors as error}
+            <li><a href={'#input-' + error.id} onclick={event => {
+              event.preventDefault();
+              document.getElementById('input-' + error.id)?.focus();
+            }}>{error.id}. {error.message}</a></li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
     {#each fields as field (field.input.id)}
-      <TaskInput input={field.input} bind:value={field.value} bind:empty={field.empty} />
+      <TaskInput input={field.input} bind:value={field.value} bind:empty={field.empty} error={errors.find(error => error.id === field.input.id)?.message} />
     {/each}
     {#if pending}
       <p class="muted">Retry the pending submission with the same values.</p>
     {/if}
     <button type="submit" class="primary" disabled={busy}>{pending ? 'Retry submission' : 'Run task'}</button>
   </form>
+{:else}
+  <h1>Run task</h1>
 {/if}

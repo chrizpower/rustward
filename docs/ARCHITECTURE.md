@@ -6,7 +6,10 @@ drain. It also evaluates UTC schedules and supports explicit configuration
 reload. The private web console uses the same admission and execution controls.
 Vite builds the Svelte console during the Linux Rust build. The Rust service
 embeds and serves these assets in the same process. See the
-[console design rules](DESIGN.md) for presentation and interaction.
+[console design rules](DESIGN.md) for presentation and interaction. Run history
+shows the latest recorded event in UTC. Rustward records admission time for
+new runs. Earlier records can still show dispatch, completion, or schedule
+due time when available.
 
 The service expires eligible completed runs, their logs, and their writable
 run directories in bounded batches.

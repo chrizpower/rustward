@@ -4,7 +4,7 @@ use std::{
     os::unix::fs::{FileExt, MetadataExt},
 };
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use rustix::fs::{Mode, OFlags, ResolveFlags, openat2};
 use serde_json::{Value, json};
 
@@ -18,8 +18,9 @@ pub(super) fn runs(store: &mut Store, before: Option<i64>, queued: bool) -> Resu
     store.perform(|db| {
         let mut query = db
             .prepare(
-                "SELECT sequence,runs.run_id,task_id,phase,result,schedule_id,due_ms,runtime_id
-             FROM runs LEFT JOIN occurrences USING(run_id)
+                "SELECT sequence,runs.run_id,task_id,phase,result,schedule_id,due_ms,runtime_id,
+                    dispatched_at,completed_at,coalesce(review_required,0),admitted_at
+             FROM runs LEFT JOIN occurrences USING(run_id) LEFT JOIN launches USING(run_id)
              WHERE sequence<?1 AND (?2=0 OR phase='queued') ORDER BY sequence DESC LIMIT 20",
             )
             .map_err(storage)?;
@@ -28,8 +29,22 @@ pub(super) fn runs(store: &mut Store, before: Option<i64>, queued: bool) -> Resu
             "task_id":r.get::<_, String>(2)?, "phase":r.get::<_, String>(3)?,
             "result":r.get::<_, Option<String>>(4)?, "schedule_id":r.get::<_, Option<String>>(5)?,
             "due_ms":r.get::<_, Option<i64>>(6)?, "runtime_id":r.get::<_, String>(7)?,
+            "dispatched_ms":r.get::<_, Option<i64>>(8)?, "completed_ms":r.get::<_, Option<i64>>(9)?,
+            "review_required":r.get::<_, bool>(10)?, "admitted_ms":r.get::<_, Option<i64>>(11)?,
         }))).map_err(storage)?.collect::<Result<Vec<_>,_>>().map_err(storage)?;
         Ok(json!(rows))
+    })
+}
+
+pub(super) fn run_inputs(store: &mut Store, id: &str) -> Result<Option<String>, Error> {
+    store.perform(|db| {
+        db.query_row(
+            "SELECT submitted_inputs FROM runs WHERE run_id=?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage)
     })
 }
 

@@ -238,7 +238,28 @@ fn serves_assets_and_bounded_operations_with_origin_checks() {
                   "enabled":{"type":"boolean","value":true}}}),
         )
     };
-    assert_eq!(form("9223372036854775808").0, 422);
+    let out_of_range = form("9223372036854775808");
+    assert_eq!(out_of_range.0, 422);
+    assert_eq!(
+        out_of_range.1["fields"]["count"],
+        "Enter a signed 64-bit whole number."
+    );
+    let invalid = api(json!({
+        "operation":"submit","key":key,"task_id":"synthetic-report",
+        "inputs":{"count":{"type":"integer","value":"4"},"enabled":{"type":"string","value":"no"}}
+    }));
+    assert_eq!(invalid.0, 422);
+    assert_eq!(invalid.1["error"], "InvalidInputs");
+    assert_eq!(
+        invalid.1["fields"],
+        json!({
+            "count":"Select one of the available values.",
+            "enabled":"Enter a value of the required type without any NUL characters.",
+            "name":"Enter a value."
+        })
+    );
+    let unknown_task = api(json!({"operation":"submit","key":key,"task_id":"missing","inputs":{}}));
+    assert_eq!(unknown_task, (422, json!({"error":"InvalidInputs"})));
     assert_eq!(form("3").0, 200);
     let id = submitted.1["ok"]["run_id"].as_str().unwrap();
     assert!(
@@ -246,11 +267,21 @@ fn serves_assets_and_bounded_operations_with_origin_checks() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["run_id"] == id && row["runtime_id"] == "runtime-1")
+            .any(|row| row["run_id"] == id
+                && row["runtime_id"] == "runtime-1"
+                && row["admitted_ms"].is_number()
+                && row["review_required"] == false)
     );
     let output =
         || api(json!({"operation":"output","run_id":id,"stdout":0,"stderr":0})).1["ok"].clone();
     assert_eq!(output()["streams"]["stdout"], Value::Null);
+    assert_eq!(output()["submitted_inputs"], Value::Null);
+    let with_inputs =
+        api(json!({"operation":"output","run_id":id,"stdout":0,"stderr":0,"include_inputs":true}));
+    assert_eq!(
+        with_inputs.1["ok"]["submitted_inputs"],
+        r#"{"name":"sample"}"#
+    );
     assert_eq!(
         api(json!({"operation":"output","run_id":"invalid","stdout":0,"stderr":0})).0,
         422
