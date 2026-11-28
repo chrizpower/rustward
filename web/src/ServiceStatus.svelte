@@ -4,7 +4,11 @@
   import ActionButton from './ActionButton.svelte';
   import type { Actions } from './view';
 
-  let { actions, paused = $bindable(false) }: { actions: Actions; paused?: boolean } = $props();
+  let { actions, paused = $bindable(false), version = $bindable('') }: {
+    actions: Actions;
+    paused?: boolean;
+    version?: string;
+  } = $props();
   let status = $state<ServiceStatus>();
   let unavailable = $state(false);
 
@@ -20,6 +24,7 @@
   export async function refresh() {
     status = await control('service_status', {});
     paused = status.paused;
+    version = status.version;
     unavailable = false;
   }
 
@@ -45,7 +50,6 @@
 <div id="service">
   {#if status}
     {@const current = status}
-    <span class="service-version">Version {current.version}</span>
     <span role="status" class:attention={current.paused || current.draining || current.dispatch_block} class:failure={current.failed} class="status">{describe(current)}</span>
     <ActionButton {actions} describedBy="dispatch-effect" disabled={current.failed || current.draining} action={async () => {
       await control(current.paused ? 'resume' : 'pause', {});
@@ -53,7 +57,7 @@
     }}>
       {current.paused ? 'Resume dispatch' : 'Pause dispatch'}
     </ActionButton>
-    <span id="dispatch-effect" class="service-version">{current.paused
+    <span id="dispatch-effect" class="service-note">{current.paused
       ? 'Queued runs can start when dispatch blocks clear.'
       : 'Queued runs wait. Active runs continue.'}</span>
   {:else if unavailable}

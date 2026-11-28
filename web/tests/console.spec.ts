@@ -221,7 +221,7 @@ test('a failed output poll reports the error and retries', async ({ page, consol
   await expect(page.getByText('Completed · Cancellation')).toBeVisible();
 });
 
-test('the console shows the version reported by the service', async ({ page, consoleUrl }) => {
+test('the footer shows the version reported by the service', async ({ page, consoleUrl }) => {
   await page.goto(consoleUrl);
   const version = await page.evaluate(async () => {
     const response = await fetch('/api', {
@@ -234,7 +234,27 @@ test('the console shows the version reported by the service', async ({ page, con
     return result.ok.version;
   });
   expect(version).toMatch(/^\d+\.\d+\.\d+-/);
-  await expect(page.getByText(`Version ${version}`, { exact: true })).toHaveText(`Version ${version}`);
+  const footer = page.getByRole('contentinfo');
+  await expect(footer).toHaveText(`Version ${version}`);
+  await expect(page.getByRole('banner')).not.toContainText(`Version ${version}`);
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('Theme').selectOption(theme);
+    await expect(footer).toBeVisible();
+  }
+});
+
+test('the theme selector aligns with the right edge of the header content', async ({ page, consoleUrl }) => {
+  await page.goto(consoleUrl);
+  const theme = page.getByLabel('Theme');
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    const rightGap = await theme.evaluate(select => {
+      const header = select.closest('header')!;
+      return header.getBoundingClientRect().right - select.getBoundingClientRect().right -
+        parseFloat(getComputedStyle(header).paddingRight);
+    });
+    expect(Math.abs(rightGap)).toBeLessThan(1);
+  }
 });
 
 for (const theme of ['light', 'dark'] as const) {

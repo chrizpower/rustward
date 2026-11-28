@@ -23,6 +23,7 @@
   let version = $state(0);
   let error = $state('');
   let dispatchPaused = $state(false);
+  let serviceVersion = $state('');
   let feedback = $state('');
   let main: HTMLElement;
   let admittedRun: string | undefined;
@@ -78,14 +79,16 @@
   main.focus();
 }}>Skip to content</a>
 <header class="top">
-  <a class="brand" href="#tasks">Rustward</a>
-  <nav aria-label="Console">
-    {#each navigation as item}
-      <a href={href(item.id)} aria-current={activeSection === item.id ? 'page' : undefined}>{item.label}</a>
-    {/each}
-  </nav>
-  <ThemeControl />
-  <ServiceStatus bind:this={service} bind:paused={dispatchPaused} actions={serviceActions} />
+  <div class="top-navigation">
+    <a class="brand" href="#tasks">Rustward</a>
+    <nav aria-label="Console">
+      {#each navigation as item}
+        <a href={href(item.id)} aria-current={activeSection === item.id ? 'page' : undefined}>{item.label}</a>
+      {/each}
+    </nav>
+    <ThemeControl />
+  </div>
+  <ServiceStatus bind:this={service} bind:paused={dispatchPaused} bind:version={serviceVersion} actions={serviceActions} />
 </header>
 <main id="content" tabindex="-1" bind:this={main}>
   <div class:visually-hidden={!feedback} class="feedback" role="status">{feedback}</div>
@@ -192,3 +195,6 @@
     {/key}
   </section>
 </main>
+{#if serviceVersion}
+  <footer class="console-footer">Version {serviceVersion}</footer>
+{/if}
